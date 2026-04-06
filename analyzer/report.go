@@ -1,0 +1,1815 @@
+package analyzer
+
+import (
+	"fmt"
+	"math"
+	"strings"
+)
+
+// GenerateMarkdown 生成增强版 Markdown 格式的投资分析报告（14模块标准框架）
+func GenerateMarkdown(symbol string, years []string, steps []StepResult, scores map[string]*YearScore, comp *ComparableAnalysis, quote *QuoteData, sentiment *SentimentData, policy *PolicyMatchData) string {
+	if len(years) == 0 {
+		return "# 无数据\n\n未找到可用的财务数据。"
+	}
+	latest := years[0]
+	prev := ""
+	if len(years) > 1 {
+		prev = years[1]
+	}
+	latestScore := scores[latest]
+
+	var b strings.Builder
+
+	// ==================== 封面 ====================
+	b.WriteString(fmt.Sprintf("# %s 深度投资分析报告\n\n", symbol))
+	b.WriteString(fmt.Sprintf("**股票代码**: %s  \n", symbol))
+	b.WriteString("**分析框架**: 十八步财务分析法（quant-trading v2.2 兼容框架）  \n")
+	b.WriteString(fmt.Sprintf("**最新报告期**: %s  \n", latest))
+	b.WriteString(fmt.Sprintf("**数据基础**: 基于 %d 年财务报表数据（%s ~ %s）\n\n", len(years), latest, years[len(years)-1]))
+	b.WriteString("---\n\n")
+
+	// ==================== 重大风险提示 ====================
+	writeMajorRisks(&b, symbol, steps, latest, prev, latestScore)
+
+	// ==================== 模块1: 执行摘要 ====================
+	writeModule1(&b, symbol, steps, latest, prev, latestScore, quote)
+
+	// ==================== 模块2: 换手率深度分析 ====================
+	writeModule2(&b, quote)
+
+	// ==================== 模块3: 公司基本面分析 ====================
+	writeModule3(&b, steps, years, latest, prev)
+
+	// ==================== 模块4: 行业横向对比分析 ====================
+	writeModule4(&b, steps, latest, comp)
+
+	// ==================== 模块5: 十五五政策匹配度评估 ====================
+	writeModule5(&b, policy)
+
+	// ==================== 模块6: 实时行情数据 ====================
+	writeModule6(&b, quote)
+
+	// ==================== 模块7: 剩余收益模型估值(RIM) ====================
+	writeModule7(&b, steps, latest)
+
+	// ==================== 模块8: 技术面分析 ====================
+	writeModule8(&b, quote)
+
+	// ==================== 模块9: ML机器学习预测 ====================
+	writeModule9(&b, steps, latest, prev)
+
+	// ==================== 模块10: 智能选股6大条件 ====================
+	writeModule10(&b, steps, latest, prev)
+
+	// ==================== 模块11: 芒格逆向思维检查 ====================
+	writeModule11(&b, steps, latest, latestScore)
+
+	// ==================== 模块12: 巴菲特-芒格投资检查清单 ====================
+	writeModule12(&b, steps, latest, latestScore)
+
+	// ==================== 模块13: 社交媒体情绪监控 ====================
+	writeModule13(&b, sentiment)
+
+	// ==================== 模块14: 综合投资建议 ====================
+	writeModule14(&b, symbol, steps, latest, latestScore)
+
+	// ==================== 模块15: 结论与附录 ====================
+	writeModule15(&b, symbol, steps, years, latest, latestScore)
+
+	b.WriteString("---\n\n")
+	b.WriteString("*报告生成时间：基于最新导入的财务数据*\n")
+
+	return b.String()
+}
+
+// ========== 重大风险提示 ==========
+func writeMajorRisks(b *strings.Builder, symbol string, steps []StepResult, latest, prev string, score *YearScore) {
+	var risks []string
+	ms := getStepValue(steps, 8, latest, "MScore")
+	if ms > -2.22 {
+		if ms > -1.78 {
+			risks = append(risks, fmt.Sprintf("**M-Score 异常**: %.3f，财务造假风险较高 🔴**", ms))
+		} else {
+			risks = append(risks, fmt.Sprintf("**M-Score 偏高**: %.3f，存在财报操纵嫌疑 ⚠️**", ms))
+		}
+	}
+	growth := getStepValue(steps, 9, latest, "growthRate")
+	if growth < 0 {
+		risks = append(risks, fmt.Sprintf("**营收负增长**: %.2f%%，成长性承压 ❌**", growth))
+	}
+	pg := getStepValue(steps, 16, latest, "profitGrowth")
+	if pg < -20 {
+		risks = append(risks, fmt.Sprintf("**净利润大幅下滑**: %.2f%% ❌**", pg))
+	} else if pg < 0 {
+		risks = append(risks, fmt.Sprintf("**净利润负增长**: %.2f%% ❌**", pg))
+	}
+	roe := getStepValue(steps, 16, latest, "roe")
+	if roe < 10 {
+		risks = append(risks, fmt.Sprintf("**ROE 偏低**: %.2f%%，资本回报率不足 ❌**", roe))
+	}
+	gm := getStepValue(steps, 10, latest, "grossMargin")
+	if gm < 20 {
+		risks = append(risks, fmt.Sprintf("**毛利率过低**: %.2f%%，产品竞争力弱 ❌**", gm))
+	}
+	dr := getStepValue(steps, 3, latest, "debtRatio")
+	if dr > 60 {
+		risks = append(risks, fmt.Sprintf("**负债率过高**: %.2f%%，偿债压力大 🔴**", dr))
+	}
+	cashRatio := getStepValue(steps, 15, latest, "cashRatio")
+	if cashRatio < 50 && cashRatio != 0 {
+		risks = append(risks, fmt.Sprintf("**现金流质量偏弱**: 净利润现金含量 %.2f%% ⚠️**", cashRatio))
+	}
+
+	if len(risks) > 0 || (score != nil && score.RawScore < 70) {
+		b.WriteString("# ⚠️ 重大风险提示\n\n")
+		for _, r := range risks {
+			b.WriteString(fmt.Sprintf("- %s\n", r))
+		}
+		if score != nil && score.RawScore < 70 {
+			b.WriteString(fmt.Sprintf("- **综合评分偏低**: %.0f分（%s），财务健康度需关注\n", score.RawScore, score.Grade))
+		}
+		b.WriteString("\n---\n\n")
+	}
+}
+
+// ========== 目录 ==========
+func writeTOC(b *strings.Builder) {
+	b.WriteString("# 目录\n\n")
+	b.WriteString("- [模块1: 执行摘要](#模块1-执行摘要)\n")
+	b.WriteString("- [模块2: 换手率深度分析](#模块2-换手率深度分析)\n")
+	b.WriteString("- [模块3: 公司基本面分析](#模块3-公司基本面分析)\n")
+	b.WriteString("- [模块4: 行业横向对比分析](#模块4-行业横向对比分析)\n")
+	b.WriteString("- [模块5: 十五五政策匹配度评估](#模块5-十五五政策匹配度评估)\n")
+	b.WriteString("- [模块6: 实时行情数据](#模块6-实时行情数据)\n")
+	b.WriteString("- [模块7: 剩余收益模型估值(RIM)](#模块7-剩余收益模型估值rim)\n")
+	b.WriteString("- [模块8: 技术面分析](#模块8-技术面分析)\n")
+	b.WriteString("- [模块9: ML机器学习预测](#模块9-ml机器学习预测)\n")
+	b.WriteString("- [模块10: 智能选股6大条件](#模块10-智能选股6大条件)\n")
+	b.WriteString("- [模块11: 芒格逆向思维检查](#模块11-芒格逆向思维检查)\n")
+	b.WriteString("- [模块12: 巴菲特-芒格投资检查清单](#模块12-巴菲特-芒格投资检查清单)\n")
+	b.WriteString("- [模块13: 社交媒体情绪监控](#模块13-社交媒体情绪监控)\n")
+	b.WriteString("- [模块14: 综合投资建议](#模块14-综合投资建议)\n")
+	b.WriteString("- [模块15: 结论与附录](#模块15-结论与附录)\n")
+	b.WriteString("\n---\n\n")
+}
+
+// ========== 8项核心指标高亮 ==========
+func writeEightIndicatorsHighlight(b *strings.Builder, steps []StepResult, latest string) {
+	indicators := []struct {
+		name     string
+		value    float64
+		unit     string
+		passed   bool
+		operator string
+		threshold float64
+	}{
+		{"ROE", getStepValue(steps, 16, latest, "roe"), "%", getStepValue(steps, 16, latest, "roe") > 20, ">", 20},
+		{"净利润现金比率", getStepValue(steps, 15, latest, "cashRatio"), "%", getStepValue(steps, 15, latest, "cashRatio") > 100, ">", 100},
+		{"资产负债率", getStepValue(steps, 3, latest, "debtRatio"), "%", getStepValue(steps, 3, latest, "debtRatio") < 60, "<", 60},
+		{"毛利率", getStepValue(steps, 10, latest, "grossMargin"), "%", getStepValue(steps, 10, latest, "grossMargin") > 40, ">", 40},
+		{"营业利润率", getStepValue(steps, 14, latest, "coreProfitMargin"), "%", getStepValue(steps, 14, latest, "coreProfitMargin") > 20, ">", 20},
+		{"营业收入增长率", getStepValue(steps, 9, latest, "growthRate"), "%", getStepValue(steps, 9, latest, "growthRate") > 10, ">", 10},
+		{"固定资产比率", getStepValue(steps, 6, latest, "ratio"), "%", getStepValue(steps, 6, latest, "ratio") < 40, "<", 40},
+		{"分红率", getStepValue(steps, 18, latest, "ratio"), "%", getStepValue(steps, 18, latest, "ratio") > 30, ">", 30},
+	}
+
+	matchCount := 0
+	for _, ind := range indicators {
+		if ind.passed {
+			matchCount++
+		}
+	}
+
+	b.WriteString("## 核心指标一览\n\n")
+	if matchCount >= 5 {
+		b.WriteString("> 🏆 **核心指标亮点**：该企业 8 项核心财务指标中满足 **" + fmt.Sprintf("%d", matchCount) + " 项**，表现优异，值得重点关注。\n\n")
+		b.WriteString("> **达标指标**：\n")
+		for _, ind := range indicators {
+			if ind.passed {
+				b.WriteString(fmt.Sprintf("> - ✅ **%s**：%.2f%s（%s %.0f%s）\n", ind.name, ind.value, ind.unit, ind.operator, ind.threshold, ind.unit))
+			}
+		}
+		if matchCount < 8 {
+			b.WriteString("> \n")
+			b.WriteString("> **未达标指标**：\n")
+			for _, ind := range indicators {
+				if !ind.passed {
+					b.WriteString(fmt.Sprintf("> - ⚠️ **%s**：%.2f%s（%s %.0f%s）\n", ind.name, ind.value, ind.unit, ind.operator, ind.threshold, ind.unit))
+				}
+			}
+		}
+		b.WriteString("\n")
+	} else {
+		b.WriteString("| 指标 | 数值 | 阈值 | 是否达标 |\n")
+		b.WriteString("|------|------|------|----------|\n")
+		for _, ind := range indicators {
+			status := "❌ 未达标"
+			if ind.passed {
+				status = "✅ 达标"
+			}
+			b.WriteString(fmt.Sprintf("| **%s** | %.2f%s | %s %.0f%s | %s |\n", ind.name, ind.value, ind.unit, ind.operator, ind.threshold, ind.unit, status))
+		}
+		b.WriteString(fmt.Sprintf("\n**达标比例**：%d / 8 项\n\n", matchCount))
+	}
+}
+
+// ========== 模块1: 执行摘要 ==========
+func writeModule1(b *strings.Builder, symbol string, steps []StepResult, latest, prev string, score *YearScore, quote *QuoteData) {
+	b.WriteString("# 模块1: 执行摘要\n\n")
+
+	writeEightIndicatorsHighlight(b, steps, latest)
+
+	b.WriteString("## 1.1 多维度评分汇总\n\n")
+	b.WriteString("| 评估维度 | 评级 | 得分 | 关键结论 |\n")
+	b.WriteString("|----------|------|------|----------|\n")
+	if score != nil {
+		b.WriteString(fmt.Sprintf("| **基本面（18步综合）** | %s | **%.0f/100** | %s |\n", scoreToStars(score.RawScore), score.RawScore, gradeComment(score.RawScore)))
+	}
+	b.WriteString(fmt.Sprintf("| **成长能力** | %s | %.0f/100 | %s |\n", scoreToStars(growthScore(steps, latest)), growthScore(steps, latest), growthComment(steps, latest)))
+	b.WriteString(fmt.Sprintf("| **盈利能力** | %s | %.0f/100 | %s |\n", scoreToStars(profitScore(steps, latest)), profitScore(steps, latest), profitComment(steps, latest)))
+	b.WriteString(fmt.Sprintf("| **现金流质量** | %s | %.0f/100 | %s |\n", scoreToStars(cashScore(steps, latest)), cashScore(steps, latest), cashComment(steps, latest)))
+	b.WriteString(fmt.Sprintf("| **偿债安全** | %s | %.0f/100 | %s |\n", scoreToStars(debtScore(steps, latest)), debtScore(steps, latest), debtComment(steps, latest)))
+	vs := valuationScore(quote)
+	vc := valuationComment(quote)
+	if quote != nil && (quote.PE > 0 || quote.PB > 0) {
+		b.WriteString(fmt.Sprintf("| **实时估值** | %s | %.0f/100 | %s |\n", scoreToStars(vs), vs, vc))
+	} else {
+		b.WriteString(fmt.Sprintf("| **实时估值** | - | -/100 | %s |\n", vc))
+	}
+	b.WriteString(fmt.Sprintf("| **技术形态** | - | -/100 | 待接入技术分析数据 |\n"))
+	b.WriteString(fmt.Sprintf("| **ML预测** | - | -/30 | 待接入机器学习模型 |\n"))
+	b.WriteString(fmt.Sprintf("| **逆向检查** | %s | %.0f/100 | %s |\n", scoreToStars(reverseScore(steps, latest, score)), reverseScore(steps, latest, score), reverseComment(steps, latest, score)))
+	b.WriteString(fmt.Sprintf("| **巴芒清单** | %s | %.1f/10 | %s |\n", scoreToStars(buffettScore(steps, latest, score)*10), buffettScore(steps, latest, score), buffettComment(steps, latest, score)))
+	if score != nil {
+		weighted := score.RawScore*0.30 + profitScore(steps, latest)*0.25 + cashScore(steps, latest)*0.20 + growthScore(steps, latest)*0.15 + debtScore(steps, latest)*0.10
+		b.WriteString(fmt.Sprintf("| **综合建议** | **%s** | **%.0f/100** | %s |\n", investmentGrade(weighted), weighted, strategyAdvice(weighted)))
+	}
+	b.WriteString("\n")
+
+	b.WriteString("## 1.2 综合评级与建议\n\n")
+	if score != nil {
+		weighted := score.RawScore*0.30 + profitScore(steps, latest)*0.25 + cashScore(steps, latest)*0.20 + growthScore(steps, latest)*0.15 + debtScore(steps, latest)*0.10
+		b.WriteString(fmt.Sprintf("**综合评分**: %.0f/100 %s  \n", weighted, scoreToStars(weighted)))
+		b.WriteString(fmt.Sprintf("**投资评级**: **%s**  \n", investmentGrade(weighted)))
+		b.WriteString(fmt.Sprintf("**建议仓位**: %s  \n", positionAdvice(weighted)))
+		b.WriteString(fmt.Sprintf("**操作策略**: %s  \n\n", strategyAdvice(weighted)))
+		b.WriteString("> **一句话建议**: ")
+		b.WriteString(oneSentenceAdvice(symbol, weighted, steps, latest))
+		b.WriteString("\n\n")
+	}
+	b.WriteString("---\n\n")
+}
+
+// ========== 模块2: 换手率深度分析 ==========
+func writeModule2(b *strings.Builder, quote *QuoteData) {
+	b.WriteString("# 模块2: 换手率深度分析\n\n")
+
+	if quote == nil || quote.TurnoverRate == 0 {
+		b.WriteString("> **说明**: 当前暂无实时换手率数据。请在网络畅通时重新选中股票获取行情。\n\n")
+		b.WriteString("---\n\n")
+		return
+	}
+
+	tr := quote.TurnoverRate
+	vol := quote.Volume
+	toa := quote.TurnoverAmount
+	vr := quote.VolumeRatio
+
+	b.WriteString("## 2.1 实时换手与成交指标\n\n")
+	b.WriteString("| 指标 | 数值 | 评估 |\n")
+	b.WriteString("|------|------|------|\n")
+	b.WriteString(fmt.Sprintf("| **换手率** | %.2f%% | %s |\n", tr, turnoverAssessment(tr)))
+	b.WriteString(fmt.Sprintf("| **成交量** | %.0f 手 | - |\n", vol))
+	b.WriteString(fmt.Sprintf("| **成交额** | %.0f 万元 | - |\n", toa/10000))
+	if vr > 0 {
+		b.WriteString(fmt.Sprintf("| **量比** | %.2f | %s |\n", vr, volumeRatioAssessment(vr)))
+	}
+	b.WriteString("\n")
+
+	b.WriteString("## 2.2 流动性评级\n\n")
+	if tr < 1 {
+		b.WriteString("- **流动性偏低**：换手率低于 1%，交投清淡，大额买卖可能对价格产生较大冲击。\n")
+	} else if tr < 3 {
+		b.WriteString("- **流动性正常**：换手率在 1%~3% 区间，交易活跃度适中，流动性风险可控。\n")
+	} else if tr < 7 {
+		b.WriteString("- **流动性活跃**：换手率在 3%~7% 区间，市场关注度较高，买卖盘相对充裕。\n")
+	} else {
+		b.WriteString("- **流动性非常活跃**：换手率超过 7%，交投极度活跃，需警惕短期波动放大。\n")
+	}
+	b.WriteString("\n---\n\n")
+}
+
+// ========== 模块3: 公司基本面分析 ==========
+func writeModule3(b *strings.Builder, steps []StepResult, years []string, latest, prev string) {
+	b.WriteString("# 模块3: 公司基本面分析\n\n")
+
+	b.WriteString("## 3.1 全年核心财务数据" + traceTrigger(3,9,10,15,16) + "\n\n")
+	b.WriteString(fmt.Sprintf("| 指标 | %s | %s | 同比 | 评估 |\n", latest, prev))
+	b.WriteString("|------|--------|------|------|------|\n")
+	writeMetricRow(b, "营业收入", getStepValue(steps, 9, latest, "revenue"), getStepValue(steps, 9, prev, "revenue"), "亿元", 1e8)
+	writeMetricRow(b, "归母净利润", getStepValue(steps, 16, latest, "profit"), getStepValue(steps, 16, prev, "profit"), "亿元", 1e8)
+	writeMetricRow(b, "ROE", getStepValue(steps, 16, latest, "roe"), getStepValue(steps, 16, prev, "roe"), "%", 1)
+	writeMetricRow(b, "毛利率", getStepValue(steps, 10, latest, "grossMargin"), getStepValue(steps, 10, prev, "grossMargin"), "%", 1)
+	writeMetricRow(b, "资产负债率", getStepValue(steps, 3, latest, "debtRatio"), getStepValue(steps, 3, prev, "debtRatio"), "%", 1)
+	writeMetricRow(b, "经营现金流净额", getStepValue(steps, 15, latest, "operatingCF"), getStepValue(steps, 15, prev, "operatingCF"), "亿元", 1e8)
+	b.WriteString("\n")
+
+	b.WriteString("## 3.2 核心财务指标趋势（近5年）" + traceTrigger(3,9,10,15,16) + "\n\n")
+	b.WriteString("| 年度 | ROE | 毛利率 | 资产负债率 | 营收增长率 | 净利润现金含量 | M-Score |\n")
+	b.WriteString("|------|-----|--------|------------|------------|----------------|---------|\n")
+	for i := 0; i < len(years) && i < 5; i++ {
+		year := years[i]
+		b.WriteString(fmt.Sprintf("| %s | %s | %s | %s | %s | %s | %s |\n",
+			year,
+			fmtVal(getStepValue(steps, 16, year, "roe"), "%"),
+			fmtVal(getStepValue(steps, 10, year, "grossMargin"), "%"),
+			fmtVal(getStepValue(steps, 3, year, "debtRatio"), "%"),
+			fmtVal(getStepValue(steps, 9, year, "growthRate"), "%"),
+			fmtVal(getStepValue(steps, 15, year, "cashRatio"), "%"),
+			fmtVal(getStepValue(steps, 8, year, "MScore"), ""),
+		))
+	}
+	b.WriteString("\n")
+	b.WriteString("> **解读**: 持续观察ROE和毛利率的趋势变化，若连续下滑需警惕竞争力衰退；资产负债率稳定或下降为加分项；M-Score若持续高于-2.22建议核查财报真实性。\n\n")
+
+	b.WriteString(fmt.Sprintf("## 3.3 十八步分析详情（%s）\n\n", latest))
+	categories := []struct {
+		name  string
+		steps []int
+	}{
+		{"会计与资产质量", []int{1, 2, 5, 6, 7, 8}},
+		{"偿债与营运安全", []int{3, 4, 11, 17}},
+		{"盈利能力", []int{10, 12, 13, 14, 16}},
+		{"现金流与分红", []int{15, 18}},
+		{"成长能力", []int{9}},
+	}
+	b.WriteString("| 维度 | 达标数/总数 | 状态 |\n")
+	b.WriteString("|------|-------------|------|\n")
+	for _, cat := range categories {
+		pass, total := countCategoryPass(steps, cat.steps, latest)
+		status := "🟢 健康"
+		if pass < total {
+			if float64(pass)/float64(total) < 0.6 {
+				status = "🔴 偏弱"
+			} else {
+				status = "🟡 一般"
+			}
+		}
+		b.WriteString(fmt.Sprintf("| %s | %d/%d | %s |\n", cat.name, pass, total, status))
+	}
+	b.WriteString("\n")
+
+	b.WriteString("## 3.4 核心风险点\n\n")
+	risks := extractRisks(steps, latest)
+	if len(risks) == 0 {
+		b.WriteString("未发现重大风险，财务整体可控。\n")
+	} else {
+		b.WriteString("| 风险类别 | 风险描述 | 严重程度 |\n")
+		b.WriteString("|----------|----------|----------|\n")
+		for _, r := range risks {
+			b.WriteString(fmt.Sprintf("| %s | %s | %s |\n", r.Category, r.Indicator, r.Severity))
+		}
+	}
+	b.WriteString("\n---\n\n")
+}
+
+// ========== 模块4: 行业横向对比分析 ==========
+func writeModule4(b *strings.Builder, steps []StepResult, latest string, comp *ComparableAnalysis) {
+	b.WriteString("# 模块4: 行业横向对比分析\n\n")
+
+	if comp == nil || !comp.HasData || len(comp.Metrics) == 0 {
+		b.WriteString("> **说明**: 当前未配置可比公司，或可比公司数据尚未下载。请在股票详情页的\"可比公司\"面板中添加 3~5 家对标公司并下载其财报数据。\n\n")
+		b.WriteString("---\n\n")
+		return
+	}
+
+	target := &ComparableMetrics{
+		Symbol:        "当前公司",
+		ROE:           getStepValue(steps, 16, latest, "roe"),
+		GrossMargin:   getStepValue(steps, 10, latest, "grossMargin"),
+		RevenueGrowth: getStepValue(steps, 9, latest, "growthRate"),
+		DebtRatio:     getStepValue(steps, 3, latest, "debtRatio"),
+		CashRatio:     getStepValue(steps, 15, latest, "cashRatio"),
+		MScore:        getStepValue(steps, 8, latest, "MScore"),
+	}
+
+	b.WriteString(fmt.Sprintf("## 4.1 可比公司关键指标对比（%s）", latest) + traceTrigger(3,9,10,15,16) + "\n\n")
+	b.WriteString("| 指标 | 当前公司 | 可比均值 | 最高 | 最低 | 排名百分位 |\n")
+	b.WriteString("|------|----------|----------|------|------|------------|\n")
+	b.WriteString(fmt.Sprintf("| **ROE** | %.2f%% | %.2f%% | %.2f%% | %.2f%% | %.0f%% |\n",
+		target.ROE, comp.Average.ROE, comp.Max.ROE, comp.Min.ROE, RankPercentile(comp.Metrics, target, "roe")))
+	b.WriteString(fmt.Sprintf("| **毛利率** | %.2f%% | %.2f%% | %.2f%% | %.2f%% | %.0f%% |\n",
+		target.GrossMargin, comp.Average.GrossMargin, comp.Max.GrossMargin, comp.Min.GrossMargin, RankPercentile(comp.Metrics, target, "grossMargin")))
+	b.WriteString(fmt.Sprintf("| **营收增长率** | %.2f%% | %.2f%% | %.2f%% | %.2f%% | %.0f%% |\n",
+		target.RevenueGrowth, comp.Average.RevenueGrowth, comp.Max.RevenueGrowth, comp.Min.RevenueGrowth, RankPercentile(comp.Metrics, target, "revenueGrowth")))
+	b.WriteString(fmt.Sprintf("| **资产负债率** | %.2f%% | %.2f%% | %.2f%% | %.2f%% | %.0f%% |\n",
+		target.DebtRatio, comp.Average.DebtRatio, comp.Max.DebtRatio, comp.Min.DebtRatio, RankPercentile(comp.Metrics, target, "debtRatio")))
+	b.WriteString(fmt.Sprintf("| **净利润现金含量** | %.2f%% | %.2f%% | %.2f%% | %.2f%% | %.0f%% |\n",
+		target.CashRatio, comp.Average.CashRatio, comp.Max.CashRatio, comp.Min.CashRatio, RankPercentile(comp.Metrics, target, "cashRatio")))
+	b.WriteString(fmt.Sprintf("| **M-Score** | %.3f | %.3f | %.3f | %.3f | %.0f%% |\n",
+		target.MScore, comp.Average.MScore, comp.Max.MScore, comp.Min.MScore, RankPercentile(comp.Metrics, target, "mScore")))
+	b.WriteString("\n")
+
+	b.WriteString("## 4.2 可比公司明细\n\n")
+	b.WriteString("| 公司 | ROE | 毛利率 | 营收增长 | 负债率 | 现金含量 | M-Score |\n")
+	b.WriteString("|------|-----|--------|----------|--------|----------|---------|\n")
+	for _, m := range comp.Metrics {
+		b.WriteString(fmt.Sprintf("| %s | %.2f%% | %.2f%% | %.2f%% | %.2f%% | %.2f%% | %.3f |\n",
+			m.Symbol, m.ROE, m.GrossMargin, m.RevenueGrowth, m.DebtRatio, m.CashRatio, m.MScore))
+	}
+	b.WriteString(fmt.Sprintf("| **平均值** | %.2f%% | %.2f%% | %.2f%% | %.2f%% | %.2f%% | %.3f |\n",
+		comp.Average.ROE, comp.Average.GrossMargin, comp.Average.RevenueGrowth, comp.Average.DebtRatio, comp.Average.CashRatio, comp.Average.MScore))
+	b.WriteString("\n")
+
+	b.WriteString("> **解读**: 排名百分位表示当前公司在可比公司中的相对位置（越高越好，负债率与 M-Score 为反向指标）。\n\n")
+
+	// 多年度趋势对比
+	if len(comp.YearlyTrends) >= 2 && len(comp.CommonYears) >= 2 {
+		b.WriteString("## 4.3 多年度趋势对比（当前公司 vs 可比均值）\n\n")
+		b.WriteString("| 年份 | ROE(公司/均值) | 毛利率(公司/均值) | 负债率(公司/均值) | 现金含量(公司/均值) |\n")
+		b.WriteString("|------|----------------|-------------------|-------------------|---------------------|\n")
+		for _, yt := range comp.YearlyTrends {
+			ty := getStepValue(steps, 16, yt.Year, "roe")
+			tgm := getStepValue(steps, 10, yt.Year, "grossMargin")
+			tdr := getStepValue(steps, 3, yt.Year, "debtRatio")
+			tcr := getStepValue(steps, 15, yt.Year, "cashRatio")
+			b.WriteString(fmt.Sprintf("| **%s** | %.2f%% / %.2f%% | %.2f%% / %.2f%% | %.2f%% / %.2f%% | %.2f%% / %.2f%% |\n",
+				yt.Year, ty, yt.Average.ROE, tgm, yt.Average.GrossMargin, tdr, yt.Average.DebtRatio, tcr, yt.Average.CashRatio))
+		}
+		b.WriteString("\n")
+
+		b.WriteString("### 趋势简评\n\n")
+		writeComparableTrendComment(b, steps, comp)
+		b.WriteString("\n")
+	}
+
+	b.WriteString("---\n\n")
+}
+
+// ========== 模块5: 十五五政策匹配度评估 ==========
+func writeModule5(b *strings.Builder, policy *PolicyMatchData) {
+	b.WriteString("# 模块5: 十五五政策匹配度评估\n\n")
+
+	if policy == nil || policy.Industry == "" {
+		b.WriteString("> **说明**: 当前暂无政策匹配数据。请在网络畅通时重新选中股票获取基本资料。\n\n")
+		b.WriteString("---\n\n")
+		return
+	}
+
+	b.WriteString("## 5.1 政策匹配概览\n\n")
+	b.WriteString(fmt.Sprintf("| 评估维度 | 结果 |\n"))
+	b.WriteString(fmt.Sprintf("|----------|------|\n"))
+	b.WriteString(fmt.Sprintf("| **所属行业** | %s |\n", policy.Industry))
+	b.WriteString(fmt.Sprintf("| **匹配评级** | %s |\n", policy.MatchLevel))
+	b.WriteString(fmt.Sprintf("| **政策评分** | %d / 100 |\n", policy.Score))
+	b.WriteString("\n")
+
+	b.WriteString("## 5.2 重点政策方向\n\n")
+	for _, p := range policy.Policies {
+		b.WriteString(fmt.Sprintf("- **%s**\n", p))
+	}
+	b.WriteString("\n")
+
+	b.WriteString("## 5.3 解读摘要\n\n")
+	b.WriteString(fmt.Sprintf("> %s\n\n", policy.Summary))
+
+	b.WriteString("---\n\n")
+}
+
+// ========== 模块6: 实时行情数据 ==========
+func writeModule6(b *strings.Builder, quote *QuoteData) {
+	b.WriteString("# 模块6: 实时行情数据\n\n")
+
+	if quote == nil || quote.CurrentPrice == 0 {
+		b.WriteString("> **说明**: 当前暂无实时行情数据。请在网络畅通时重新选中股票获取行情。\n\n")
+		b.WriteString("---\n\n")
+		return
+	}
+
+	b.WriteString("## 5.1 实时价格与涨跌\n\n")
+	b.WriteString("| 指标 | 数值 |\n")
+	b.WriteString("|------|------|\n")
+	b.WriteString(fmt.Sprintf("| **最新价** | %.2f 元 |\n", quote.CurrentPrice))
+	b.WriteString(fmt.Sprintf("| **涨跌额** | %+.2f 元 |\n", quote.ChangeAmount))
+	b.WriteString(fmt.Sprintf("| **涨跌幅** | %+.2f%% |\n", quote.ChangePercent))
+	b.WriteString(fmt.Sprintf("| **今日最高** | %.2f 元 |\n", quote.High))
+	b.WriteString(fmt.Sprintf("| **今日最低** | %.2f 元 |\n", quote.Low))
+	b.WriteString(fmt.Sprintf("| **今开** | %.2f 元 |\n", quote.Open))
+	b.WriteString(fmt.Sprintf("| **昨收** | %.2f 元 |\n", quote.PreviousClose))
+	b.WriteString(fmt.Sprintf("| **振幅** | %.2f%% |\n", quote.Amplitude))
+	b.WriteString("\n")
+
+	b.WriteString("## 5.2 实时估值指标\n\n")
+	b.WriteString("| 指标 | 数值 |\n")
+	b.WriteString("|------|------|\n")
+	if quote.MarketCap > 0 {
+		b.WriteString(fmt.Sprintf("| **总市值** | %.2f 亿元 |\n", quote.MarketCap/1e8))
+	}
+	if quote.CirculatingMarketCap > 0 {
+		b.WriteString(fmt.Sprintf("| **流通市值** | %.2f 亿元 |\n", quote.CirculatingMarketCap/1e8))
+	}
+	if quote.PE > 0 {
+		b.WriteString(fmt.Sprintf("| **市盈率(动)** | %.2f |\n", quote.PE))
+	}
+	if quote.PB > 0 {
+		b.WriteString(fmt.Sprintf("| **市净率** | %.2f |\n", quote.PB))
+	}
+	b.WriteString("\n---\n\n")
+}
+
+// ========== 模块6: RIM估值（基于现有数据做简化版） ==========
+func writeModule7(b *strings.Builder, steps []StepResult, latest string) {
+	b.WriteString("# 模块7: 剩余收益模型估值(RIM)\n\n")
+	b.WriteString("> **说明**: 当前版本基于财务报表中的 ROE 与净利润做简化 RIM 估算，未接入实时股价。未来可接入行情接口进行完整估值建模。\n\n")
+
+	roe := getStepValue(steps, 16, latest, "roe")
+	eps := 0.0
+	if profit := getStepValue(steps, 16, latest, "profit"); profit > 0 {
+		// 无法获取股本，用占位提示
+		eps = -1
+	}
+	b.WriteString(fmt.Sprintf("## 7.1 模型参数（基于 %s 年报）", latest) + traceTrigger(16) + "\n\n")
+	b.WriteString("| 参数 | 符号 | 取值 | 说明 |\n")
+	b.WriteString("|------|------|------|------|\n")
+	b.WriteString(fmt.Sprintf("| **%s ROE** | ROE | %.2f%% | 年报数据 |\n", latest, roe))
+	if eps >= 0 {
+		b.WriteString(fmt.Sprintf("| **最新EPS** | EPS | %.2f元 | 推算值 |\n", eps))
+	} else {
+		b.WriteString("| **最新EPS** | EPS | 待计算 | 需接入总股本数据 |\n")
+	}
+	b.WriteString("| **资本成本** | r | 7.0% | 假设值 |\n")
+	b.WriteString("| **永续增长率** | g | 3.0% | 假设值 |\n")
+	b.WriteString("| **当前股价** | P | - | 待接入实时行情 |\n")
+	b.WriteString("\n")
+
+	b.WriteString("## 6.2 估值情景（简化版）\n\n")
+	b.WriteString("| 情景 | ROE假设 | 内在价值/净资产 | 评级 |\n")
+	b.WriteString("|------|---------|----------------|------|\n")
+	b.WriteString("| 悲观 | ROE-3pp | 约1.2-1.5x PB | 谨慎 |\n")
+	b.WriteString("| 基准 | 维持当前 | 约1.5-2.0x PB | 中性 |\n")
+	b.WriteString("| 乐观 | ROE+3pp | 约2.0-2.5x PB | 积极 |\n")
+	b.WriteString("\n")
+
+	b.WriteString("> **解读**: RIM 估值的核心在于 ROE 能否持续高于资本成本。")
+	if roe >= 15 {
+		b.WriteString(fmt.Sprintf("当前 ROE %.2f%% 高于一般资本成本，具备创造价值的能力。", roe))
+	} else if roe > 7 {
+		b.WriteString(fmt.Sprintf("当前 ROE %.2f%% 略高于资本成本，但安全边际不足。", roe))
+	} else {
+		b.WriteString(fmt.Sprintf("当前 ROE %.2f%% 低于资本成本，长期可能侵蚀股东价值。", roe))
+	}
+	b.WriteString("\n\n---\n\n")
+}
+
+// ========== 模块7: 技术面分析 ==========
+func writeModule8(b *strings.Builder, quote *QuoteData) {
+	b.WriteString("# 模块8: 技术面分析\n\n")
+
+	if quote == nil || quote.CurrentPrice == 0 {
+		b.WriteString("> **说明**: 当前暂无实时行情数据，无法生成技术面分析。请在网络畅通时重新选中股票获取行情。\n\n")
+		b.WriteString("---\n\n")
+		return
+	}
+
+	cp := quote.CurrentPrice
+	high := quote.High
+	low := quote.Low
+	open := quote.Open
+	prev := quote.PreviousClose
+	tr := quote.TurnoverRate
+	amp := quote.Amplitude
+
+	b.WriteString("## 7.1 日内价格位置\n\n")
+	if high > low {
+		pos := (cp - low) / (high - low) * 100
+		b.WriteString(fmt.Sprintf("- 当前价格处于今日高低点区间的 **%.1f%%** 位置", pos))
+		if pos > 70 {
+			b.WriteString("，接近日内高点，多头力量较强。\n")
+		} else if pos < 30 {
+			b.WriteString("，接近日内低点，空头压力较大。\n")
+		} else {
+			b.WriteString("，位于中间区域，多空博弈均衡。\n")
+		}
+	}
+	if open > 0 && prev > 0 {
+		gap := (open - prev) / prev * 100
+		if math.Abs(gap) > 1 {
+			b.WriteString(fmt.Sprintf("- 今日开盘跳空 %.2f%%，%s\n", gap, gapDirection(gap)))
+		}
+	}
+	b.WriteString("\n")
+
+	b.WriteString("## 7.2 量价关系简评\n\n")
+	if tr >= 3 && amp >= 3 {
+		b.WriteString("- **高换手高振幅**：交投活跃，资金博弈激烈，短期趋势可能延续。\n")
+	} else if tr >= 3 && amp < 3 {
+		b.WriteString("- **高换手低振幅**：筹码交换充分但价格波动有限，可能是蓄势或出货信号。\n")
+	} else if tr < 1 && amp >= 3 {
+		b.WriteString("- **低换手高振幅**：流动性不足导致价格易受大单影响，波动具有偶然性。\n")
+	} else {
+		b.WriteString("- **低换手低振幅**：交投清淡，趋势惯性较强，突破需放量确认。\n")
+	}
+
+	b.WriteString("\n## 7.3 短期技术倾向\n\n")
+	score := 0
+	if quote.ChangePercent > 0 { score++ }
+	if cp > open { score++ }
+	if high > prev && low > prev*0.97 { score++ }
+	if tr > 1 { score++ }
+
+	switch score {
+	case 4:
+		b.WriteString("**偏多**:  price、开盘、高低点及换手均呈现积极信号。\n")
+	case 3:
+		b.WriteString("**略偏多**: 大部分日内指标偏向积极，但有一处偏弱。\n")
+	case 2:
+		b.WriteString("**中性**: 多空信号交织，短期方向不明。\n")
+	case 1:
+		b.WriteString("**略偏空**: 大部分日内指标偏弱，仅有一处积极信号。\n")
+	default:
+		b.WriteString("**偏空**: price、开盘、高低点及换手均呈现弱势信号。\n")
+	}
+	b.WriteString("\n---\n\n")
+}
+
+// ========== 模块8: ML机器学习预测（占位+基于财务的简易推断） ==========
+func writeModule9(b *strings.Builder, steps []StepResult, latest, prev string) {
+	b.WriteString("# 模块9: ML机器学习预测\n\n")
+	b.WriteString("> **说明**: 当前版本暂无机器学习模型，以下基于财务趋势做简易方向推断。\n\n")
+
+	b.WriteString("## 8.1 负向因子\n\n")
+	var neg, pos []string
+	if g := getStepValue(steps, 9, latest, "growthRate"); g < 10 {
+		neg = append(neg, fmt.Sprintf("- 营收增长率 %.2f%%，低于理想水平", g))
+	}
+	if pg := getStepValue(steps, 16, latest, "profitGrowth"); pg < 10 {
+		neg = append(neg, fmt.Sprintf("- 净利润增长率 %.2f%%，低于理想水平", pg))
+	}
+	if roe := getStepValue(steps, 16, latest, "roe"); roe < 15 {
+		neg = append(neg, fmt.Sprintf("- ROE %.2f%%，资本回报能力偏弱", roe))
+	}
+	if gm := getStepValue(steps, 10, latest, "grossMargin"); gm < 40 {
+		neg = append(neg, fmt.Sprintf("- 毛利率 %.2f%%，产品竞争力未达高毛利标准", gm))
+	}
+	if ms := getStepValue(steps, 8, latest, "MScore"); ms > -2.22 {
+		neg = append(neg, fmt.Sprintf("- M-Score %.3f，财报真实性需核查", ms))
+	}
+	if dr := getStepValue(steps, 3, latest, "debtRatio"); dr > 60 {
+		neg = append(neg, fmt.Sprintf("- 资产负债率 %.2f%%，偿债压力偏大", dr))
+	}
+	if len(neg) == 0 {
+		neg = append(neg, "- 暂无显著负向因子")
+	}
+	for _, s := range neg {
+		b.WriteString(s + "\n")
+	}
+	b.WriteString("\n")
+
+	b.WriteString("## 8.2 正向因子\n\n")
+	if g := getStepValue(steps, 9, latest, "growthRate"); g >= 10 {
+		pos = append(pos, fmt.Sprintf("- 营收增长率 %.2f%%，保持稳健增长", g))
+	}
+	if pg := getStepValue(steps, 16, latest, "profitGrowth"); pg >= 10 {
+		pos = append(pos, fmt.Sprintf("- 净利润增长率 %.2f%%，盈利能力持续改善", pg))
+	}
+	if roe := getStepValue(steps, 16, latest, "roe"); roe >= 15 {
+		pos = append(pos, fmt.Sprintf("- ROE %.2f%%，资本回报能力良好", roe))
+	}
+	if gm := getStepValue(steps, 10, latest, "grossMargin"); gm >= 40 {
+		pos = append(pos, fmt.Sprintf("- 毛利率 %.2f%%，具备较强定价权", gm))
+	}
+	if dr := getStepValue(steps, 3, latest, "debtRatio"); dr <= 40 {
+		pos = append(pos, fmt.Sprintf("- 资产负债率 %.2f%%，财务结构稳健", dr))
+	}
+	if cr := getStepValue(steps, 15, latest, "cashRatio"); cr >= 100 {
+		pos = append(pos, fmt.Sprintf("- 净利润现金含量 %.2f%%，盈利质量高", cr))
+	}
+	if ms := getStepValue(steps, 8, latest, "MScore"); ms <= -2.22 {
+		pos = append(pos, fmt.Sprintf("- M-Score %.3f，财报操纵风险低", ms))
+	}
+	if len(pos) == 0 {
+		pos = append(pos, "- 暂无显著正向因子")
+	}
+	for _, s := range pos {
+		b.WriteString(s + "\n")
+	}
+	b.WriteString("\n")
+
+	b.WriteString("## 8.3 简易预测结论\n\n")
+	score := 50.0
+	score -= float64(len(neg)) * 8
+	score += float64(len(pos)) * 8
+	score = math.Max(0, math.Min(100, score))
+	b.WriteString(fmt.Sprintf("**财务趋势评分**: %.0f/100（基于正负向因子简易加权）\n\n", score))
+	b.WriteString("---\n\n")
+}
+
+// ========== 模块9: 智能选股6大条件 ==========
+func writeModule10(b *strings.Builder, steps []StepResult, latest, prev string) {
+	b.WriteString("# 模块10: 智能选股6大条件\n\n")
+	b.WriteString("## 9.1 条件检查表" + traceTrigger(3,9,10,15,16) + "\n\n")
+
+	roe := getStepValue(steps, 16, latest, "roe")
+	gm := getStepValue(steps, 10, latest, "grossMargin")
+	growth := getStepValue(steps, 9, latest, "growthRate")
+	ms := getStepValue(steps, 8, latest, "MScore")
+	dr := getStepValue(steps, 3, latest, "debtRatio")
+	cashDiff := getStepValue(steps, 3, latest, "cashDebtDiff")
+	cr := getStepValue(steps, 15, latest, "cashRatio")
+
+	conditions := []struct {
+		name   string
+		std    string
+		value  string
+		pass   bool
+		points int
+		max    int
+	}{
+		{"① ROE ≥ 15%", "≥15%", fmt.Sprintf("%.2f%%", roe), roe >= 15, 20, 20},
+		{"② 毛利率 ≥ 40%", "≥40%", fmt.Sprintf("%.2f%%", gm), gm >= 40, 15, 15},
+		{"③ 营收增长 ≥ 10%", "≥10%", fmt.Sprintf("%.2f%%", growth), growth >= 10, 15, 15},
+		{"④ M-Score ≤ -2.22", "≤-2.22", fmt.Sprintf("%.3f", ms), ms <= -2.22, 15, 15},
+		{"⑤ 资产负债率 ≤ 60%", "≤60%", fmt.Sprintf("%.2f%%", dr), dr <= 60, 10, 10},
+		{"⑥ 净利润现金含量 ≥ 100%", "≥100%", fmt.Sprintf("%.2f%%", cr), cr >= 100, 15, 15},
+		{"⑦ 准货币资金-有息负债 ≥ 0", "≥0", fmt.Sprintf("%.2f亿", cashDiff/1e8), cashDiff >= 0, 10, 10},
+	}
+
+	b.WriteString("| 条件 | 标准 | 实际值 | 是否满足 | 得分 |\n")
+	b.WriteString("|------|------|--------|----------|------|\n")
+	totalScore := 0
+	passCount := 0
+	for _, c := range conditions {
+		passStr := "❌"
+		if c.pass {
+			passStr = "✅"
+			passCount++
+			totalScore += c.points
+		}
+		b.WriteString(fmt.Sprintf("| %s | %s | %s | %s | %d/%d |\n", c.name, c.std, c.value, passStr, totalScore, c.max))
+	}
+	b.WriteString(fmt.Sprintf("| **总分** | - | - | **%d/%d项** | **%d/100** |\n", passCount, len(conditions), totalScore))
+	b.WriteString("\n")
+
+	if passCount >= 5 {
+		b.WriteString("**选股评级**: ✅ **符合**核心买入条件\n\n")
+	} else if passCount >= 3 {
+		b.WriteString("**选股评级**: 🟡 **部分符合**，需观察短板改善\n\n")
+	} else {
+		b.WriteString("**选股评级**: ❌ **不符合**买入条件\n\n")
+	}
+	b.WriteString("---\n\n")
+}
+
+// ========== 模块10: 芒格逆向思维检查 ==========
+func writeModule11(b *strings.Builder, steps []StepResult, latest string, score *YearScore) {
+	b.WriteString("# 模块11: 芒格逆向思维检查\n\n")
+
+	b.WriteString("## 10.1 逆向三问\n\n")
+
+	b.WriteString("### 问1: 市场忽略了什么负面因素？\n\n")
+	risks := extractRisks(steps, latest)
+	if len(risks) == 0 {
+		b.WriteString("- 暂未发现重大被忽略的负面因素。\n")
+	} else {
+		for _, r := range risks {
+			b.WriteString(fmt.Sprintf("- **%s**: %s（%s）\n", r.Category, r.Indicator, r.Desc))
+		}
+	}
+	b.WriteString("\n")
+
+	b.WriteString("### 问2: 悲观时忽略了什么积极因素？\n\n")
+	var positives []string
+	if g := getStepValue(steps, 9, latest, "growthRate"); g >= 10 {
+		positives = append(positives, fmt.Sprintf("- 营收保持 %.2f%% 增长，业务仍在扩张", g))
+	}
+	if roe := getStepValue(steps, 16, latest, "roe"); roe >= 15 {
+		positives = append(positives, fmt.Sprintf("- ROE %.2f%%，长期资本回报能力依然优秀", roe))
+	}
+	if gm := getStepValue(steps, 10, latest, "grossMargin"); gm >= 40 {
+		positives = append(positives, fmt.Sprintf("- 毛利率 %.2f%%，护城河较深", gm))
+	}
+	if dr := getStepValue(steps, 3, latest, "debtRatio"); dr <= 40 {
+		positives = append(positives, fmt.Sprintf("- 资产负债率 %.2f%%，财务结构健康", dr))
+	}
+	if cr := getStepValue(steps, 15, latest, "cashRatio"); cr >= 100 {
+		positives = append(positives, fmt.Sprintf("- 经营现金流充沛，净利润含金量 %.2f%%", cr))
+	}
+	if ms := getStepValue(steps, 8, latest, "MScore"); ms <= -2.22 {
+		positives = append(positives, fmt.Sprintf("- M-Score %.3f，财报质量可信", ms))
+	}
+	if len(positives) == 0 {
+		positives = append(positives, "- 当前财务数据中积极因素不明显，需等待基本面改善信号。")
+	}
+	for _, p := range positives {
+		b.WriteString(p + "\n")
+	}
+	b.WriteString("\n")
+
+	b.WriteString("### 问3: 什么情况下这笔交易会成功？\n\n")
+	b.WriteString("**反转触发器**:\n")
+	b.WriteString("1. ROE 持续回升并稳定在 15% 以上\n")
+	b.WriteString("2. 毛利率止跌回升，定价权修复\n")
+	b.WriteString("3. 经营现金流持续覆盖净利润\n")
+	b.WriteString("4. M-Score 回落至 -2.22 以下\n")
+	b.WriteString("\n")
+
+	b.WriteString("## 10.2 逆向检查评分\n\n")
+	revScore := reverseScore(steps, latest, score)
+	b.WriteString(fmt.Sprintf("**基础分**: 85分  \n"))
+	b.WriteString(fmt.Sprintf("**扣分合计**: %.0f分  \n", math.Max(0, 85-revScore)))
+	b.WriteString(fmt.Sprintf("**最终评分**: %.0f/100  \n", revScore))
+	if revScore >= 70 {
+		b.WriteString("**风险评级**: 🟢 **中等偏低风险**\n\n")
+	} else if revScore >= 50 {
+		b.WriteString("**风险评级**: 🟠 **中等风险**\n\n")
+	} else {
+		b.WriteString("**风险评级**: 🔴 **中高风险**\n\n")
+	}
+	b.WriteString("---\n\n")
+}
+
+// ========== 模块11: 巴菲特-芒格投资检查清单 ==========
+func writeModule12(b *strings.Builder, steps []StepResult, latest string, score *YearScore) {
+	b.WriteString("# 模块12: 巴菲特-芒格投资检查清单\n\n")
+	b.WriteString("## 11.1 7项核心检查" + traceTrigger(3,7,10,15,16,18) + "\n\n")
+
+	roe := getStepValue(steps, 16, latest, "roe")
+	gm := getStepValue(steps, 10, latest, "grossMargin")
+	growth := getStepValue(steps, 9, latest, "growthRate")
+	pg := getStepValue(steps, 16, latest, "profitGrowth")
+	ms := getStepValue(steps, 8, latest, "MScore")
+	dr := getStepValue(steps, 3, latest, "debtRatio")
+	cr := getStepValue(steps, 15, latest, "cashRatio")
+	divRatio := getStepValue(steps, 18, latest, "ratio")
+
+	checks := []struct {
+		dim    string
+		weight string
+		item   string
+		score  float64
+		desc   string
+	}{
+		{"护城河", "15%", "竞争优势（毛利率/ROE）", mapScore(gm, 40, 20, 5), moatComment(gm, roe)},
+		{"能力圈", "10%", "业务可理解（主业专注度）", mapScore(getStepValue(steps, 7, latest, "ratio"), 10, 30, 5), "投资类资产占比反映主业专注度"},
+		{"安全边际", "20%", "估值有折扣（暂缺股价）", 3, "未接入实时股价，无法计算安全边际"},
+		{"长期价值", "10%", "持续经营能力（现金流/分红）", mapScore(divRatio, 45, 70, 5), fmt.Sprintf("分红占比 %.1f%%，分红可持续性待观察", divRatio)},
+		{"管理层", "10%", "诚信可靠（M-Score审计质量）", mapScore(-ms, 2.22, 1.0, 5), fmt.Sprintf("M-Score=%.3f%s", ms, auditComment(ms))},
+		{"财务稳健", "20%", "现金流健康/负债率低", (mapScore(dr, 60, 80, 5) + mapScore(cr, 100, 50, 5)) / 2, fmt.Sprintf("负债率%.1f%%，现金含量%.1f%%", dr, cr)},
+		{"供需格局", "15%", "成长空间（营收增长率）", mapScore(growth, 20, 0, 5), growthComment(steps, latest)},
+	}
+
+	b.WriteString("| 维度 | 权重 | 检查项 | 评分 | 说明 |\n")
+	b.WriteString("|------|------|--------|------|------|\n")
+	total := 0.0
+	for _, c := range checks {
+		b.WriteString(fmt.Sprintf("| %s | %s | %s | %.1f/5 | %s |\n", c.dim, c.weight, c.item, c.score, c.desc))
+		total += c.score
+	}
+	b.WriteString(fmt.Sprintf("| **总分** | 100%% | - | **%.1f/10** | %s |\n", total/3.5, buffettComment(steps, latest, score)))
+	b.WriteString("\n")
+
+	b.WriteString("## 11.2 关键否决项\n\n")
+	if roe < 15 {
+		b.WriteString(fmt.Sprintf("- ❌ ROE>15%%可持续？**存疑**（当前%.2f%%）\n", roe))
+	} else {
+		b.WriteString(fmt.Sprintf("- ✅ ROE>15%%可持续？**通过**（当前%.2f%%）\n", roe))
+	}
+	if growth < 0 || pg < 0 {
+		b.WriteString(fmt.Sprintf("- ❌ 业绩正增长？**否**（营收%.2f%%，净利润%.2f%%）\n", growth, pg))
+	} else {
+		b.WriteString(fmt.Sprintf("- ✅ 业绩正增长？**是**（营收%.2f%%，净利润%.2f%%）\n", growth, pg))
+	}
+	if ms > -2.22 {
+		b.WriteString(fmt.Sprintf("- ❌ 财报可信？**存疑**（M-Score %.3f）\n", ms))
+	} else {
+		b.WriteString(fmt.Sprintf("- ✅ 财报可信？**通过**（M-Score %.3f）\n", ms))
+	}
+	b.WriteString("\n---\n\n")
+}
+
+// ========== 模块12: 社交媒体情绪监控 ==========
+func writeModule13(b *strings.Builder, sentiment *SentimentData) {
+	b.WriteString("# 模块13: 社交媒体情绪监控\n\n")
+
+	if sentiment == nil || !sentiment.HasData {
+		b.WriteString("> **说明**: 当前暂无可用舆情数据（网络受限或该股票近期无相关研报/资讯）。\n\n")
+		b.WriteString("---\n\n")
+		return
+	}
+
+	// 12.1 情绪指标
+	b.WriteString("## 12.1 情绪指标\n\n")
+	b.WriteString("| 指标 | 数值 | 说明 |\n")
+	b.WriteString("|------|------|------|\n")
+
+	scoreEmoji := "🟡"
+	scoreDesc := "中性"
+	if sentiment.Score > 0.3 {
+		scoreEmoji = "🟢"
+		scoreDesc = "偏多"
+	} else if sentiment.Score < -0.3 {
+		scoreEmoji = "🔴"
+		scoreDesc = "偏空"
+	}
+	b.WriteString(fmt.Sprintf("| %s 情绪得分 | %.2f | %s |\n", scoreEmoji, sentiment.Score, scoreDesc))
+	b.WriteString(fmt.Sprintf("| 📊 热度指数 | %d 条 | 近一年相关研报/资讯数量 |\n", sentiment.HeatIndex))
+	b.WriteString(fmt.Sprintf("| ✅ 利好信号 | %d 个 | 命中正面关键词次数 |\n", len(sentiment.PositiveWords)))
+	b.WriteString(fmt.Sprintf("| ⚠️ 风险信号 | %d 个 | 命中负面关键词次数 |\n", len(sentiment.NegativeWords)))
+	b.WriteString("\n")
+
+	// 12.2 关键词云
+	if len(sentiment.PositiveWords) > 0 || len(sentiment.NegativeWords) > 0 {
+		b.WriteString("## 12.2 关键词云\n\n")
+		if len(sentiment.PositiveWords) > 0 {
+			b.WriteString("**正面关键词**：" + strings.Join(sentiment.PositiveWords, "、") + "\n\n")
+		}
+		if len(sentiment.NegativeWords) > 0 {
+			b.WriteString("**负面关键词**：" + strings.Join(sentiment.NegativeWords, "、") + "\n\n")
+		}
+	}
+
+	// 12.3 最新舆情摘要
+	if len(sentiment.Summaries) > 0 {
+		b.WriteString("## 12.3 最新舆情摘要\n\n")
+		for _, s := range sentiment.Summaries {
+			emoji := "🟡"
+			if s.Sentiment > 0.3 {
+				emoji = "🟢"
+			} else if s.Sentiment < -0.3 {
+				emoji = "🔴"
+			}
+			b.WriteString(fmt.Sprintf("- %s **%s**（%s，%s）\n", emoji, s.Title, s.Source, s.Date))
+		}
+		b.WriteString("\n")
+	}
+
+	b.WriteString("---\n\n")
+}
+
+// ========== 模块13: 综合投资建议 ==========
+func writeModule14(b *strings.Builder, symbol string, steps []StepResult, latest string, score *YearScore) {
+	b.WriteString("# 模块14: 综合投资建议\n\n")
+
+	weighted := 0.0
+	if score != nil {
+		weighted = score.RawScore*0.30 + profitScore(steps, latest)*0.25 + cashScore(steps, latest)*0.20 + growthScore(steps, latest)*0.15 + debtScore(steps, latest)*0.10
+	}
+
+	b.WriteString("## 13.1 综合评分汇总\n\n")
+	b.WriteString("| 模块 | 权重 | 得分 | 加权分 |\n")
+	b.WriteString("|------|------|------|--------|\n")
+	if score != nil {
+		b.WriteString(fmt.Sprintf("| 基本面（18步综合） | 30%% | %.0f/100 | %.1f |\n", score.RawScore, score.RawScore*0.30))
+		b.WriteString(fmt.Sprintf("| 盈利能力 | 15%% | %.0f/100 | %.1f |\n", profitScore(steps, latest), profitScore(steps, latest)*0.15))
+		b.WriteString(fmt.Sprintf("| 现金流质量 | 15%% | %.0f/100 | %.1f |\n", cashScore(steps, latest), cashScore(steps, latest)*0.15))
+		b.WriteString(fmt.Sprintf("| 成长能力 | 15%% | %.0f/100 | %.1f |\n", growthScore(steps, latest), growthScore(steps, latest)*0.15))
+		b.WriteString(fmt.Sprintf("| 偿债安全 | 10%% | %.0f/100 | %.1f |\n", debtScore(steps, latest), debtScore(steps, latest)*0.10))
+		b.WriteString(fmt.Sprintf("| 逆向检查 | 10%% | %.0f/100 | %.1f |\n", reverseScore(steps, latest, score), reverseScore(steps, latest, score)*0.10))
+		b.WriteString(fmt.Sprintf("| 巴芒清单 | 5%% | %.0f/100 | %.1f |\n", buffettScore(steps, latest, score)*10, buffettScore(steps, latest, score)))
+		b.WriteString(fmt.Sprintf("| **总分** | 100%% | - | **%.0f/100** |\n", weighted))
+	}
+	b.WriteString("\n")
+
+	b.WriteString("## 13.2 投资建议\n\n")
+	b.WriteString("| 项目 | 建议 |\n")
+	b.WriteString("|------|------|\n")
+	b.WriteString(fmt.Sprintf("| **综合评级** | %s |\n", investmentGrade(weighted)))
+	b.WriteString(fmt.Sprintf("| **综合评分** | %.0f/100 %s |\n", weighted, scoreToStars(weighted)))
+	b.WriteString(fmt.Sprintf("| **操作建议** | %s |\n", strategyAdvice(weighted)))
+	b.WriteString(fmt.Sprintf("| **建议仓位** | %s |\n", positionAdvice(weighted)))
+	b.WriteString("| **入场区间** | 待接入实时股价后计算 |\n")
+	b.WriteString("| **止损位** | 待接入实时股价后计算 |\n")
+	b.WriteString("| **目标位** | 待接入RIM估值与行情后计算 |\n")
+	b.WriteString("\n")
+
+	b.WriteString("## 13.3 操作策略\n\n")
+	if weighted >= 80 {
+		b.WriteString("**策略A：积极配置（推荐）**\n")
+		b.WriteString("- 基本面健康，可逢低分批建仓\n")
+		b.WriteString("- 建议仓位 5-8%，长期持有\n")
+		b.WriteString("- 若回撤 10% 可加仓\n\n")
+		b.WriteString("**策略B：持有者**\n")
+		b.WriteString("- 继续持有，关注 ROE 和毛利率稳定性\n")
+	} else if weighted >= 70 {
+		b.WriteString("**策略A：逢低试探（推荐）**\n")
+		b.WriteString("- 财务整体尚可，存在部分短板\n")
+		b.WriteString("- 建议仓位 3-5%，分批试探\n")
+		b.WriteString("- 等待 M-Score 或毛利率改善后再加仓\n\n")
+		b.WriteString("**策略B：持有者**\n")
+		b.WriteString("- 维持现有仓位，观察关键指标修复情况\n")
+	} else if weighted >= 60 {
+		b.WriteString("**策略A：观望等待（推荐）**\n")
+		b.WriteString("- 财务存在明显短板，暂不建仓\n")
+		b.WriteString("- 等待年报数据持续改善后再介入\n\n")
+		b.WriteString("**策略B：左侧试探（激进）**\n")
+		b.WriteString("- 若对行业长期前景有信心，可轻仓 1-3% 试探\n")
+		b.WriteString("- 严格止损\n")
+	} else {
+		b.WriteString("**策略A：回避（推荐）**\n")
+		b.WriteString("- 财务风险较高，建议回避\n")
+		b.WriteString("- 等待风险释放、基本面反转后再考虑\n\n")
+		b.WriteString("**策略B：持有者**\n")
+		b.WriteString("- 建议减仓或设置严格止损\n")
+	}
+	b.WriteString("\n---\n\n")
+}
+
+// ========== 模块14: 结论与附录 ==========
+func writeModule15(b *strings.Builder, symbol string, steps []StepResult, years []string, latest string, score *YearScore) {
+	b.WriteString("# 模块15: 结论与附录\n\n")
+
+	weighted := 0.0
+	if score != nil {
+		weighted = score.RawScore*0.30 + profitScore(steps, latest)*0.25 + cashScore(steps, latest)*0.20 + growthScore(steps, latest)*0.15 + debtScore(steps, latest)*0.10
+	}
+
+	b.WriteString("## 14.1 核心结论\n\n")
+	b.WriteString("> **")
+	b.WriteString(fmt.Sprintf("%s %s年报", symbol, latest))
+	b.WriteString(fmt.Sprintf(" 综合评分 %.0f 分，评级 %s。", weighted, investmentGrade(weighted)))
+	b.WriteString(oneSentenceAdvice(symbol, weighted, steps, latest))
+	b.WriteString("**\n\n")
+
+	b.WriteString("## 14.2 关键数据速查\n\n")
+	b.WriteString(fmt.Sprintf("| 指标 | %s | 同比 | 评估 |\n", latest))
+	b.WriteString("|------|--------|------|------|\n")
+	rev := getStepValue(steps, 9, latest, "revenue")
+	prevRev := getStepValue(steps, 9, years[minInt(1, len(years)-1)], "revenue")
+	b.WriteString(fmt.Sprintf("| 营业总收入 | %.2f亿 | %s | %s |\n", rev/1e8, yoyFmt(rev, prevRev), yoyEmoji(rev, prevRev)))
+	prof := getStepValue(steps, 16, latest, "profit")
+	prevProf := getStepValue(steps, 16, years[minInt(1, len(years)-1)], "profit")
+	b.WriteString(fmt.Sprintf("| 归母净利润 | %.2f亿 | %s | %s |\n", prof/1e8, yoyFmt(prof, prevProf), yoyEmoji(prof, prevProf)))
+	b.WriteString(fmt.Sprintf("| 毛利率 | %.2f%% | - | %s |\n", getStepValue(steps, 10, latest, "grossMargin"), gmEmoji(getStepValue(steps, 10, latest, "grossMargin"))))
+	b.WriteString(fmt.Sprintf("| 资产负债率 | %.2f%% | - | %s |\n", getStepValue(steps, 3, latest, "debtRatio"), drEmoji(getStepValue(steps, 3, latest, "debtRatio"))))
+	b.WriteString(fmt.Sprintf("| M-Score | %.3f | - | %s |\n", getStepValue(steps, 8, latest, "MScore"), msEmoji(getStepValue(steps, 8, latest, "MScore"))))
+	if score != nil {
+		b.WriteString(fmt.Sprintf("| 十八步评分 | %.0f分（%s） | - | - |\n", score.RawScore, score.Grade))
+	}
+	b.WriteString("\n")
+
+	b.WriteString("## 14.3 投资逻辑总结\n\n")
+	b.WriteString("**负面因素**:\n")
+	risks := extractRisks(steps, latest)
+	if len(risks) == 0 {
+		b.WriteString("1. 未发现显著财务风险点\n")
+	} else {
+		for i, r := range risks {
+			b.WriteString(fmt.Sprintf("%d. %s：%s\n", i+1, r.Category, r.Desc))
+		}
+	}
+	b.WriteString("\n**正面因素**:\n")
+	positives := positiveFactors(steps, latest)
+	if len(positives) == 0 {
+		b.WriteString("1. 当前数据中积极因素不明显\n")
+	} else {
+		for i, p := range positives {
+			b.WriteString(fmt.Sprintf("%d. %s\n", i+1, p))
+		}
+	}
+	b.WriteString("\n")
+
+	b.WriteString("## 14.4 免责声明\n\n")
+	b.WriteString("本报告基于公开财务报表数据及十八步财务分析模型生成，仅供参考，不构成任何投资建议。投资有风险，入市需谨慎。\n\n")
+}
+
+// ==================== 辅助函数 ====================
+
+type RiskItem struct {
+	Category  string
+	Indicator string
+	Severity  string
+	Desc      string
+}
+
+func scoreToStars(score float64) string {
+	switch {
+	case score >= 90:
+		return "⭐⭐⭐⭐⭐"
+	case score >= 80:
+		return "⭐⭐⭐⭐"
+	case score >= 70:
+		return "⭐⭐⭐"
+	case score >= 60:
+		return "⭐⭐"
+	default:
+		return "⭐"
+	}
+}
+
+func gradeComment(score float64) string {
+	switch {
+	case score >= 90:
+		return "财务结构非常健康，各项指标优秀"
+	case score >= 80:
+		return "财务状况良好，少数维度有改善空间"
+	case score >= 70:
+		return "财务整体中等，需关注部分风险点"
+	case score >= 60:
+		return "财务存在明显短板，建议深入核查"
+	default:
+		return "财务风险较高，建议谨慎对待"
+	}
+}
+
+func investmentGrade(score float64) string {
+	switch {
+	case score >= 90:
+		return "强烈推荐"
+	case score >= 80:
+		return "推荐"
+	case score >= 70:
+		return "谨慎推荐"
+	case score >= 60:
+		return "观望"
+	default:
+		return "回避"
+	}
+}
+
+func positionAdvice(score float64) string {
+	switch {
+	case score >= 90:
+		return "8-12%"
+	case score >= 80:
+		return "5-8%"
+	case score >= 70:
+		return "3-5%"
+	case score >= 60:
+		return "1-3%或观望"
+	default:
+		return "0-1%或回避"
+	}
+}
+
+func strategyAdvice(score float64) string {
+	switch {
+	case score >= 90:
+		return "积极配置，长期持有"
+	case score >= 80:
+		return "逢低分批建仓"
+	case score >= 70:
+		return "观望/逢低轻仓试探"
+	case score >= 60:
+		return "观望为主，等待基本面改善"
+	default:
+		return "回避，等待风险释放"
+	}
+}
+
+func oneSentenceAdvice(symbol string, score float64, steps []StepResult, year string) string {
+	var parts []string
+	if score >= 80 {
+		parts = append(parts, "财务基本面整体健康")
+	} else if score >= 70 {
+		parts = append(parts, "财务基本面尚可，但存在部分短板")
+	} else {
+		parts = append(parts, "财务基本面偏弱，风险点较多")
+	}
+
+	roe := getStepValue(steps, 16, year, "roe")
+	if roe >= 15 {
+		parts = append(parts, fmt.Sprintf("ROE %.1f%%显示公司具备较好的资本回报能力", roe))
+	} else if roe > 0 {
+		parts = append(parts, fmt.Sprintf("ROE %.1f%%低于理想水平，资本回报能力有待提升", roe))
+	}
+
+	debtRatio := getStepValue(steps, 3, year, "debtRatio")
+	if debtRatio <= 40 {
+		parts = append(parts, "负债率低，财务结构稳健")
+	} else if debtRatio > 60 {
+		parts = append(parts, "负债率偏高，需关注偿债压力")
+	}
+
+	ms := getStepValue(steps, 8, year, "MScore")
+	if ms > -2.22 {
+		parts = append(parts, fmt.Sprintf("M-Score %.2f提示需警惕财报操纵嫌疑", ms))
+	}
+
+	parts = append(parts, fmt.Sprintf("建议%s", strategyAdvice(score)))
+	return strings.Join(parts, "。") + "。"
+}
+
+func growthScore(steps []StepResult, year string) float64 {
+	g := getStepValue(steps, 9, year, "growthRate")
+	if g >= 20 {
+		return 90
+	} else if g >= 10 {
+		return 80
+	} else if g >= 0 {
+		return 60
+	} else if g >= -10 {
+		return 40
+	}
+	return 20
+}
+
+func growthComment(steps []StepResult, year string) string {
+	g := getStepValue(steps, 9, year, "growthRate")
+	if g >= 20 {
+		return "高速增长"
+	} else if g >= 10 {
+		return "稳健增长"
+	} else if g >= 0 {
+		return "增长放缓"
+	} else if g >= -10 {
+		return "轻微下滑"
+	}
+	return "显著下滑"
+}
+
+func profitScore(steps []StepResult, year string) float64 {
+	roe := getStepValue(steps, 16, year, "roe")
+	gm := getStepValue(steps, 10, year, "grossMargin")
+	cp := getStepValue(steps, 14, year, "coreProfitMargin")
+	score := 50.0
+	if roe >= 20 {
+		score += 25
+	} else if roe >= 15 {
+		score += 20
+	} else if roe >= 10 {
+		score += 10
+	} else if roe > 0 {
+		score += 5
+	}
+	if gm >= 40 {
+		score += 15
+	} else if gm >= 30 {
+		score += 10
+	} else if gm >= 20 {
+		score += 5
+	}
+	if cp >= 15 {
+		score += 10
+	} else if cp >= 10 {
+		score += 5
+	}
+	return math.Min(100, score)
+}
+
+func profitComment(steps []StepResult, year string) string {
+	roe := getStepValue(steps, 16, year, "roe")
+	gm := getStepValue(steps, 10, year, "grossMargin")
+	if roe >= 15 && gm >= 40 {
+		return "盈利能力优秀，高毛利+高ROE"
+	} else if roe >= 15 {
+		return "盈利能力良好，ROE达标但毛利率偏低"
+	} else if roe >= 10 {
+		return "盈利能力一般，ROE有提升空间"
+	} else if roe > 0 {
+		return "盈利能力偏弱，ROE低于理想水平"
+	}
+	return "盈利能力较差，ROE为负或极低"
+}
+
+func cashScore(steps []StepResult, year string) float64 {
+	cr := getStepValue(steps, 15, year, "cashRatio")
+	ocf := getStepValue(steps, 15, year, "operatingCF")
+	score := 50.0
+	if cr >= 100 {
+		score += 30
+	} else if cr >= 50 {
+		score += 15
+	} else if cr > 0 {
+		score += 5
+	}
+	if ocf > 0 {
+		score += 20
+	}
+	return math.Min(100, score)
+}
+
+func cashComment(steps []StepResult, year string) string {
+	cr := getStepValue(steps, 15, year, "cashRatio")
+	ocf := getStepValue(steps, 15, year, "operatingCF")
+	if cr >= 100 && ocf > 0 {
+		return "现金流质量优秀，经营现金流充沛"
+	} else if ocf > 0 {
+		return "经营现金流为正，但净利润含金量有提升空间"
+	} else if ocf < 0 {
+		return "经营现金流为负，现金流压力需关注"
+	}
+	return "现金流数据不足"
+}
+
+func debtScore(steps []StepResult, year string) float64 {
+	dr := getStepValue(steps, 3, year, "debtRatio")
+	diff := getStepValue(steps, 3, year, "cashDebtDiff")
+	score := 50.0
+	if dr <= 40 {
+		score += 25
+	} else if dr <= 60 {
+		score += 15
+	} else if dr <= 70 {
+		score += 5
+	}
+	if diff >= 0 {
+		score += 25
+	} else if diff > -1e9 {
+		score += 10
+	}
+	return math.Min(100, score)
+}
+
+func debtComment(steps []StepResult, year string) string {
+	dr := getStepValue(steps, 3, year, "debtRatio")
+	diff := getStepValue(steps, 3, year, "cashDebtDiff")
+	if dr <= 40 && diff >= 0 {
+		return "偿债能力优秀，负债率低且现金充裕"
+	} else if dr <= 60 && diff >= 0 {
+		return "偿债能力良好，结构相对安全"
+	} else if dr <= 60 {
+		return "偿债能力一般，准货币资金未能完全覆盖有息负债"
+	} else if dr <= 70 {
+		return "偿债压力较大，负债率偏高"
+	}
+	return "偿债风险高，需密切关注"
+}
+
+func valuationScore(quote *QuoteData) float64 {
+	if quote == nil {
+		return 0
+	}
+	score := 50.0
+	if quote.PE > 0 {
+		if quote.PE < 15 {
+			score += 25
+		} else if quote.PE < 25 {
+			score += 15
+		} else if quote.PE < 40 {
+			score += 5
+		} else {
+			score -= 15
+		}
+	} else {
+		score -= 15
+	}
+	if quote.PB > 0 {
+		if quote.PB < 2 {
+			score += 25
+		} else if quote.PB < 3 {
+			score += 15
+		} else if quote.PB < 5 {
+			score += 5
+		} else {
+			score -= 15
+		}
+	} else {
+		score -= 15
+	}
+	return math.Max(0, math.Min(100, score))
+}
+
+func valuationComment(quote *QuoteData) string {
+	if quote == nil || (quote.PE <= 0 && quote.PB <= 0) {
+		return "暂无估值数据"
+	}
+	s := valuationScore(quote)
+	if s >= 80 {
+		return "估值较低，具备安全边际"
+	} else if s >= 60 {
+		return "估值处于合理区间"
+	} else if s >= 40 {
+		return "估值偏高，需关注性价比"
+	}
+	return "估值过高，注意风险"
+}
+
+func reverseScore(steps []StepResult, year string, score *YearScore) float64 {
+	s := 85.0
+	if score != nil {
+		s -= (100 - score.RawScore) * 0.4
+	}
+	risks := extractRisks(steps, year)
+	s -= float64(len(risks)) * 5
+	return math.Max(0, math.Min(100, s))
+}
+
+func reverseComment(steps []StepResult, year string, score *YearScore) string {
+	s := reverseScore(steps, year, score)
+	if s >= 75 {
+		return "风险可控，负面因素较少"
+	} else if s >= 60 {
+		return "存在一定风险，需关注短板"
+	} else if s >= 40 {
+		return "风险点较多，谨慎对待"
+	}
+	return "风险较高，建议回避"
+}
+
+func buffettScore(steps []StepResult, year string, score *YearScore) float64 {
+	roe := getStepValue(steps, 16, year, "roe")
+	gm := getStepValue(steps, 10, year, "grossMargin")
+	ms := getStepValue(steps, 8, year, "MScore")
+	cr := getStepValue(steps, 15, year, "cashRatio")
+	dr := getStepValue(steps, 3, year, "debtRatio")
+	ia := getStepValue(steps, 7, year, "ratio")
+
+	s := 5.0
+	if roe >= 15 {
+		s += 1.5
+	}
+	if gm >= 40 {
+		s += 1
+	}
+	if ms <= -2.22 {
+		s += 1
+	}
+	if cr >= 100 {
+		s += 0.5
+	}
+	if dr <= 60 {
+		s += 0.5
+	}
+	if ia <= 10 {
+		s += 0.5
+	}
+	return math.Min(10, s)
+}
+
+func buffettComment(steps []StepResult, year string, score *YearScore) string {
+	s := buffettScore(steps, year, score)
+	if s >= 8 {
+		return "基本满足巴芒投资标准"
+	} else if s >= 6 {
+		return "勉强及格，部分维度待提升"
+	} else if s >= 4 {
+		return "不满足标准，需等待改善"
+	}
+	return "明显偏离标准，建议回避"
+}
+
+func positiveFactors(steps []StepResult, year string) []string {
+	var ps []string
+	if g := getStepValue(steps, 9, year, "growthRate"); g >= 10 {
+		ps = append(ps, fmt.Sprintf("营收保持 %.2f%% 增长，业务仍在扩张", g))
+	}
+	if pg := getStepValue(steps, 16, year, "profitGrowth"); pg >= 10 {
+		ps = append(ps, fmt.Sprintf("净利润增长 %.2f%%，盈利能力改善", pg))
+	}
+	if roe := getStepValue(steps, 16, year, "roe"); roe >= 15 {
+		ps = append(ps, fmt.Sprintf("ROE %.2f%%，资本回报能力优秀", roe))
+	}
+	if gm := getStepValue(steps, 10, year, "grossMargin"); gm >= 40 {
+		ps = append(ps, fmt.Sprintf("毛利率 %.2f%%，护城河较深", gm))
+	}
+	if dr := getStepValue(steps, 3, year, "debtRatio"); dr <= 40 {
+		ps = append(ps, fmt.Sprintf("资产负债率 %.2f%%，财务结构稳健", dr))
+	}
+	if cr := getStepValue(steps, 15, year, "cashRatio"); cr >= 100 {
+		ps = append(ps, fmt.Sprintf("净利润现金含量 %.2f%%，盈利质量高", cr))
+	}
+	if ms := getStepValue(steps, 8, year, "MScore"); ms <= -2.22 {
+		ps = append(ps, fmt.Sprintf("M-Score %.3f，财报操纵风险低", ms))
+	}
+	return ps
+}
+
+func getStepValue(steps []StepResult, stepNum int, year, key string) float64 {
+	for _, s := range steps {
+		if s.StepNum != stepNum {
+			continue
+		}
+		yd, ok := s.YearlyData[year]
+		if !ok {
+			return 0
+		}
+		return anyToFloat64(yd[key])
+	}
+	return 0
+}
+
+func countCategoryPass(steps []StepResult, stepNums []int, year string) (int, int) {
+	pass := 0
+	total := 0
+	stepMap := make(map[int]bool)
+	for _, n := range stepNums {
+		stepMap[n] = true
+	}
+	for _, s := range steps {
+		if !stepMap[s.StepNum] {
+			continue
+		}
+		p, ok := s.Pass[year]
+		if !ok {
+			continue
+		}
+		total++
+		if p {
+			pass++
+		}
+	}
+	return pass, total
+}
+
+func extractRisks(steps []StepResult, year string) []RiskItem {
+	var risks []RiskItem
+	for _, s := range steps {
+		p, ok := s.Pass[year]
+		if !ok || p {
+			continue
+		}
+		switch s.StepNum {
+		case 3:
+			dr := getStepValue(steps, 3, year, "debtRatio")
+			diff := getStepValue(steps, 3, year, "cashDebtDiff")
+			if dr > 60 {
+				risks = append(risks, RiskItem{"偿债风险", fmt.Sprintf("资产负债率%.1f%%", dr), "🔴 高", "负债率超过60%警戒线"})
+			} else if diff < 0 {
+				risks = append(risks, RiskItem{"偿债风险", fmt.Sprintf("准货币资金缺口%.1f亿", -diff/1e8), "🟠 中高", "现金未能覆盖有息负债"})
+			}
+		case 4:
+			diff := getStepValue(steps, 4, year, "diff")
+			risks = append(risks, RiskItem{"产业链地位", fmt.Sprintf("两头吃差额%.1f亿", diff/1e8), "🟠 中高", "对上下游议价能力偏弱"})
+		case 5:
+			ratio := getStepValue(steps, 5, year, "ratio")
+			if ratio > 20 {
+				risks = append(risks, RiskItem{"回款风险", fmt.Sprintf("应收账款占比%.1f%%", ratio), "🔴 高", "回款压力大，销售回款慢"})
+			} else {
+				risks = append(risks, RiskItem{"回款风险", fmt.Sprintf("应收账款占比%.1f%%", ratio), "🟠 中高", "应收占比偏高"})
+			}
+		case 6:
+			ratio := getStepValue(steps, 6, year, "ratio")
+			if ratio > 40 {
+				risks = append(risks, RiskItem{"资产结构", fmt.Sprintf("固定资产占比%.1f%%", ratio), "🟠 中高", "重资产模式，维持成本高"})
+			}
+		case 7:
+			ratio := getStepValue(steps, 7, year, "ratio")
+			risks = append(risks, RiskItem{"主业专注", fmt.Sprintf("投资类资产占比%.1f%%", ratio), "🟠 中高", "主业专注度不足"})
+		case 8:
+			ms := getStepValue(steps, 8, year, "MScore")
+			if ms > -2.22 {
+				severity := "🟠 中高"
+				if ms > -1.78 {
+					severity = "🔴 高"
+				}
+				risks = append(risks, RiskItem{"财务造假风险", fmt.Sprintf("M-Score %.2f", ms), severity, "存在财报操纵嫌疑，建议深入核查"})
+			}
+		case 9:
+			g := getStepValue(steps, 9, year, "growthRate")
+			if g < 0 {
+				risks = append(risks, RiskItem{"成长风险", fmt.Sprintf("营收增长%.1f%%", g), "🔴 高", "营业收入出现负增长"})
+			} else if g < 10 {
+				risks = append(risks, RiskItem{"成长风险", fmt.Sprintf("营收增长%.1f%%", g), "🟠 中高", "营收增长未达10%理想水平"})
+			}
+		case 10:
+			gm := getStepValue(steps, 10, year, "grossMargin")
+			if gm < 20 {
+				risks = append(risks, RiskItem{"盈利质量", fmt.Sprintf("毛利率%.1f%%", gm), "🔴 高", "毛利率偏低，产品竞争力弱"})
+			} else if gm < 40 {
+				risks = append(risks, RiskItem{"盈利质量", fmt.Sprintf("毛利率%.1f%%", gm), "🟠 中高", "毛利率未达高毛利标准"})
+			}
+		case 16:
+			roe := getStepValue(steps, 16, year, "roe")
+			if roe < 15 {
+				risks = append(risks, RiskItem{"资本回报", fmt.Sprintf("ROE %.1f%%", roe), "🟠 中高", "ROE低于15%理想水平"})
+			}
+		}
+	}
+	return risks
+}
+
+func writeMetricRow(b *strings.Builder, name string, latestVal, prevVal float64, unit string, div float64) {
+	lv, pv := latestVal, prevVal
+	if div != 1 {
+		lv /= div
+		pv /= div
+	}
+	change := "-"
+	if pv != 0 {
+		pct := (latestVal - prevVal) / math.Abs(prevVal) * 100
+		emoji := "➡️"
+		if pct > 0 {
+			emoji = "📈"
+		} else if pct < 0 {
+			emoji = "📉"
+		}
+		change = fmt.Sprintf("%s %.2f%%", emoji, pct)
+	}
+	assess := "🟡 持平"
+	if latestVal > prevVal {
+		assess = "🟢 上升"
+	} else if latestVal < prevVal {
+		assess = "🔴 下降"
+	}
+	if name == "资产负债率" || name == "期间费用率/毛利率" {
+		if latestVal < prevVal {
+			assess = "🟢 优化"
+		} else if latestVal > prevVal {
+			assess = "🔴 恶化"
+		}
+	}
+	if prevVal == 0 {
+		assess = "-"
+		change = "-"
+	}
+	b.WriteString(fmt.Sprintf("| **%s** | %.2f%s | %.2f%s | %s | %s |\n", name, lv, unit, pv, unit, change, assess))
+}
+
+func fmtVal(v float64, unit string) string {
+	if v == 0 {
+		return "-"
+	}
+	if unit == "%" {
+		return fmt.Sprintf("%.2f%%", v)
+	}
+	return fmt.Sprintf("%.3f", v)
+}
+
+func traceTrigger(stepNums ...int) string {
+	if len(stepNums) == 0 {
+		return ""
+	}
+	var sb strings.Builder
+	sb.WriteString(` <span class="trace-trigger" data-steps="`)
+	for i, n := range stepNums {
+		if i > 0 {
+			sb.WriteString(",")
+		}
+		sb.WriteString(fmt.Sprintf("%d", n))
+	}
+	sb.WriteString(`">❓</span>`)
+	return sb.String()
+}
+
+func yoyFmt(cur, prev float64) string {
+	if prev == 0 {
+		return "-"
+	}
+	pct := (cur - prev) / math.Abs(prev) * 100
+	return fmt.Sprintf("%.2f%%", pct)
+}
+
+func yoyEmoji(cur, prev float64) string {
+	if prev == 0 {
+		return "-"
+	}
+	pct := (cur - prev) / math.Abs(prev) * 100
+	if pct > 0 {
+		return "🟢 增长"
+	} else if pct < 0 {
+		return "🔴 下降"
+	}
+	return "➡️ 持平"
+}
+
+func roeEmoji(v float64) string {
+	if v >= 15 {
+		return "🟢 优秀"
+	} else if v >= 10 {
+		return "🟡 一般"
+	} else if v > 0 {
+		return "🔴 偏弱"
+	}
+	return "🔴 极差"
+}
+
+func gmEmoji(v float64) string {
+	if v >= 40 {
+		return "🟢 高毛利"
+	} else if v >= 30 {
+		return "🟡 中等"
+	} else if v >= 20 {
+		return "🔴 偏低"
+	}
+	return "🔴 过低"
+}
+
+func drEmoji(v float64) string {
+	if v <= 40 {
+		return "🟢 安全"
+	} else if v <= 60 {
+		return "🟡 适中"
+	} else if v <= 70 {
+		return "🔴 偏高"
+	}
+	return "🔴 危险"
+}
+
+func msEmoji(v float64) string {
+	if v <= -2.22 {
+		return "🟢 安全"
+	} else if v <= -1.78 {
+		return "🟡 关注"
+	}
+	return "🔴 风险"
+}
+
+func moatComment(gm, roe float64) string {
+	if gm >= 40 && roe >= 15 {
+		return "高毛利+高ROE，护城河较深"
+	} else if gm >= 30 {
+		return "毛利率尚可，竞争壁垒中等"
+	}
+	return "毛利率偏低，护城河待验证"
+}
+
+func auditComment(ms float64) string {
+	if ms <= -2.22 {
+		return "，审计质量可信"
+	} else if ms <= -1.78 {
+		return "，需关注"
+	}
+	return "，风险较高"
+}
+
+func mapScore(val, good, bad, max float64) float64 {
+	if val >= good {
+		return max
+	}
+	if val <= bad {
+		return 1
+	}
+	return 1 + (max-1)*(val-bad)/(good-bad)
+}
+
+func minInt(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+func turnoverAssessment(tr float64) string {
+	if tr >= 7 {
+		return "非常活跃"
+	}
+	if tr >= 3 {
+		return "活跃"
+	}
+	if tr >= 1 {
+		return "正常"
+	}
+	return "低迷"
+}
+
+func volumeRatioAssessment(vr float64) string {
+	if vr >= 2 {
+		return "放量"
+	}
+	if vr >= 0.8 {
+		return "正常"
+	}
+	return "缩量"
+}
+
+func gapDirection(gap float64) string {
+	if gap > 0 {
+		return "高开运行"
+	}
+	return "低开运行"
+}
+
+func writeComparableTrendComment(b *strings.Builder, steps []StepResult, comp *ComparableAnalysis) {
+	if len(comp.CommonYears) < 2 {
+		return
+	}
+	latest := comp.CommonYears[0]
+	oldest := comp.CommonYears[len(comp.CommonYears)-1]
+
+	latestAvg := comp.YearlyTrends[0].Average
+	oldestAvg := comp.YearlyTrends[len(comp.YearlyTrends)-1].Average
+
+	latestROE := getStepValue(steps, 16, latest, "roe")
+	oldestROE := getStepValue(steps, 16, oldest, "roe")
+	roeGap := latestROE - latestAvg.ROE
+
+	if latestROE > oldestROE && latestAvg.ROE < oldestAvg.ROE {
+		b.WriteString("- **ROE 走势优异**：公司 ROE 呈上升趋势，而可比均值在下降，竞争优势在扩大。\n")
+	} else if latestROE < oldestROE && latestAvg.ROE > oldestAvg.ROE {
+		b.WriteString("- **ROE 走势承压**：公司 ROE 下滑，而可比均值在提升，相对竞争力在减弱。\n")
+	} else if latestROE > oldestROE {
+		b.WriteString("- **ROE 持续改善**：公司与可比均值同步或独立改善。\n")
+	} else if latestROE < oldestROE {
+		b.WriteString("- **ROE 有所回落**：公司 ROE 较历史高点下降，需关注盈利能力变化。\n")
+	}
+
+	if roeGap >= 5 {
+		b.WriteString(fmt.Sprintf("- **ROE 领先可比均值 %.2f 个百分点**，资本回报能力在可比公司中处于优势地位。\n", roeGap))
+	} else if roeGap <= -5 {
+		b.WriteString(fmt.Sprintf("- **ROE 落后可比均值 %.2f 个百分点**，资本回报能力相对偏弱。\n", -roeGap))
+	}
+
+	latestGM := getStepValue(steps, 10, latest, "grossMargin")
+	oldestGM := getStepValue(steps, 10, oldest, "grossMargin")
+	if latestGM > oldestGM+3 {
+		b.WriteString("- **毛利率持续提升**：定价权或成本控制能力在改善。\n")
+	} else if latestGM < oldestGM-3 {
+		b.WriteString("- **毛利率有所下滑**：产品竞争力或行业竞争格局可能趋紧。\n")
+	}
+
+	latestDR := getStepValue(steps, 3, latest, "debtRatio")
+	oldestDR := getStepValue(steps, 3, oldest, "debtRatio")
+	if latestDR < oldestDR-5 {
+		b.WriteString("- **负债率明显下降**：财务结构在优化，偿债安全性提升。\n")
+	} else if latestDR > oldestDR+5 {
+		b.WriteString("- **负债率明显上升**：杠杆扩张较快，需关注偿债压力。\n")
+	}
+
+	latestCR := getStepValue(steps, 15, latest, "cashRatio")
+	oldestCR := getStepValue(steps, 15, oldest, "cashRatio")
+	if latestCR > oldestCR+10 {
+		b.WriteString("- **现金流质量改善**：盈利含金量在提升。\n")
+	} else if latestCR < oldestCR-10 {
+		b.WriteString("- **现金流质量下滑**：净利润中的现金比例在下降。\n")
+	}
+}

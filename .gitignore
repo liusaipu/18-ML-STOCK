@@ -1,0 +1,76 @@
+# macOS
+.DS_Store
+
+# Build outputs
+build/bin/
+build/darwin/
+build/windows/
+dist/
+*.exe
+*.app
+*.zip
+
+# Go
+*.log
+*.test
+*.out
+vendor/
+
+# Wails
+wails-dev.log
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# Python / Local tools
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+
+# Test data / local samples
+*.csv
+*.xlsx
+*.xls
+data/
+!data/.gitkeep
+
+# User local config & runtime data (financial reports, profiles, etc.)
+# These are generated at runtime and contain user-specific data
+watchlist.json
+comparables.json
+reports/
+.history/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Temp files
+*.tmp
+*.bak
+tmp/
+temp/
+
+# Documents (keep source docs if needed, but ignore large binaries)
+*.docx
+*.pdf
+
+# Archives
+*.tar.gz
+*.rar
+*.7z
+
+# Binary / large artifacts
+financial-analysis-18steps/
+*.zip
+
+# Generated analysis reports (user-specific data)
+*_深度投资分析报告_*.md
+*_分析报告_*.md
+reports/*.md
