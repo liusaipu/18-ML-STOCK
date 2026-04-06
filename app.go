@@ -136,11 +136,11 @@ func (a *App) AddToWatchlist(code string) error {
 	// 查找股票信息
 	for _, s := range a.stocks {
 		if s.Code == code {
-			list = append(list, WatchlistItem{
+			list = append([]WatchlistItem{{
 				Code:   s.Code,
 				Name:   s.Name,
 				Market: s.Market,
-			})
+			}}, list...)
 			return a.storage.SaveWatchlist(list)
 		}
 	}
