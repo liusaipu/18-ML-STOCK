@@ -30,6 +30,7 @@ function Collapsible({ title, children, defaultExpanded = false }: { title: Reac
 }
 import {
   GetWatchlist,
+  GetWatchlistActivity,
   AddToWatchlist,
   RemoveFromWatchlist,
   ReorderWatchlist,
@@ -162,6 +163,8 @@ function App() {
   const [quoteError, setQuoteError] = useState<string>('')
   const [klines, setKlines] = useState<KlineData[]>([])
   const [klineError, setKlineError] = useState<string>('')
+  const [activityMap, setActivityMap] = useState<Record<string, main.WatchlistActivitySummary>>({})
+  const [activitySort, setActivitySort] = useState<'none' | 'desc' | 'asc'>('none')
   const inputRef = useRef<HTMLInputElement>(null)
   const reportContentRef = useRef<HTMLDivElement>(null)
   const dragIndexRef = useRef<number | null>(null)
@@ -331,12 +334,34 @@ function App() {
     return map
   }, [])
 
-  // 初始化加载自选列表
+  // 初始化加载自选列表及活跃度
   useEffect(() => {
     GetWatchlist().then((list) => {
       setWatchlist(list || [])
     })
+    GetWatchlistActivity().then((list) => {
+      const map: Record<string, main.WatchlistActivitySummary> = {}
+      ;(list || []).forEach((item) => {
+        map[item.code] = item
+      })
+      setActivityMap(map)
+    })
   }, [])
+
+  // 自选股变化时刷新活跃度
+  useEffect(() => {
+    if (watchlist.length === 0) return
+    GetWatchlistActivity().then((list) => {
+      console.log('[GetWatchlistActivity] returned', list)
+      const map: Record<string, main.WatchlistActivitySummary> = {}
+      ;(list || []).forEach((item) => {
+        map[item.code] = item
+      })
+      setActivityMap(map)
+    }).catch((err) => {
+      console.error('[GetWatchlistActivity] error', err)
+    })
+  }, [watchlist.length])
 
   // 主题持久化
   useEffect(() => {
@@ -365,6 +390,18 @@ function App() {
     () => watchlist.find((s) => s.code === selectedCode) || null,
     [selectedCode, watchlist]
   )
+
+  const displayWatchlist = useMemo(() => {
+    if (activitySort === 'none') return watchlist
+    const list = [...watchlist]
+    list.sort((a, b) => {
+      const scoreA = activityMap[a.code]?.score ?? -1
+      const scoreB = activityMap[b.code]?.score ?? -1
+      if (activitySort === 'desc') return scoreB - scoreA
+      return scoreA - scoreB
+    })
+    return list
+  }, [watchlist, activityMap, activitySort])
 
   const currentSnapshot = selectedStock ? snapshots[selectedStock.code] : null
   const { highlights, risks } = useMemo(() => {
@@ -846,66 +883,96 @@ function App() {
           </div>
         </div>
 
+        <div className="watchlist-header">
+          <span className="watch-header-name">股票名称</span>
+          <span
+            className="watch-header-activity"
+            title="点击排序"
+            onClick={() => {
+              setActivitySort((prev) => {
+                if (prev === 'none') return 'desc'
+                if (prev === 'desc') return 'asc'
+                return 'none'
+              })
+            }}
+          >
+            活跃度
+            {activitySort === 'desc' && ' ▼'}
+            {activitySort === 'asc' && ' ▲'}
+            {activitySort === 'none' && ' ⇅'}
+          </span>
+          <span className="watch-header-action" />
+        </div>
         <ul className="watchlist">
-          {watchlist.map((s, idx) => (
-            <li
-              key={s.code}
-              draggable
-              className={selectedCode === s.code ? 'active' : ''}
-              onDragStart={() => {
-                dragIndexRef.current = idx
-              }}
-              onDragOver={(e) => {
-                e.preventDefault()
-              }}
-              onDrop={(e) => {
-                e.preventDefault()
-                const fromIdx = dragIndexRef.current
-                dragIndexRef.current = null
-                if (fromIdx === null || fromIdx === idx) return
-                const newList = [...watchlist]
-                const [moved] = newList.splice(fromIdx, 1)
-                newList.splice(idx, 0, moved)
-                setWatchlist(newList)
-                const codes = newList.map((i) => i.code)
-                ReorderWatchlist(codes).catch((err) => console.error('排序保存失败:', err))
-              }}
-              onClick={() => {
-                setSelectedCode(s.code)
-                setProfile(null)
-                setQuote(null)
-                setQuoteError('')
-                setKlines([])
-                setKlineError('')
-                setImportResult(null)
-                setDownloadResult(null)
-                setReport(null)
-                setViewingHistory(null)
-                setHistoryContent('')
-                setComparables([])
-                loadReportHistory(s.code)
-                loadDataHistory(s.code)
-                loadProfile(s.code)
-                loadConcepts(s.code)
-                loadComparables(s.code)
-                loadQuote(s.code)
-                loadKlines(s.code)
-              }}
-            >
-              <span className="watch-drag-handle" title="拖动排序">☰</span>
-              <div className="watch-info" title={`${s.name}(${s.code})`}>
-                {s.name}<span className="code-part">({s.code})</span>
-              </div>
-              <button
-                className="btn-remove"
-                title="移除"
-                onClick={(e) => handleRemove(s.code, e)}
-                disabled={loading}
+          {displayWatchlist.map((s, idx) => {
+            const act = activityMap[s.code]
+            const scoreText = act ? Math.round(act.score).toString() : '-'
+            return (
+              <li
+                key={s.code}
+                draggable={activitySort === 'none'}
+                className={selectedCode === s.code ? 'active' : ''}
+                onDragStart={() => {
+                  dragIndexRef.current = idx
+                }}
+                onDragOver={(e) => {
+                  if (activitySort !== 'none') return
+                  e.preventDefault()
+                }}
+                onDrop={(e) => {
+                  if (activitySort !== 'none') return
+                  e.preventDefault()
+                  const fromIdx = dragIndexRef.current
+                  dragIndexRef.current = null
+                  if (fromIdx === null || fromIdx === idx) return
+                  const newList = [...displayWatchlist]
+                  const [moved] = newList.splice(fromIdx, 1)
+                  newList.splice(idx, 0, moved)
+                  setWatchlist(newList)
+                  setActivitySort('none')
+                  const codes = newList.map((i) => i.code)
+                  ReorderWatchlist(codes).catch((err) => console.error('排序保存失败:', err))
+                }}
+                onClick={() => {
+                  setSelectedCode(s.code)
+                  setProfile(null)
+                  setQuote(null)
+                  setQuoteError('')
+                  setKlines([])
+                  setKlineError('')
+                  setImportResult(null)
+                  setDownloadResult(null)
+                  setReport(null)
+                  setViewingHistory(null)
+                  setHistoryContent('')
+                  setComparables([])
+                  loadReportHistory(s.code)
+                  loadDataHistory(s.code)
+                  loadProfile(s.code)
+                  loadConcepts(s.code)
+                  loadComparables(s.code)
+                  loadQuote(s.code)
+                  loadKlines(s.code)
+                }}
               >
-                ×
-              </button>
-            </li>
-          ))}
+                <span className="watch-drag-handle" title={activitySort === 'none' ? '拖动排序' : '排序中禁用拖动'}>☰</span>
+                <div className="watch-info" title={`${s.name}(${s.code})`}>
+                  {s.name}<span className="code-part">({s.code})</span>
+                </div>
+                <div className="watch-activity" title={act ? `${act.grade} · ${Math.round(act.score)}分` : ''}>
+                  {scoreText}
+                </div>
+                <button
+                  className="btn-remove"
+                  title="移除"
+                  onClick={(e) => handleRemove(s.code, e)}
+                  disabled={loading}
+                >
+                  ×
+                </button>
+              </li>
+            )
+          })}
         </ul>
 
         <div className="watchlist-footer">

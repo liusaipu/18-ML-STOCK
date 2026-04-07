@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
@@ -353,11 +354,22 @@ func FetchStockProfile(market, code string) (*StockProfile, error) {
 				for _, m := range mgmtResp.RptManagerList {
 					if strings.Contains(m.ZW, "董事长") || strings.Contains(m.ZW, "总经理") || strings.Contains(m.ZW, "法定代表人") {
 						if m.JJ != "" {
-							profile.ChairmanNationality = extractNationality(m.JJ)
-							profile.PoliticalAffiliation = extractPoliticalAffiliation(m.JJ)
-							break
+							nat := extractNationality(m.JJ)
+							if nat != "" {
+								profile.ChairmanNationality = nat
+								profile.PoliticalAffiliation = extractPoliticalAffiliation(m.JJ)
+								break
+							}
 						}
 					}
+				}
+			}
+			// 若已判定为中国台湾但蓝绿属性仍为空，尝试内置映射表及百度百科推断
+			if profile.ChairmanNationality == "中国台湾" && profile.PoliticalAffiliation == "" && targetName != "" {
+				if pa, ok := knownTaiwanPoliticalMap[targetName]; ok && pa != "" {
+					profile.PoliticalAffiliation = pa
+				} else {
+					profile.PoliticalAffiliation = inferPoliticalAffiliationFromBaike(targetName)
 				}
 			}
 		}
@@ -413,6 +425,10 @@ func extractNationality(jj string) string {
 	if strings.Contains(jj, "台湾籍") || strings.Contains(jj, "台湾人") || strings.Contains(jj, "出生于台湾") {
 		return "中国台湾"
 	}
+	// 若简介中出现“台湾”字样（如台湾公司、台湾大学等），优先判定为中国台湾
+	if strings.Contains(jj, "台湾") {
+		return "中国台湾"
+	}
 	// 常见外籍
 	if strings.Contains(jj, "美国国籍") || strings.Contains(jj, "美籍") {
 		return "美国"
@@ -461,6 +477,49 @@ func extractPoliticalAffiliation(jj string) string {
 	}
 	for _, k := range blue {
 		if strings.Contains(jj, k) {
+			return "blue"
+		}
+	}
+	return ""
+}
+
+// 已知台湾籍企业家的蓝绿属性映射表（程序内置兜底）
+var knownTaiwanPoliticalMap = map[string]string{
+	"郭台铭": "blue",
+	"王永庆": "blue",
+	"王文洋": "blue",
+	"严凯泰": "blue",
+}
+
+// inferPoliticalAffiliationFromBaike 尝试从百度百科页面推断人物蓝绿属性
+func inferPoliticalAffiliationFromBaike(name string) string {
+	if name == "" {
+		return ""
+	}
+	baikeURL := fmt.Sprintf("https://baike.baidu.com/item/%s", url.QueryEscape(name))
+	body, err := httpGetWithReferer(baikeURL, "https://baike.baidu.com/")
+	if err != nil {
+		return ""
+	}
+	text := string(body)
+	// 去掉 HTML 标签，只保留文本便于正则匹配
+	reTag := regexp.MustCompile(`<[^>]+>`)
+	text = reTag.ReplaceAllString(text, " ")
+	text = strings.ReplaceAll(text, "\n", " ")
+	text = strings.ReplaceAll(text, "\t", " ")
+
+	green := []string{"民进党", "民主进步党", "绿营", "泛绿", "深绿"}
+	blue := []string{"国民党", "中国国民党", "蓝营", "泛蓝", "深蓝"}
+
+	for _, k := range green {
+		pat := regexp.MustCompile(regexp.QuoteMeta(name) + `.{0,40}` + regexp.QuoteMeta(k) + `|` + regexp.QuoteMeta(k) + `.{0,40}` + regexp.QuoteMeta(name))
+		if pat.MatchString(text) {
+			return "green"
+		}
+	}
+	for _, k := range blue {
+		pat := regexp.MustCompile(regexp.QuoteMeta(name) + `.{0,40}` + regexp.QuoteMeta(k) + `|` + regexp.QuoteMeta(k) + `.{0,40}` + regexp.QuoteMeta(name))
+		if pat.MatchString(text) {
 			return "blue"
 		}
 	}
@@ -617,6 +676,7 @@ type KlineData struct {
 	Low    float64 `json:"low"`
 	High   float64 `json:"high"`
 	Volume float64 `json:"volume"`
+	Amount float64 `json:"amount"` // 成交额（元）
 }
 
 // FetchStockKlines 获取股票历史K线数据（日K），先尝试东方财富，再腾讯财经，再网易财经
@@ -659,6 +719,10 @@ func parseEastMoneyKlines(lines []string) []KlineData {
 		if len(parts) < 6 {
 			continue
 		}
+		amount := 0.0
+		if len(parts) > 6 {
+			amount = parseStrFloat(parts[6])
+		}
 		result = append(result, KlineData{
 			Time:   parts[0],
 			Open:   parseStrFloat(parts[1]),
@@ -666,6 +730,7 @@ func parseEastMoneyKlines(lines []string) []KlineData {
 			Low:    parseStrFloat(parts[3]),
 			High:   parseStrFloat(parts[4]),
 			Volume: parseStrFloat(parts[5]),
+			Amount: amount,
 		})
 	}
 	return result
@@ -708,13 +773,17 @@ func fetchKlinesFromTencent(market, code string, limit int) ([]KlineData, error)
 			continue
 		}
 		date, _ := item[0].(string)
+		close := parseAnyFloat(item[2])
+		volume := parseAnyFloat(item[5])
+		amount := close * volume * 100 // 腾讯无成交额字段，用收盘价×成交量(手)×100 估算
 		klines = append(klines, KlineData{
 			Time:   date,
 			Open:   parseAnyFloat(item[1]),
-			Close:  parseAnyFloat(item[2]),
+			Close:  close,
 			High:   parseAnyFloat(item[3]),
 			Low:    parseAnyFloat(item[4]),
-			Volume: parseAnyFloat(item[5]),
+			Volume: volume,
+			Amount: amount,
 		})
 	}
 	return klines, nil
@@ -741,6 +810,7 @@ func fetchKlinesFromNetEase(market, code string, limit int) ([]KlineData, error)
 	// 网易返回 GB2312 编码的 CSV
 	reader := transform.NewReader(resp.Body, simplifiedchinese.GBK.NewDecoder())
 	csvReader := csv.NewReader(reader)
+	csvReader.LazyQuotes = true
 	records, err := csvReader.ReadAll()
 	if err != nil {
 		return nil, err
@@ -766,6 +836,10 @@ func fetchKlinesFromNetEase(market, code string, limit int) ([]KlineData, error)
 		if len(date) == 8 {
 			date = date[:4] + "-" + date[4:6] + "-" + date[6:]
 		}
+		amount := 0.0
+		if len(row) > 11 {
+			amount = parseStrFloat(row[11]) // 成交金额（元）
+		}
 		klines = append(klines, KlineData{
 			Time:   date,
 			Open:   parseStrFloat(row[6]),
@@ -773,6 +847,7 @@ func fetchKlinesFromNetEase(market, code string, limit int) ([]KlineData, error)
 			Low:    parseStrFloat(row[5]),
 			Close:  parseStrFloat(row[3]),
 			Volume: parseStrFloat(row[10]) / 100, // 网易成交量是股数，转为手
+			Amount: amount,
 		})
 		if len(klines) >= limit {
 			break

@@ -42,7 +42,11 @@ export function GetStockQuote(arg1:string):Promise<downloader.StockQuote>;
 
 export function GetWatchlist():Promise<Array<main.WatchlistItem>>;
 
+export function GetWatchlistActivity():Promise<Array<main.WatchlistActivitySummary>>;
+
 export function ImportFinancialReports(arg1:string):Promise<main.ImportResult>;
+
+export function RefreshIndustryBaselines():Promise<Record<string, analyzer.IndustryBaseline>>;
 
 export function RefreshStockProfile(arg1:string):Promise<main.StockProfile>;
 

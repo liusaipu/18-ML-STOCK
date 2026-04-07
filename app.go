@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -76,6 +77,12 @@ func (a *App) startup(ctx context.Context) {
 	if err := a.loadStockDB(); err != nil {
 		fmt.Printf("加载股票代码库失败: %v\n", err)
 	}
+
+	// 初始化行业基准（如不存在则用默认值创建）
+	if _, err := a.storage.LoadIndustryBaselines(); os.IsNotExist(err) {
+		defaultBaselines := analyzer.BuildIndustryBaselines(nil)
+		_ = a.storage.SaveIndustryBaselines(defaultBaselines)
+	}
 }
 
 // loadStockDB 从嵌入的资源或数据目录加载股票列表
@@ -107,6 +114,100 @@ func (a *App) SearchStocks(keyword string) []StockInfo {
 }
 
 // GetWatchlist 获取自选列表
+// WatchlistActivitySummary 自选股票活跃度摘要
+type WatchlistActivitySummary struct {
+	Code  string  `json:"code"`
+	Score float64 `json:"score"`
+	Stars int     `json:"stars"`
+	Grade string  `json:"grade"`
+}
+
+// GetWatchlistActivity 批量获取自选股的活跃度（带缓存）
+func (a *App) GetWatchlistActivity() ([]WatchlistActivitySummary, error) {
+	if a.storage == nil {
+		return nil, fmt.Errorf("存储未初始化")
+	}
+	watchlist, err := a.storage.LoadWatchlist()
+	if err != nil {
+		return nil, err
+	}
+	fmt.Printf("[GetWatchlistActivity] watchlist count: %d\n", len(watchlist))
+
+	baselines, _ := a.storage.LoadIndustryBaselines()
+	var result []WatchlistActivitySummary
+
+	for _, item := range watchlist {
+		var activity *analyzer.ActivityData
+		// 拆分 code 和 market（item.Code 可能是 002584.SZ 格式）
+		pureCode := item.Code
+		market := item.Market
+		if strings.Contains(item.Code, ".") {
+			parts := strings.SplitN(item.Code, ".", 2)
+			pureCode = parts[0]
+			if market == "" {
+				market = strings.ToUpper(parts[1])
+			}
+		}
+		if market == "" {
+			if strings.HasPrefix(pureCode, "6") {
+				market = "SH"
+			} else {
+				market = "SZ"
+			}
+		}
+		// 先读缓存
+		if cached, err := a.storage.LoadActivityCache(item.Code); err == nil && cached != nil {
+			activity = cached
+		} else {
+			klines, err := downloader.FetchStockKlines(market, pureCode, 60)
+			if err != nil || len(klines) < 20 {
+				fmt.Printf("[GetWatchlistActivity] %s klines err=%v len=%d\n", item.Code, err, len(klines))
+				continue
+			}
+			quote, err := downloader.FetchStockQuote(market, pureCode)
+			if err != nil || quote == nil || quote.CirculatingMarketCap <= 0 {
+				fmt.Printf("[GetWatchlistActivity] %s quote err=%v cap=%.0f\n", item.Code, err, quote.CirculatingMarketCap)
+				continue
+			}
+			profile, _ := downloader.FetchStockProfile(market, pureCode)
+			industry := ""
+			if profile != nil {
+				industry = profile.Industry
+			}
+			aklines := make([]analyzer.ActivityKline, len(klines))
+			for i, k := range klines {
+				aklines[i] = analyzer.ActivityKline{
+					Time:   k.Time,
+					Open:   k.Open,
+					Close:  k.Close,
+					Low:    k.Low,
+					High:   k.High,
+					Volume: k.Volume,
+					Amount: k.Amount,
+				}
+			}
+			qLite := &analyzer.StockQuoteLite{CirculatingMarketCap: quote.CirculatingMarketCap}
+			activity = analyzer.CalculateActivity(aklines, qLite, industry, baselines)
+			_ = a.storage.SaveActivityCache(item.Code, activity)
+		}
+
+		if activity != nil && activity.Score > 0 {
+			result = append(result, WatchlistActivitySummary{
+				Code:  item.Code,
+				Score: activity.Score,
+				Stars: activity.Stars,
+				Grade: activity.Grade,
+			})
+			fmt.Printf("[GetWatchlistActivity] %s score=%.0f stars=%d\n", item.Code, activity.Score, activity.Stars)
+		} else {
+			fmt.Printf("[GetWatchlistActivity] %s skipped (nil or score=0)\n", item.Code)
+		}
+	}
+
+	fmt.Printf("[GetWatchlistActivity] total returned: %d\n", len(result))
+	return result, nil
+}
+
 func (a *App) GetWatchlist() ([]WatchlistItem, error) {
 	if a.storage == nil {
 		return nil, fmt.Errorf("存储未初始化")
@@ -331,7 +432,7 @@ func (a *App) ImportFinancialReports(symbol string) (*ImportResult, error) {
 		if len(errors) > 0 {
 			msg += fmt.Sprintf("\n\n处理过程中的问题:\n%s", strings.Join(errors, "\n"))
 		}
-		return nil, fmt.Errorf(msg)
+		return nil, fmt.Errorf("%s", msg)
 	}
 
 	result.Success = true
@@ -666,7 +767,54 @@ func (a *App) AnalyzeStock(symbol string, overwriteLatest bool) (*analyzer.Analy
 		policyData = analyzer.BuildPolicyMatch(profile.Industry, conceptList)
 	}
 
-	report, err := analyzer.RunAnalysisWithComparablesAndQuoteAndSentimentAndPolicy(a.storage.DataDir(), symbol, compAnalysis, quoteData, sentimentData, policyData)
+	// 获取K线数据
+	var klines []downloader.KlineData
+	if list, err := a.GetStockKlines(symbol); err == nil && len(list) >= 20 {
+		klines = list
+	}
+
+	// 技术形态分析
+	var technicalData *analyzer.TechnicalData
+	if len(klines) >= 30 {
+		tklines := make([]analyzer.TechnicalKline, len(klines))
+		for i, k := range klines {
+			tklines[i] = analyzer.TechnicalKline{
+				Time:   k.Time,
+				Open:   k.Open,
+				Close:  k.Close,
+				Low:    k.Low,
+				High:   k.High,
+				Volume: k.Volume,
+			}
+		}
+		technicalData = analyzer.AnalyzeTechnical(tklines)
+	}
+
+	// 交易活跃度分析
+	var activityData *analyzer.ActivityData
+	if len(klines) >= 20 && quoteData != nil {
+		baselines, _ := a.storage.LoadIndustryBaselines()
+		industry := ""
+		if profile != nil {
+			industry = profile.Industry
+		}
+		aklines := make([]analyzer.ActivityKline, len(klines))
+		for i, k := range klines {
+			aklines[i] = analyzer.ActivityKline{
+				Time:   k.Time,
+				Open:   k.Open,
+				Close:  k.Close,
+				Low:    k.Low,
+				High:   k.High,
+				Volume: k.Volume,
+				Amount: k.Amount,
+			}
+		}
+		qLite := &analyzer.StockQuoteLite{CirculatingMarketCap: quoteData.CirculatingMarketCap}
+		activityData = analyzer.CalculateActivity(aklines, qLite, industry, baselines)
+	}
+
+	report, err := analyzer.RunAnalysisWithAll(a.storage.DataDir(), symbol, compAnalysis, quoteData, sentimentData, policyData, technicalData, activityData)
 	if err != nil {
 		return nil, err
 	}
@@ -781,6 +929,60 @@ func (a *App) RefreshStockProfile(symbol string) (*StockProfile, error) {
 	path := filepath.Join(a.storage.DataDir(), "data", symbol, "profile.json")
 	_ = os.Remove(path)
 	return a.GetStockProfile(symbol)
+}
+
+// RefreshIndustryBaselines 基于当前自选股数据刷新行业换手率基准
+func (a *App) RefreshIndustryBaselines() (map[string]*analyzer.IndustryBaseline, error) {
+	if a.storage == nil {
+		return nil, fmt.Errorf("存储未初始化")
+	}
+
+	watchlist, err := a.storage.LoadWatchlist()
+	if err != nil {
+		return nil, fmt.Errorf("加载自选股失败: %w", err)
+	}
+
+	// 按行业收集换手率
+	industryTurnovers := make(map[string][]float64)
+	for _, item := range watchlist {
+		profile, err := a.GetStockProfile(item.Code)
+		if err != nil || profile == nil || profile.Industry == "" {
+			continue
+		}
+		quote, err := a.GetStockQuote(item.Code)
+		if err != nil || quote == nil || quote.TurnoverRate <= 0 {
+			continue
+		}
+		industryTurnovers[profile.Industry] = append(industryTurnovers[profile.Industry], quote.TurnoverRate)
+	}
+
+	samples := make(map[string]*analyzer.IndustryBaseline)
+	for industry, list := range industryTurnovers {
+		if len(list) == 0 {
+			continue
+		}
+		sort.Float64s(list)
+		avgVal := 0.0
+		for _, v := range list {
+			avgVal += v
+		}
+		avgVal /= float64(len(list))
+		medianVal := list[len(list)/2]
+		if len(list)%2 == 0 {
+			medianVal = (list[len(list)/2-1] + list[len(list)/2]) / 2
+		}
+		samples[industry] = &analyzer.IndustryBaseline{
+			AvgTurnover:    avgVal,
+			MedianTurnover: medianVal,
+			SampleCount:    len(list),
+		}
+	}
+
+	baselines := analyzer.BuildIndustryBaselines(samples)
+	if err := a.storage.SaveIndustryBaselines(baselines); err != nil {
+		return nil, fmt.Errorf("保存行业基准失败: %w", err)
+	}
+	return baselines, nil
 }
 
 // GetStockConcepts 获取股票概念与风口

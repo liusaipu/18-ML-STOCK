@@ -193,6 +193,7 @@ export namespace downloader {
 	    low: number;
 	    high: number;
 	    volume: number;
+	    amount: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new KlineData(source);
@@ -206,6 +207,7 @@ export namespace downloader {
 	        this.low = source["low"];
 	        this.high = source["high"];
 	        this.volume = source["volume"];
+	        this.amount = source["amount"];
 	    }
 	}
 	export class StockConcepts {
@@ -439,6 +441,24 @@ export namespace main {
 	        this.chairmanHoldRatio = source["chairmanHoldRatio"];
 	        this.politicalAffiliation = source["politicalAffiliation"];
 	        this.updatedAt = source["updatedAt"];
+	    }
+	}
+	export class WatchlistActivitySummary {
+	    code: string;
+	    score: number;
+	    stars: number;
+	    grade: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new WatchlistActivitySummary(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.code = source["code"];
+	        this.score = source["score"];
+	        this.stars = source["stars"];
+	        this.grade = source["grade"];
 	    }
 	}
 	export class WatchlistItem {

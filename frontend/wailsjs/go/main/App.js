@@ -78,8 +78,16 @@ export function GetWatchlist() {
   return window['go']['main']['App']['GetWatchlist']();
 }
 
+export function GetWatchlistActivity() {
+  return window['go']['main']['App']['GetWatchlistActivity']();
+}
+
 export function ImportFinancialReports(arg1) {
   return window['go']['main']['App']['ImportFinancialReports'](arg1);
+}
+
+export function RefreshIndustryBaselines() {
+  return window['go']['main']['App']['RefreshIndustryBaselines']();
 }
 
 export function RefreshStockProfile(arg1) {

@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/stock-analyzer/analyzer"
 	"github.com/stock-analyzer/downloader"
 )
 
@@ -640,4 +641,75 @@ func mergeYears(yearsList ...[]string) []string {
 		result[i], result[j] = result[j], result[i]
 	}
 	return result
+}
+
+// IndustryBaselinePath 返回行业基准文件路径
+func (s *Storage) IndustryBaselinePath() string {
+	return filepath.Join(s.dataDir, "industry_baseline.json")
+}
+
+// LoadIndustryBaselines 加载行业基准数据
+func (s *Storage) LoadIndustryBaselines() (map[string]*analyzer.IndustryBaseline, error) {
+	path := s.IndustryBaselinePath()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	var baselines map[string]*analyzer.IndustryBaseline
+	if err := json.Unmarshal(data, &baselines); err != nil {
+		return nil, err
+	}
+	return baselines, nil
+}
+
+// SaveIndustryBaselines 保存行业基准数据
+func (s *Storage) SaveIndustryBaselines(baselines map[string]*analyzer.IndustryBaseline) error {
+	path := s.IndustryBaselinePath()
+	data, err := json.MarshalIndent(baselines, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, data, 0644)
+}
+
+// ActivityCachePath 返回某只股票的活跃度缓存文件路径
+func (s *Storage) ActivityCachePath(symbol string) string {
+	return filepath.Join(s.DataDir(), "data", symbol, "activity.json")
+}
+
+// SaveActivityCache 保存活跃度缓存
+func (s *Storage) SaveActivityCache(symbol string, data *analyzer.ActivityData) error {
+	path := s.ActivityCachePath(symbol)
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		return err
+	}
+	b, err := json.MarshalIndent(data, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, b, 0644)
+}
+
+// LoadActivityCache 加载活跃度缓存（同时校验时效，默认当天有效）
+func (s *Storage) LoadActivityCache(symbol string) (*analyzer.ActivityData, error) {
+	path := s.ActivityCachePath(symbol)
+	info, err := os.Stat(path)
+	if err != nil {
+		return nil, err
+	}
+	if time.Since(info.ModTime()) > 24*time.Hour {
+		return nil, fmt.Errorf("缓存过期")
+	}
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	var data analyzer.ActivityData
+	if err := json.Unmarshal(b, &data); err != nil {
+		return nil, err
+	}
+	return &data, nil
 }

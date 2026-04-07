@@ -7,7 +7,7 @@ import (
 )
 
 // GenerateMarkdown 生成增强版 Markdown 格式的投资分析报告（14模块标准框架）
-func GenerateMarkdown(symbol string, years []string, steps []StepResult, scores map[string]*YearScore, comp *ComparableAnalysis, quote *QuoteData, sentiment *SentimentData, policy *PolicyMatchData) string {
+func GenerateMarkdown(symbol string, years []string, steps []StepResult, scores map[string]*YearScore, comp *ComparableAnalysis, quote *QuoteData, sentiment *SentimentData, policy *PolicyMatchData, technical *TechnicalData, activity *ActivityData) string {
 	if len(years) == 0 {
 		return "# 无数据\n\n未找到可用的财务数据。"
 	}
@@ -32,7 +32,7 @@ func GenerateMarkdown(symbol string, years []string, steps []StepResult, scores 
 	writeMajorRisks(&b, symbol, steps, latest, prev, latestScore)
 
 	// ==================== 模块1: 执行摘要 ====================
-	writeModule1(&b, symbol, steps, latest, prev, latestScore, quote)
+	writeModule1(&b, symbol, steps, latest, prev, latestScore, quote, technical, activity)
 
 	// ==================== 模块2: 换手率深度分析 ====================
 	writeModule2(&b, quote)
@@ -53,7 +53,7 @@ func GenerateMarkdown(symbol string, years []string, steps []StepResult, scores 
 	writeModule7(&b, steps, latest)
 
 	// ==================== 模块8: 技术面分析 ====================
-	writeModule8(&b, quote)
+	writeModule8(&b, quote, technical, activity)
 
 	// ==================== 模块9: ML机器学习预测 ====================
 	writeModule9(&b, steps, latest, prev)
@@ -214,7 +214,7 @@ func writeEightIndicatorsHighlight(b *strings.Builder, steps []StepResult, lates
 }
 
 // ========== 模块1: 执行摘要 ==========
-func writeModule1(b *strings.Builder, symbol string, steps []StepResult, latest, prev string, score *YearScore, quote *QuoteData) {
+func writeModule1(b *strings.Builder, symbol string, steps []StepResult, latest, prev string, score *YearScore, quote *QuoteData, technical *TechnicalData, activity *ActivityData) {
 	b.WriteString("# 模块1: 执行摘要\n\n")
 
 	writeEightIndicatorsHighlight(b, steps, latest)
@@ -236,7 +236,16 @@ func writeModule1(b *strings.Builder, symbol string, steps []StepResult, latest,
 	} else {
 		b.WriteString(fmt.Sprintf("| **实时估值** | - | -/100 | %s |\n", vc))
 	}
-	b.WriteString(fmt.Sprintf("| **技术形态** | - | -/100 | 待接入技术分析数据 |\n"))
+	if technical != nil && technical.Score > 0 {
+		b.WriteString(fmt.Sprintf("| **技术形态** | %s | %.0f/100 | %s |\n", scoreToStars(technical.Score), technical.Score, technical.Comment))
+	} else {
+		b.WriteString(fmt.Sprintf("| **技术形态** | - | -/100 | 待接入技术分析数据 |\n"))
+	}
+	if activity != nil && activity.Score > 0 {
+		b.WriteString(fmt.Sprintf("| **交易活跃度** | %s | %.0f/100 | %s |\n", formatActivityStars(activity.Stars), activity.Score, activity.Comment))
+	} else {
+		b.WriteString(fmt.Sprintf("| **交易活跃度** | - | -/100 | 数据不足 |\n"))
+	}
 	b.WriteString(fmt.Sprintf("| **ML预测** | - | -/30 | 待接入机器学习模型 |\n"))
 	b.WriteString(fmt.Sprintf("| **逆向检查** | %s | %.0f/100 | %s |\n", scoreToStars(reverseScore(steps, latest, score)), reverseScore(steps, latest, score), reverseComment(steps, latest, score)))
 	b.WriteString(fmt.Sprintf("| **巴芒清单** | %s | %.1f/10 | %s |\n", scoreToStars(buffettScore(steps, latest, score)*10), buffettScore(steps, latest, score), buffettComment(steps, latest, score)))
@@ -562,7 +571,7 @@ func writeModule7(b *strings.Builder, steps []StepResult, latest string) {
 }
 
 // ========== 模块7: 技术面分析 ==========
-func writeModule8(b *strings.Builder, quote *QuoteData) {
+func writeModule8(b *strings.Builder, quote *QuoteData, technical *TechnicalData, activity *ActivityData) {
 	b.WriteString("# 模块8: 技术面分析\n\n")
 
 	if quote == nil || quote.CurrentPrice == 0 {
@@ -629,6 +638,29 @@ func writeModule8(b *strings.Builder, quote *QuoteData) {
 	default:
 		b.WriteString("**偏空**: price、开盘、高低点及换手均呈现弱势信号。\n")
 	}
+
+	// 新增：基于历史K线的技术指标分析
+	if technical != nil && technical.Score > 0 {
+		b.WriteString("\n## 7.4 历史K线技术指标分析\n\n")
+		b.WriteString(fmt.Sprintf("| 指标 | 状态 | 说明 |\n"))
+		b.WriteString(fmt.Sprintf("|------|------|------|\n"))
+		b.WriteString(fmt.Sprintf("| 技术评分 | %s | %.0f/100（%s） |\n", scoreToStars(technical.Score), technical.Score, technical.Grade))
+		b.WriteString(fmt.Sprintf("| 趋势方向 | %s | %s |\n", technical.Trend, technical.MAStatus))
+		b.WriteString(fmt.Sprintf("| MACD | %s | 动能信号 |\n", technical.MACDStatus))
+		b.WriteString(fmt.Sprintf("| RSI(14) | %s | 超买超卖状态 |\n", technical.RSIStatus))
+		b.WriteString(fmt.Sprintf("| 布林带 | %s | 价格相对波动区间 |\n", technical.BollingerStatus))
+		b.WriteString(fmt.Sprintf("| 量价关系 | %s | 成交量配合程度 |\n", technical.VolumeStatus))
+		b.WriteString(fmt.Sprintf("| 技术形态 | %s | %s |\n", technical.Pattern, technical.SupportResistance))
+		b.WriteString("\n")
+		b.WriteString(fmt.Sprintf("> **综合结论**: %s\n\n", technical.Comment))
+	}
+
+	if activity != nil && activity.Score > 0 && activity.PotentialHint != "" {
+		b.WriteString("\n## 7.5 交易活跃度潜力提示\n\n")
+		b.WriteString(fmt.Sprintf("> **活跃度评级**: %s（%.0f分）\n\n", formatActivityStars(activity.Stars), activity.Score))
+		b.WriteString(fmt.Sprintf("> 💡 **提示**: %s\n\n", activity.PotentialHint))
+	}
+
 	b.WriteString("\n---\n\n")
 }
 
@@ -1090,6 +1122,21 @@ func scoreToStars(score float64) string {
 	case score >= 70:
 		return "⭐⭐⭐"
 	case score >= 60:
+		return "⭐⭐"
+	default:
+		return "⭐"
+	}
+}
+
+func formatActivityStars(stars int) string {
+	switch stars {
+	case 5:
+		return "⭐⭐⭐⭐⭐"
+	case 4:
+		return "⭐⭐⭐⭐"
+	case 3:
+		return "⭐⭐⭐"
+	case 2:
 		return "⭐⭐"
 	default:
 		return "⭐"
