@@ -37,6 +37,7 @@ import {
   ImportFinancialReports,
   DownloadReports,
   AnalyzeStock,
+  AnalyzeStockWithRIM,
   CheckAnalysisCache,
   DownloadReport,
   DeleteReport,
@@ -180,6 +181,17 @@ function App() {
   const [traceList, setTraceList] = useState<analyzer.CalcTrace[]>([])
   const [forceAnalyzeOpen, setForceAnalyzeOpen] = useState(false)
   const [lastAnalysisAt, setLastAnalysisAt] = useState('')
+
+  // RIM 参数弹窗状态
+  const [showRIMModal, setShowRIMModal] = useState(false)
+  const [rimBeta, setRimBeta] = useState(0.98)
+  const [rimRf, setRimRf] = useState(1.83)
+  const [rimRmRf, setRimRmRf] = useState(5.17)
+  const [rimG, setRimG] = useState(5.0)
+  const [rimEPS, setRimEPS] = useState<number[]>([0, 0, 0, 0, 0, 0])
+  const [rimBPS0, setRimBPS0] = useState(0)
+  const [rimPrice, setRimPrice] = useState(0)
+  const [rimLoading, setRimLoading] = useState(false)
 
   const tocSections = [
     { label: '模块1: 执行摘要', id: '模块1-执行摘要' },
@@ -699,6 +711,71 @@ function App() {
       console.error('检查分析缓存失败:', err)
     }
     await runAnalyze(overwriteLatest)
+  }
+
+  const openRIMModal = () => {
+    if (!selectedStock) return
+    // 优先用当前报告中的RIM数据预填充，否则用默认值
+    const rim = report?.rim
+    if (rim && rim.hasData) {
+      setRimBeta(rim.beta ?? 0.98)
+      setRimRf((rim.rf ?? 0.0183) * 100)
+      setRimRmRf((rim.rmRf ?? 0.0517) * 100)
+      setRimG((rim.params?.GTerminal ?? 0.05) * 100)
+      setRimBPS0(rim.params?.BPS0 ?? 0)
+      setRimPrice(rim.params?.CurrentPrice ?? 0)
+      const eps = rim.params?.Forecast?.EPS?.slice(0, 6) || []
+      while (eps.length < 6) eps.push(0)
+      setRimEPS(eps)
+    } else if (quote) {
+      // 从行情推算默认值
+      setRimBeta(0.98)
+      setRimRf(1.83)
+      setRimRmRf(5.17)
+      setRimG(5.0)
+      setRimBPS0(quote.pb > 0 ? quote.currentPrice / quote.pb : 0)
+      setRimPrice(quote.currentPrice)
+      setRimEPS([0, 0, 0, 0, 0, 0])
+    }
+    setShowRIMModal(true)
+  }
+
+  const handleAnalyzeWithRIM = async () => {
+    if (!selectedStock) return
+    setRimLoading(true)
+    try {
+      const params = {
+        BPS0: rimBPS0,
+        KE: rimRf / 100 + rimBeta * (rimRmRf / 100),
+        GTerminal: rimG / 100,
+        Forecast: { EPS: rimEPS.filter((v) => v > 0), DPS: [] },
+        CurrentPrice: rimPrice,
+      }
+      const rimData = {
+        hasData: true,
+        params,
+        result: null as any,
+        rf: rimRf / 100,
+        beta: rimBeta,
+        rmRf: rimRmRf / 100,
+      }
+      const rimJSON = JSON.stringify(rimData)
+      const result = await AnalyzeStockWithRIM(selectedStock.code, false, rimJSON)
+      setReport(result)
+      setViewingHistory(null)
+      setHistoryContent('')
+      if (result) {
+        setSnapshots((prev) => ({ ...prev, [selectedStock.code]: result }))
+      }
+      setAppliedComparables(comparables)
+      await loadReportHistory(selectedStock.code)
+      setShowRIMModal(false)
+    } catch (err: any) {
+      console.error('RIM分析失败:', err)
+      alert(String(err))
+    } finally {
+      setRimLoading(false)
+    }
   }
 
   const handleReportDownload = async () => {
@@ -1577,6 +1654,14 @@ function App() {
             >
               下载报告
             </button>
+            <button
+              className="btn-rim"
+              onClick={openRIMModal}
+              disabled={!selectedStock}
+              title={!selectedStock ? '请先选择股票' : '调整RIM估值参数并重新分析'}
+            >
+              调整RIM
+            </button>
           </div>
         </div>
         <div className="report-content" ref={reportContentRef}>
@@ -1722,6 +1807,62 @@ function App() {
                 }}
               >
                 强制重新分析
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* RIM 参数调整弹窗 */}
+      {showRIMModal && (
+        <div className="modal-overlay" onClick={() => setShowRIMModal(false)}>
+          <div className="modal-content rim-modal" onClick={(e) => e.stopPropagation()}>
+            <h4>调整 RIM 估值参数</h4>
+            <div className="rim-form">
+              <div className="rim-row">
+                <label>Beta</label>
+                <input type="number" step={0.01} value={rimBeta} onChange={(e) => setRimBeta(Number(e.target.value))} />
+              </div>
+              <div className="rim-row">
+                <label>无风险利率 Rf (%)</label>
+                <input type="number" step={0.01} value={rimRf} onChange={(e) => setRimRf(Number(e.target.value))} />
+              </div>
+              <div className="rim-row">
+                <label>市场风险溢价 Rm-Rf (%)</label>
+                <input type="number" step={0.01} value={rimRmRf} onChange={(e) => setRimRmRf(Number(e.target.value))} />
+              </div>
+              <div className="rim-row">
+                <label>永续增长率 g (%)</label>
+                <input type="number" step={0.1} value={rimG} onChange={(e) => setRimG(Number(e.target.value))} />
+              </div>
+              <div className="rim-row">
+                <label>每股净资产 BPS0</label>
+                <input type="number" step={0.01} value={rimBPS0} onChange={(e) => setRimBPS0(Number(e.target.value))} />
+              </div>
+              <div className="rim-row">
+                <label>当前股价</label>
+                <input type="number" step={0.01} value={rimPrice} onChange={(e) => setRimPrice(Number(e.target.value))} />
+              </div>
+              <div className="rim-eps-title">预测期 EPS（至少填前3年）</div>
+              <div className="rim-eps-grid">
+                {rimEPS.map((v, i) => (
+                  <div className="rim-eps-item" key={i}>
+                    <label>第{i + 1}年</label>
+                    <input type="number" step={0.01} value={v} onChange={(e) => {
+                      const next = [...rimEPS]
+                      next[i] = Number(e.target.value)
+                      setRimEPS(next)
+                    }} />
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="modal-actions">
+              <button className="btn" onClick={() => setShowRIMModal(false)} disabled={rimLoading}>
+                取消
+              </button>
+              <button className="btn primary" onClick={handleAnalyzeWithRIM} disabled={rimLoading || rimBPS0 <= 0 || rimEPS.filter((v) => v > 0).length < 1}>
+                {rimLoading ? '分析中...' : '应用并重新分析'}
               </button>
             </div>
           </div>

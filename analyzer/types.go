@@ -45,6 +45,7 @@ type AnalysisReport struct {
 	Score           map[string]float64     `json:"score"`
 	OverallGrade    string                 `json:"overallGrade"`
 	MarkdownContent string                 `json:"markdownContent"`
+	RIM             *RIMData               `json:"rim,omitempty"`
 }
 
 // PassItem 单一年度的达标项
@@ -96,5 +97,17 @@ type SentimentData struct {
 type MLPredictionData struct {
 	Sentiment *MLSentimentPrediction `json:"sentiment,omitempty"`
 	Financial *MLFinancialPrediction `json:"financial,omitempty"`
+}
+
+// RIMData 剩余收益模型数据
+type RIMData struct {
+	HasData bool       `json:"hasData"`
+	Params  RIMParams  `json:"params"`
+	Result  *RIMResult `json:"result,omitempty"`
+	Error   string     `json:"error,omitempty"`
+	EPSRaw  map[string]float64 `json:"epsRaw,omitempty"`
+	Rf      float64    `json:"rf"`
+	Beta    float64    `json:"beta"`
+	RmRf    float64    `json:"rmRf"`
 }
 

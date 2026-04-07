@@ -671,6 +671,25 @@ func (a *App) CheckAnalysisCache(symbol string) (*CacheStatus, error) {
 
 // AnalyzeStock 对指定股票执行18步财务分析
 func (a *App) AnalyzeStock(symbol string, overwriteLatest bool) (*analyzer.AnalysisReport, error) {
+	return a.analyzeStockInternal(symbol, overwriteLatest, nil)
+}
+
+// AnalyzeStockWithRIM 使用用户自定义RIM参数执行分析
+func (a *App) AnalyzeStockWithRIM(symbol string, overwriteLatest bool, rimJSON string) (*analyzer.AnalysisReport, error) {
+	var customRIM *analyzer.RIMData
+	if rimJSON != "" {
+		customRIM = &analyzer.RIMData{}
+		if err := json.Unmarshal([]byte(rimJSON), customRIM); err != nil {
+			return nil, fmt.Errorf("解析RIM参数失败: %w", err)
+		}
+		if customRIM.HasData && customRIM.Result == nil {
+			customRIM.Result = analyzer.CalculateMultiPeriodRIM(customRIM.Params)
+		}
+	}
+	return a.analyzeStockInternal(symbol, overwriteLatest, customRIM)
+}
+
+func (a *App) analyzeStockInternal(symbol string, overwriteLatest bool, customRIM *analyzer.RIMData) (*analyzer.AnalysisReport, error) {
 	if a.storage == nil {
 		return nil, fmt.Errorf("存储未初始化")
 	}
@@ -853,7 +872,161 @@ func (a *App) AnalyzeStock(symbol string, overwriteLatest bool) (*analyzer.Analy
 		}
 	}
 
-	report, err := analyzer.RunAnalysisWithAll(a.storage.DataDir(), symbol, compAnalysis, quoteData, sentimentData, policyData, technicalData, activityData, mlData)
+	// RIM 多期估值数据
+	var rimData *analyzer.RIMData
+	if customRIM != nil {
+		rimData = customRIM
+	} else if quoteData != nil {
+		rimData = &analyzer.RIMData{}
+		pureCode := symbol
+		if idx := strings.Index(symbol, "."); idx > 0 {
+			pureCode = symbol[:idx]
+		}
+		ext, extErr := downloader.FetchRIMExternalData(pureCode)
+		if extErr != nil {
+			fmt.Printf("[RIM] fetch failed for %s: %v\n", symbol, extErr)
+		}
+		if ext != nil {
+			rimData.Rf = ext.Rf
+			rimData.Beta = ext.Beta
+			rimData.RmRf = ext.RmRf
+			rimData.EPSRaw = ext.EPSForecast
+		} else {
+			// 使用默认参数（即使外部数据获取失败也尝试计算）
+			rimData.Rf = 0.0183
+			rimData.Beta = 0.98
+			rimData.RmRf = 0.0517
+		}
+
+		// 计算 BPS0
+		bps0 := 0.0
+		if quoteData.PB > 0 && quoteData.CurrentPrice > 0 {
+			bps0 = quoteData.CurrentPrice / quoteData.PB
+		}
+		if bps0 <= 0 && ext != nil && ext.PB > 0 && ext.Price > 0 {
+			bps0 = ext.Price / ext.PB
+		}
+		if bps0 <= 0 {
+			// fallback: 财报股东权益 / 总股本
+			totalShares := 0.0
+			if ext != nil {
+				totalShares = ext.TotalShares
+			}
+			if finData, err := analyzer.LoadFinancialData(a.storage.DataDir(), symbol); err == nil && finData != nil && len(finData.Years) > 0 {
+				year := finData.Years[0]
+				if bs := finData.BalanceSheet[year]; bs != nil {
+					equity := bs["所有者权益合计"]
+					if equity == 0 {
+						equity = bs["总资产"] - bs["总负债"]
+					}
+					if equity > 0 && totalShares > 0 {
+						bps0 = equity / 1e8 / (totalShares / 1e8) // 元/股
+					}
+				}
+			}
+		}
+
+		// 构造 EPS 预测序列（按年份排序，至少6年）
+		var epsSeq []float64
+		if ext != nil && len(ext.EPSForecast) > 0 {
+			// 提取年份键并排序
+			years := make([]string, 0, len(ext.EPSForecast))
+			for y := range ext.EPSForecast {
+				years = append(years, y)
+			}
+			// 简单字符串排序对年份有效
+			for i := 0; i < len(years)-1; i++ {
+				for j := i + 1; j < len(years); j++ {
+					if years[i] > years[j] {
+						years[i], years[j] = years[j], years[i]
+					}
+				}
+			}
+			for _, y := range years {
+				if v, ok := ext.EPSForecast[y]; ok && v > 0 {
+					epsSeq = append(epsSeq, v)
+				}
+			}
+		}
+		// 如果外部没有预测数据，用 trailing EPS 做起点然后外推
+		if len(epsSeq) == 0 {
+			trailingEPS := 0.0
+			var finYear string
+			var finProfit float64
+			if finData, err := analyzer.LoadFinancialData(a.storage.DataDir(), symbol); err == nil && finData != nil && len(finData.Years) > 0 {
+				finYear = finData.Years[0]
+				if inc := finData.IncomeStatement[finYear]; inc != nil {
+					finProfit = inc["净利润"]
+				}
+				if finProfit > 0 && ext != nil && ext.TotalShares > 0 {
+					trailingEPS = finProfit / 1e8 / (ext.TotalShares / 1e8)
+				}
+				if trailingEPS <= 0 && bps0 > 0 {
+					// 用 ROE × BPS0 推算
+					roe := 0.0
+					if inc := finData.IncomeStatement[finYear]; inc != nil {
+						netProfit := inc["净利润"]
+						if bs := finData.BalanceSheet[finYear]; bs != nil {
+							equity := bs["所有者权益合计"]
+							if equity == 0 {
+								equity = bs["总资产"] - bs["总负债"]
+							}
+							if equity > 0 {
+								roe = netProfit / equity * 100
+							}
+						}
+					}
+					if roe > 0 {
+						trailingEPS = bps0 * (roe / 100)
+					}
+				}
+			}
+			if trailingEPS > 0 {
+				epsSeq = append(epsSeq, trailingEPS)
+			}
+		}
+		// 如果预测年份不足6年，用最后一年增长率外推（默认增长率 10% -> 5%）
+		growthRates := []float64{0.10, 0.10, 0.08, 0.05, 0.05, 0.05}
+		for len(epsSeq) < 6 {
+			last := 0.0
+			if len(epsSeq) > 0 {
+				last = epsSeq[len(epsSeq)-1]
+			}
+			g := growthRates[len(epsSeq)%len(growthRates)]
+			if last > 0 {
+				epsSeq = append(epsSeq, last*(1+g))
+			} else {
+				epsSeq = append(epsSeq, 0)
+			}
+		}
+
+		ke := rimData.Rf + rimData.Beta*rimData.RmRf
+		gTerminal := 0.05
+		price := quoteData.CurrentPrice
+		if price <= 0 && ext != nil {
+			price = ext.Price
+		}
+
+		if bps0 > 0 && ke > gTerminal {
+			params := analyzer.RIMParams{
+				BPS0:         bps0,
+				KE:           ke,
+				GTerminal:    gTerminal,
+				Forecast:     analyzer.RIMForecast{EPS: epsSeq},
+				CurrentPrice: price,
+			}
+			rimData.Params = params
+			rimData.Result = analyzer.CalculateMultiPeriodRIM(params)
+			if rimData.Result != nil {
+				rimData.HasData = true
+			}
+		}
+		if !rimData.HasData {
+			rimData = nil
+		}
+}
+
+	report, err := analyzer.RunAnalysisWithAll(a.storage.DataDir(), symbol, compAnalysis, quoteData, sentimentData, policyData, technicalData, activityData, mlData, rimData)
 	if err != nil {
 		return nil, err
 	}

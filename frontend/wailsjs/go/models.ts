@@ -1,5 +1,189 @@
 export namespace analyzer {
 	
+	export class RIMScenario {
+	    ROE: number;
+	    Value: number;
+	    DiffPct: number;
+	    Grade: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new RIMScenario(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.ROE = source["ROE"];
+	        this.Value = source["Value"];
+	        this.DiffPct = source["DiffPct"];
+	        this.Grade = source["Grade"];
+	    }
+	}
+	export class RIMYearDetail {
+	    Year: number;
+	    EPS: number;
+	    DPS: number;
+	    BPS: number;
+	    RE: number;
+	    Discount: number;
+	    PVRE: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new RIMYearDetail(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.Year = source["Year"];
+	        this.EPS = source["EPS"];
+	        this.DPS = source["DPS"];
+	        this.BPS = source["BPS"];
+	        this.RE = source["RE"];
+	        this.Discount = source["Discount"];
+	        this.PVRE = source["PVRE"];
+	    }
+	}
+	export class RIMResult {
+	    Details: RIMYearDetail[];
+	    SumPVRE: number;
+	    CV: number;
+	    PVCV: number;
+	    Value: number;
+	    Upside: number;
+	    Pessimistic: RIMScenario;
+	    Baseline: RIMScenario;
+	    Optimistic: RIMScenario;
+	
+	    static createFrom(source: any = {}) {
+	        return new RIMResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.Details = this.convertValues(source["Details"], RIMYearDetail);
+	        this.SumPVRE = source["SumPVRE"];
+	        this.CV = source["CV"];
+	        this.PVCV = source["PVCV"];
+	        this.Value = source["Value"];
+	        this.Upside = source["Upside"];
+	        this.Pessimistic = this.convertValues(source["Pessimistic"], RIMScenario);
+	        this.Baseline = this.convertValues(source["Baseline"], RIMScenario);
+	        this.Optimistic = this.convertValues(source["Optimistic"], RIMScenario);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class RIMForecast {
+	    EPS: number[];
+	    DPS: number[];
+	
+	    static createFrom(source: any = {}) {
+	        return new RIMForecast(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.EPS = source["EPS"];
+	        this.DPS = source["DPS"];
+	    }
+	}
+	export class RIMParams {
+	    BPS0: number;
+	    KE: number;
+	    GTerminal: number;
+	    Forecast: RIMForecast;
+	    CurrentPrice: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new RIMParams(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.BPS0 = source["BPS0"];
+	        this.KE = source["KE"];
+	        this.GTerminal = source["GTerminal"];
+	        this.Forecast = this.convertValues(source["Forecast"], RIMForecast);
+	        this.CurrentPrice = source["CurrentPrice"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class RIMData {
+	    hasData: boolean;
+	    params: RIMParams;
+	    result?: RIMResult;
+	    error?: string;
+	    epsRaw?: Record<string, number>;
+	    rf: number;
+	    beta: number;
+	    rmRf: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new RIMData(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.hasData = source["hasData"];
+	        this.params = this.convertValues(source["params"], RIMParams);
+	        this.result = this.convertValues(source["result"], RIMResult);
+	        this.error = source["error"];
+	        this.epsRaw = source["epsRaw"];
+	        this.rf = source["rf"];
+	        this.beta = source["beta"];
+	        this.rmRf = source["rmRf"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class CalcStep {
 	    desc: string;
 	    expr: string;
@@ -127,6 +311,7 @@ export namespace analyzer {
 	    score: Record<string, number>;
 	    overallGrade: string;
 	    markdownContent: string;
+	    rim?: RIMData;
 	
 	    static createFrom(source: any = {}) {
 	        return new AnalysisReport(source);
@@ -142,6 +327,7 @@ export namespace analyzer {
 	        this.score = source["score"];
 	        this.overallGrade = source["overallGrade"];
 	        this.markdownContent = source["markdownContent"];
+	        this.rim = this.convertValues(source["rim"], RIMData);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -181,6 +367,12 @@ export namespace analyzer {
 	        this.value = source["value"];
 	    }
 	}
+	
+	
+	
+	
+	
+	
 
 }
 

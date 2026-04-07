@@ -10,6 +10,8 @@ export function AddToWatchlist(arg1:string):Promise<void>;
 
 export function AnalyzeStock(arg1:string,arg2:boolean):Promise<analyzer.AnalysisReport>;
 
+export function AnalyzeStockWithRIM(arg1:string,arg2:boolean,arg3:string):Promise<analyzer.AnalysisReport>;
+
 export function CheckAnalysisCache(arg1:string):Promise<main.CacheStatus>;
 
 export function DeleteReport(arg1:string,arg2:string):Promise<void>;

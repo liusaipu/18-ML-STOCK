@@ -34,6 +34,16 @@ func mlInferenceScriptPath() string {
 	return filepath.Join(base, "..", "ml_models", "inference.py")
 }
 
+func resolveMLPythonExecutable() string {
+	_, b, _, _ := runtime.Caller(0)
+	base := filepath.Dir(b)
+	venvPython := filepath.Join(base, "..", ".venv", "bin", "python3")
+	if _, err := os.Stat(venvPython); err == nil {
+		return venvPython
+	}
+	return "python3"
+}
+
 // callMLInference 调用 Python 推理脚本
 func callMLInference(engine string, payload map[string]any) (map[string]any, error) {
 	script := mlInferenceScriptPath()
@@ -50,7 +60,8 @@ func callMLInference(engine string, payload map[string]any) (map[string]any, err
 		return nil, err
 	}
 
-	cmd := exec.Command("python3", script)
+	python := resolveMLPythonExecutable()
+	cmd := exec.Command(python, script)
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		return nil, err

@@ -14,6 +14,10 @@ export function AnalyzeStock(arg1, arg2) {
   return window['go']['main']['App']['AnalyzeStock'](arg1, arg2);
 }
 
+export function AnalyzeStockWithRIM(arg1, arg2, arg3) {
+  return window['go']['main']['App']['AnalyzeStockWithRIM'](arg1, arg2, arg3);
+}
+
 export function CheckAnalysisCache(arg1) {
   return window['go']['main']['App']['CheckAnalysisCache'](arg1);
 }

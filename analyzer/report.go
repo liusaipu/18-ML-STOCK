@@ -7,7 +7,7 @@ import (
 )
 
 // GenerateMarkdown 生成增强版 Markdown 格式的投资分析报告（14模块标准框架）
-func GenerateMarkdown(symbol string, years []string, steps []StepResult, scores map[string]*YearScore, comp *ComparableAnalysis, quote *QuoteData, sentiment *SentimentData, policy *PolicyMatchData, technical *TechnicalData, activity *ActivityData, ml *MLPredictionData) string {
+func GenerateMarkdown(symbol string, years []string, steps []StepResult, scores map[string]*YearScore, comp *ComparableAnalysis, quote *QuoteData, sentiment *SentimentData, policy *PolicyMatchData, technical *TechnicalData, activity *ActivityData, ml *MLPredictionData, rim *RIMData) string {
 	if len(years) == 0 {
 		return "# 无数据\n\n未找到可用的财务数据。"
 	}
@@ -50,7 +50,7 @@ func GenerateMarkdown(symbol string, years []string, steps []StepResult, scores 
 	writeModule6(&b, quote)
 
 	// ==================== 模块7: 剩余收益模型估值(RIM) ====================
-	writeModule7(&b, steps, latest, quote)
+	writeModule7(&b, steps, latest, quote, rim)
 
 	// ==================== 模块8: 技术面分析 ====================
 	writeModule8(&b, quote, technical, activity)
@@ -557,81 +557,65 @@ func writeModule6(b *strings.Builder, quote *QuoteData) {
 	b.WriteString("\n---\n\n")
 }
 
-// ========== 模块6: RIM估值（基于现有数据做简化版） ==========
-func writeModule7(b *strings.Builder, steps []StepResult, latest string, quote *QuoteData) {
+// ========== 模块6: RIM估值（基于多期预测） ==========
+func writeModule7(b *strings.Builder, steps []StepResult, latest string, quote *QuoteData, rim *RIMData) {
 	b.WriteString("# 模块7: 剩余收益模型估值(RIM)\n\n")
 
 	roe := getStepValue(steps, 16, latest, "roe")
-	profit := getStepValue(steps, 16, latest, "profit")
-	r := 0.07
-	g := 0.03
-
-	hasQuote := quote != nil && quote.CurrentPrice > 0 && quote.MarketCap > 0 && quote.PB > 0 && profit > 0
 
 	b.WriteString(fmt.Sprintf("## 7.1 模型参数（基于 %s 年报）", latest) + traceTrigger(16) + "\n\n")
 	b.WriteString("| 参数 | 符号 | 取值 | 说明 |\n")
 	b.WriteString("|------|------|------|------|\n")
 	b.WriteString(fmt.Sprintf("| **%s ROE** | ROE | %.2f%% | 年报数据 |\n", latest, roe))
 
-	var eps, bps, intrinsic, upside float64
-	if hasQuote {
-		shares := quote.MarketCap / quote.CurrentPrice // 总股本（亿股）
-		eps = profit / 1e8 / shares                    // 元/股
-		bps = quote.CurrentPrice / quote.PB            // 每股净资产
-		if bps > 0 && roe/100 > r {
-			intrinsic = bps + bps*(roe/100-r)/(r-g)
+	hasRIM := rim != nil && rim.HasData && rim.Result != nil
+	var bps0, ke, gTerminal, currentPrice float64
+
+	if hasRIM {
+		bps0 = rim.Params.BPS0
+		ke = rim.Params.KE
+		gTerminal = rim.Params.GTerminal
+		currentPrice = rim.Params.CurrentPrice
+		b.WriteString(fmt.Sprintf("| **每股净资产** | BPS | %.2f元 | %s |\n", bps0, rimSourceDesc(rim, quote)))
+		b.WriteString(fmt.Sprintf("| **资本成本** | kE | %.2f%% | CAPM(Rf=%.2f%%, Beta=%.2f, Rm-Rf=%.2f%%) |\n", ke*100, rim.Rf*100, rim.Beta, rim.RmRf*100))
+		b.WriteString(fmt.Sprintf("| **永续增长率** | g | %.1f%% | 稳态假设 |\n", gTerminal*100))
+		if currentPrice > 0 {
+			b.WriteString(fmt.Sprintf("| **当前股价** | P | %.2f元 | 实时行情 |\n", currentPrice))
+		} else {
+			b.WriteString("| **当前股价** | P | - | 待接入实时行情 |\n")
 		}
-		if intrinsic > 0 && quote.CurrentPrice > 0 {
-			upside = (intrinsic - quote.CurrentPrice) / quote.CurrentPrice * 100
+		// 显示预测期 EPS
+		if len(rim.Result.Details) > 0 {
+			var epsLine string
+			for i, d := range rim.Result.Details {
+				if i > 0 {
+					epsLine += ", "
+				}
+				epsLine += fmt.Sprintf("第%d年 %.2f", d.Year, d.EPS)
+			}
+			b.WriteString(fmt.Sprintf("| **预测期 EPS** | - | %s | 机构一致预期 |\n", epsLine))
 		}
-		b.WriteString(fmt.Sprintf("| **最新EPS** | EPS | %.2f元 | 净利润/总股本推算 |\n", eps))
-		b.WriteString(fmt.Sprintf("| **每股净资产** | BPS | %.2f元 | 股价/PB推算 |\n", bps))
-		b.WriteString(fmt.Sprintf("| **当前股价** | P | %.2f元 | 实时行情 |\n", quote.CurrentPrice))
 	} else {
-		b.WriteString("| **最新EPS** | EPS | 待计算 | 需接入实时行情与净利润 |\n")
-		b.WriteString("| **每股净资产** | BPS | 待计算 | 需接入实时行情 |\n")
+		b.WriteString("| **每股净资产** | BPS | 待计算 | 需接入实时行情与财报 |\n")
+		b.WriteString("| **资本成本** | kE | 7.0% | 假设值 |\n")
+		b.WriteString("| **永续增长率** | g | 3.0% | 假设值 |\n")
 		b.WriteString("| **当前股价** | P | - | 待接入实时行情 |\n")
 	}
-	b.WriteString("| **资本成本** | r | 7.0% | 假设值 |\n")
-	b.WriteString("| **永续增长率** | g | 3.0% | 假设值 |\n")
 	b.WriteString("\n")
 
 	b.WriteString("## 7.2 估值情景\n\n")
-	if hasQuote && intrinsic > 0 {
+	if hasRIM {
 		b.WriteString("| 情景 | ROE假设 | 内在价值(元) | 相对现价 | 评级 |\n")
 		b.WriteString("|------|---------|-------------|----------|------|\n")
-		scenarios := []struct {
-			name string
-			roe  float64
-		}{
-			{"悲观", roe - 3},
-			{"基准", roe},
-			{"乐观", roe + 3},
-		}
-		for _, s := range scenarios {
-			iv := 0.0
-			if bps > 0 && s.roe/100 > r {
-				iv = bps + bps*(s.roe/100-r)/(r-g)
-			}
-			rel := "-"
-			grade := "中性"
-			if iv > 0 && quote.CurrentPrice > 0 {
-				diff := (iv - quote.CurrentPrice) / quote.CurrentPrice * 100
-				rel = fmt.Sprintf("%+.1f%%", diff)
-				if diff >= 30 {
-					grade = "积极"
-				} else if diff >= 10 {
-					grade = "谨慎推荐"
-				} else if diff <= -10 {
-					grade = "高估"
-				} else {
-					grade = "中性"
-				}
-			}
-			b.WriteString(fmt.Sprintf("| %s | %.2f%% | %.2f | %s | %s |\n", s.name, s.roe, iv, rel, grade))
-		}
+		b.WriteString(fmt.Sprintf("| 悲观 | %.2f%% | %.2f | %+.1f%% | %s |\n", rim.Result.Pessimistic.ROE, rim.Result.Pessimistic.Value, rim.Result.Pessimistic.DiffPct, rim.Result.Pessimistic.Grade))
+		b.WriteString(fmt.Sprintf("| 基准 | %.2f%% | %.2f | %+.1f%% | %s |\n", rim.Result.Baseline.ROE, rim.Result.Baseline.Value, rim.Result.Baseline.DiffPct, rim.Result.Baseline.Grade))
+		b.WriteString(fmt.Sprintf("| 乐观 | %.2f%% | %.2f | %+.1f%% | %s |\n", rim.Result.Optimistic.ROE, rim.Result.Optimistic.Value, rim.Result.Optimistic.DiffPct, rim.Result.Optimistic.Grade))
 		b.WriteString("\n")
-		b.WriteString(fmt.Sprintf("> **基准情景内在价值**: %.2f 元/股，相对当前股价 %.2f 元 **%+.1f%%**。\n\n", intrinsic, quote.CurrentPrice, upside))
+		if currentPrice > 0 {
+			b.WriteString(fmt.Sprintf("> **基准情景内在价值**: %.2f 元/股，相对当前股价 %.2f 元 **%+.1f%%**。\n\n", rim.Result.Baseline.Value, currentPrice, rim.Result.Baseline.DiffPct))
+		} else {
+			b.WriteString(fmt.Sprintf("> **基准情景内在价值**: %.2f 元/股（未接入实时股价，无法计算涨幅）。\n\n", rim.Result.Baseline.Value))
+		}
 	} else {
 		b.WriteString("| 情景 | ROE假设 | 内在价值/净资产 | 评级 |\n")
 		b.WriteString("|------|---------|----------------|------|\n")
@@ -641,14 +625,29 @@ func writeModule7(b *strings.Builder, steps []StepResult, latest string, quote *
 		b.WriteString("\n")
 	}
 
+	// 多期明细
+	if hasRIM && len(rim.Result.Details) > 0 {
+		b.WriteString("## 7.3 多期计算明细\n\n")
+		b.WriteString("| 年度 | EPS(元) | DPS(元) | BPS(元) | RE(元) | 折现率 | RE现值(元) |\n")
+		b.WriteString("|------|---------|---------|---------|--------|--------|------------|\n")
+		for _, d := range rim.Result.Details {
+			b.WriteString(fmt.Sprintf("| 第%d年 | %.2f | %.2f | %.2f | %.4f | %.4f | %.4f |\n", d.Year, d.EPS, d.DPS, d.BPS, d.RE, d.Discount, d.PVRE))
+		}
+		b.WriteString(fmt.Sprintf("| **RE现值之和** | - | - | - | - | - | **%.4f** |\n", rim.Result.SumPVRE))
+		b.WriteString(fmt.Sprintf("| **持续价值 CV** | - | - | - | %.4f | - | **%.4f** |\n", rim.Result.CV, rim.Result.PVCV))
+		b.WriteString(fmt.Sprintf("| **每股价值** | - | - | - | - | - | **%.2f** |\n", rim.Result.Value))
+		b.WriteString("\n")
+	}
+
 	b.WriteString("> **解读**: RIM 估值的核心在于 ROE 能否持续高于资本成本。")
-	if hasQuote && intrinsic > 0 {
-		if upside >= 20 {
-			b.WriteString(fmt.Sprintf("当前 ROE %.2f%% 高于资本成本，内在价值 %.2f 元显著高于市价 %.2f 元，存在约 %.0f%% 的潜在上行空间。", roe, intrinsic, quote.CurrentPrice, upside))
-		} else if upside >= 0 {
-			b.WriteString(fmt.Sprintf("当前 ROE %.2f%% 高于资本成本，内在价值 %.2f 元略高于市价 %.2f 元，上行空间约 %.0f%%，安全边际一般。", roe, intrinsic, quote.CurrentPrice, upside))
+	if hasRIM && currentPrice > 0 {
+		diff := rim.Result.Baseline.DiffPct
+		if diff >= 20 {
+			b.WriteString(fmt.Sprintf("当前多期模型估算内在价值 %.2f 元显著高于市价 %.2f 元，存在约 %.0f%% 的潜在上行空间。", rim.Result.Baseline.Value, currentPrice, diff))
+		} else if diff >= 0 {
+			b.WriteString(fmt.Sprintf("当前多期模型估算内在价值 %.2f 元略高于市价 %.2f 元，上行空间约 %.0f%%，安全边际一般。", rim.Result.Baseline.Value, currentPrice, diff))
 		} else {
-			b.WriteString(fmt.Sprintf("当前 ROE %.2f%% 高于资本成本，但内在价值 %.2f 元低于市价 %.2f 元，当前价格可能已反映乐观预期。", roe, intrinsic, quote.CurrentPrice))
+			b.WriteString(fmt.Sprintf("当前多期模型估算内在价值 %.2f 元低于市价 %.2f 元，当前价格可能已反映乐观预期。", rim.Result.Baseline.Value, currentPrice))
 		}
 	} else {
 		if roe >= 15 {
@@ -660,6 +659,19 @@ func writeModule7(b *strings.Builder, steps []StepResult, latest string, quote *
 		}
 	}
 	b.WriteString("\n\n---\n\n")
+}
+
+func rimSourceDesc(rim *RIMData, quote *QuoteData) string {
+	if rim == nil || rim.Params.BPS0 <= 0 {
+		return "待计算"
+	}
+	if quote != nil && quote.PB > 0 && quote.CurrentPrice > 0 {
+		calc := quote.CurrentPrice / quote.PB
+		if math.Abs(calc-rim.Params.BPS0) < 0.5 {
+			return "股价/PB推算"
+		}
+	}
+	return "财报股东权益/总股本推算"
 }
 
 // ========== 模块7: 技术面分析 ==========
