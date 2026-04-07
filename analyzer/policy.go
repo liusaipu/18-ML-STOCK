@@ -2,13 +2,19 @@ package analyzer
 
 import "strings"
 
+// PolicyItem 单个政策方向及其匹配强度
+type PolicyItem struct {
+	Name  string `json:"name"`
+	Level int    `json:"level"` // 1-5，5为最高匹配
+}
+
 // PolicyMatchData 十五五政策匹配度评估结果
 type PolicyMatchData struct {
-	Industry   string   `json:"industry"`
-	MatchLevel string   `json:"matchLevel"` // 强匹配 / 中性 / 弱匹配
-	Score      int      `json:"score"`      // 0-100
-	Policies   []string `json:"policies"`   // 匹配到的政策方向
-	Summary    string   `json:"summary"`    // 简要解读
+	Industry   string      `json:"industry"`
+	MatchLevel string      `json:"matchLevel"` // 强匹配 / 中性 / 弱匹配
+	Score      int         `json:"score"`      // 0-100
+	Policies   []PolicyItem `json:"policies"`  // 匹配到的政策方向
+	Summary    string      `json:"summary"`    // 简要解读
 }
 
 // industryPolicyMap 行业 -> 十五五重点政策方向（按优先级排序）
@@ -125,16 +131,25 @@ func BuildPolicyMatch(industry string, concepts []string) *PolicyMatchData {
 	pm := &PolicyMatchData{
 		Industry: industry,
 		Score:    0,
-		Policies: []string{},
+		Policies: []PolicyItem{},
 	}
-	seen := make(map[string]struct{})
+	seen := make(map[string]int)
+
+	// 辅助函数：计算行业映射的 level
+	calcIndustryLevel := func(idx int) int {
+		lvl := 5 - idx
+		if lvl < 2 {
+			lvl = 2
+		}
+		return lvl
+	}
 
 	// 1. 行业映射（权重最高）
 	if list, ok := industryPolicyMap[industry]; ok {
-		for _, p := range list {
+		for i, p := range list {
 			if _, exists := seen[p]; !exists {
-				seen[p] = struct{}{}
-				pm.Policies = append(pm.Policies, p)
+				seen[p] = calcIndustryLevel(i)
+				pm.Policies = append(pm.Policies, PolicyItem{Name: p, Level: calcIndustryLevel(i)})
 			}
 		}
 	}
@@ -144,9 +159,20 @@ func BuildPolicyMatch(industry string, concepts []string) *PolicyMatchData {
 		for keyword, list := range conceptPolicyMap {
 			if strings.Contains(c, keyword) {
 				for _, p := range list {
-					if _, exists := seen[p]; !exists {
-						seen[p] = struct{}{}
-						pm.Policies = append(pm.Policies, p)
+					if lvl, exists := seen[p]; exists {
+						if lvl < 3 {
+							// 提升已有政策的匹配度
+							seen[p] = 3
+							for j := range pm.Policies {
+								if pm.Policies[j].Name == p {
+									pm.Policies[j].Level = 3
+									break
+								}
+							}
+						}
+					} else {
+						seen[p] = 3
+						pm.Policies = append(pm.Policies, PolicyItem{Name: p, Level: 3})
 					}
 				}
 			}
@@ -166,7 +192,7 @@ func BuildPolicyMatch(industry string, concepts []string) *PolicyMatchData {
 	} else {
 		pm.Score = 35
 		pm.MatchLevel = "弱匹配"
-		pm.Policies = []string{"传统领域", "转型观望"}
+		pm.Policies = []PolicyItem{{Name: "传统领域", Level: 1}, {Name: "转型观望", Level: 2}}
 	}
 
 	// 4. 生成解读摘要

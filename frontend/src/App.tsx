@@ -155,6 +155,7 @@ function App() {
   const [dataHistory, setDataHistory] = useState<HistoryMeta[]>([])
   const [profile, setProfile] = useState<StockProfile | null>(null)
   const [comparables, setComparables] = useState<string[]>([])
+  const [appliedComparables, setAppliedComparables] = useState<string[]>([])
   const [compQuery, setCompQuery] = useState('')
   const [showCompDropdown, setShowCompDropdown] = useState(false)
   const [compDownloading, setCompDownloading] = useState(false)
@@ -165,6 +166,8 @@ function App() {
   const [klineError, setKlineError] = useState<string>('')
   const [activityMap, setActivityMap] = useState<Record<string, main.WatchlistActivitySummary>>({})
   const [activitySort, setActivitySort] = useState<'none' | 'desc' | 'asc'>('none')
+  const [flashCode, setFlashCode] = useState<string | null>(null)
+  const flashTimeoutRef = useRef<number | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const reportContentRef = useRef<HTMLDivElement>(null)
   const dragIndexRef = useRef<number | null>(null)
@@ -200,7 +203,9 @@ function App() {
     if (!reportContentRef.current || !id) return
     const el = reportContentRef.current.querySelector(`#${CSS.escape(id)}`) as HTMLElement | null
     if (el) {
-      reportContentRef.current.scrollTo({ top: el.offsetTop - 12, behavior: 'smooth' })
+      const container = reportContentRef.current
+      const top = el.getBoundingClientRect().top - container.getBoundingClientRect().top + container.scrollTop - 12
+      container.scrollTo({ top, behavior: 'smooth' })
     }
   }
 
@@ -363,6 +368,37 @@ function App() {
     })
   }, [watchlist.length])
 
+  // 搜索输入时，若已加自选中有匹配，则高亮并滚动
+  useEffect(() => {
+    const q = query.trim()
+    if (!q) {
+      setFlashCode(null)
+      return
+    }
+    const lower = q.toLowerCase()
+    const matched = watchlist.find(
+      (s) => s.code.toLowerCase().includes(lower) || s.name.toLowerCase().includes(lower)
+    )
+    if (matched) {
+      setFlashCode(matched.code)
+      if (flashTimeoutRef.current) {
+        window.clearTimeout(flashTimeoutRef.current)
+      }
+      flashTimeoutRef.current = window.setTimeout(() => {
+        setFlashCode(null)
+      }, 1500)
+      // 等待 DOM 更新后滚动
+      requestAnimationFrame(() => {
+        const el = document.querySelector(`.watchlist li[data-code="${matched.code}"]`)
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+        }
+      })
+    } else {
+      setFlashCode(null)
+    }
+  }, [query, watchlist])
+
   // 主题持久化
   useEffect(() => {
     localStorage.setItem('theme', theme)
@@ -409,10 +445,16 @@ function App() {
     return extractHighlightsAndRisks(currentSnapshot)
   }, [currentSnapshot])
 
-  const loadReportHistory = useCallback(async (code: string) => {
+  const loadReportHistory = useCallback(async (code: string, autoLoadLatest = false) => {
     try {
       const files = await GetReportHistory(code)
       setHistoryFiles(files || [])
+      if (autoLoadLatest && files && files.length > 0) {
+        const latest = files[0]
+        const content = await GetReport(code, latest)
+        setHistoryContent(content)
+        setViewingHistory(latest)
+      }
     } catch {
       setHistoryFiles([])
     }
@@ -459,8 +501,10 @@ function App() {
     try {
       const list = await GetComparables(code)
       setComparables(list || [])
+      setAppliedComparables(list || [])
     } catch {
       setComparables([])
+      setAppliedComparables([])
     }
   }, [])
 
@@ -506,7 +550,7 @@ function App() {
       setReport(null)
       setViewingHistory(null)
       setHistoryContent('')
-      await loadReportHistory(stock.code)
+      await loadReportHistory(stock.code, true)
       await loadDataHistory(stock.code)
       await loadProfile(stock.code)
       await loadConcepts(stock.code)
@@ -629,6 +673,7 @@ function App() {
       if (result) {
         setSnapshots((prev) => ({ ...prev, [selectedStock.code]: result }))
       }
+      setAppliedComparables(comparables)
       await loadReportHistory(selectedStock.code)
     } catch (err: any) {
       console.error('分析失败:', err)
@@ -748,6 +793,37 @@ function App() {
       alert(String(err))
     } finally {
       setCompDownloading(false)
+    }
+  }
+
+  const handleAnalyzeWithComparables = async () => {
+    if (!selectedStock || comparables.length === 0) return
+    setCompDownloading(true)
+    setAnalyzing(true)
+    try {
+      const downloadResult = await DownloadComparableReports(selectedStock.code)
+      if (downloadResult && !downloadResult.success) {
+        alert(downloadResult.message || '下载可比公司财报失败')
+        return
+      }
+      const result = await AnalyzeStock(selectedStock.code, true)
+      setReport(result)
+      setViewingHistory(null)
+      setHistoryContent('')
+      if (result) {
+        setSnapshots((prev) => ({ ...prev, [selectedStock.code]: result }))
+      }
+      setAppliedComparables(comparables)
+      await loadReportHistory(selectedStock.code)
+      setTimeout(() => {
+        handleTocJump('模块4-行业横向对比分析')
+      }, 150)
+    } catch (err: any) {
+      console.error('分析失败:', err)
+      alert(String(err))
+    } finally {
+      setCompDownloading(false)
+      setAnalyzing(false)
     }
   }
 
@@ -910,8 +986,9 @@ function App() {
             return (
               <li
                 key={s.code}
+                data-code={s.code}
                 draggable={activitySort === 'none'}
-                className={selectedCode === s.code ? 'active' : ''}
+                className={`${selectedCode === s.code ? 'active' : ''}${flashCode === s.code ? ' flash-match' : ''}`}
                 onDragStart={() => {
                   dragIndexRef.current = idx
                 }}
@@ -946,7 +1023,7 @@ function App() {
                   setViewingHistory(null)
                   setHistoryContent('')
                   setComparables([])
-                  loadReportHistory(s.code)
+                  loadReportHistory(s.code, true)
                   loadDataHistory(s.code)
                   loadProfile(s.code)
                   loadConcepts(s.code)
@@ -1080,10 +1157,33 @@ function App() {
 
             <div className="actions">
               <button className="btn primary" onClick={handleDownload} disabled={downloading || loading}>
-                {downloading ? '下载中...' : '从网络下载财报'}
+                {downloading ? (
+                  '下载中...'
+                ) : (
+                  <span className="btn-content">
+                    下载财报
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                      <polyline points="7 10 12 15 17 10" />
+                      <line x1="12" y1="15" x2="12" y2="3" />
+                    </svg>
+                  </span>
+                )}
               </button>
               <button className="btn primary" onClick={handleAnalyze} disabled={analyzing || downloading || loading}>
-                {analyzing ? '分析中...' : '执行18步分析'}
+                {analyzing ? (
+                  '分析中...'
+                ) : (
+                  <span className="btn-content">
+                    18步分析
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      <line x1="4" y1="20" x2="4" y2="14" />
+                      <line x1="8" y1="20" x2="8" y2="10" />
+                      <line x1="12" y1="20" x2="12" y2="16" />
+                      <path d="M16 12l4 4-4 4" />
+                    </svg>
+                  </span>
+                )}
               </button>
             </div>
             <div className="actions-sub">
@@ -1237,8 +1337,7 @@ function App() {
                       const info = STOCKS.find((s) => s.code === c)
                       return (
                         <div key={c} className="cp-item">
-                          <span className="cp-code">{c}</span>
-                          <span className="cp-name">{info?.name || ''}</span>
+                          <span className="cp-name">{info?.name || c}</span>
                           <button
                             className="cp-remove"
                             onClick={() => handleRemoveComparable(c)}
@@ -1251,13 +1350,47 @@ function App() {
                     })}
                   </div>
                 )}
-                <button
-                  className="btn-text cp-download"
-                  onClick={handleDownloadComparables}
-                  disabled={compDownloading || comparables.length === 0}
-                >
-                  {compDownloading ? '下载中...' : '下载可比公司财报'}
-                </button>
+                <div className="cp-actions">
+                  <button
+                    className="btn-text cp-download"
+                    onClick={handleDownloadComparables}
+                    disabled={compDownloading || comparables.length === 0}
+                  >
+                    {compDownloading ? '下载中...' : '下载可比公司财报'}
+                  </button>
+                  {(() => {
+                    const compChanged = JSON.stringify([...appliedComparables].sort()) !== JSON.stringify([...comparables].sort())
+                    return (
+                      <button
+                        className={`btn-icon cp-merge${compChanged ? ' changed' : ''}`}
+                        title={compChanged ? '可比公司已变更，点击下载最新财报并更新到报告' : '下载最新可比公司财报并更新到报告'}
+                        onClick={handleAnalyzeWithComparables}
+                        disabled={analyzing || comparables.length === 0}
+                      >
+                        {analyzing ? (
+                          '...'
+                        ) : (
+                          <svg
+                            width="16"
+                            height="16"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2.3"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            style={{ display: 'block' }}
+                          >
+                            <rect x="3" y="6" width="14" height="12" rx="2" ry="2" />
+                            <path d="M17 12l4 4-4 4" />
+                            <path d="M8 6V4a2 2 0 0 1 2-2h2" />
+                            <polyline points="11 3 13 1 15 3" />
+                          </svg>
+                        )}
+                      </button>
+                    )
+                  })()}
+                </div>
               </div>
             </Collapsible>
 
@@ -1456,7 +1589,7 @@ function App() {
           ) : selectedStock ? (
             <div className="placeholder">
               <p>【Markdown 报告展示区】</p>
-              <p>选择股票后点击"执行18步分析"，报告将在此渲染</p>
+              <p>选择股票后点击"18步分析"，报告将在此渲染</p>
             </div>
           ) : (
             <div className="placeholder">

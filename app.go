@@ -675,7 +675,11 @@ func (a *App) AnalyzeStock(symbol string, overwriteLatest bool) (*analyzer.Analy
 		return nil, fmt.Errorf("存储未初始化")
 	}
 	comparables, _ := a.storage.GetComparables(symbol)
-	compAnalysis, _ := analyzer.BuildComparableAnalysis(a.storage.DataDir(), comparables)
+	nameMap := make(map[string]string, len(a.stocks))
+	for _, s := range a.stocks {
+		nameMap[s.Code] = s.Name
+	}
+	compAnalysis, _ := analyzer.BuildComparableAnalysis(a.storage.DataDir(), comparables, nameMap)
 
 	// 尝试获取实时行情数据用于报告
 	var quoteData *analyzer.QuoteData
@@ -814,7 +818,42 @@ func (a *App) AnalyzeStock(symbol string, overwriteLatest bool) (*analyzer.Analy
 		activityData = analyzer.CalculateActivity(aklines, qLite, industry, baselines)
 	}
 
-	report, err := analyzer.RunAnalysisWithAll(a.storage.DataDir(), symbol, compAnalysis, quoteData, sentimentData, policyData, technicalData, activityData)
+	// ML 双引擎预测
+	var mlData *analyzer.MLPredictionData
+	if finData, err := analyzer.LoadFinancialData(a.storage.DataDir(), symbol); err == nil && finData != nil {
+		mlData = &analyzer.MLPredictionData{}
+		// Engine B: 财务趋势
+		if finSeq := analyzer.BuildMLEngineBInput(finData); len(finSeq) > 0 {
+			if fp, err := analyzer.RunMLEngineB(finSeq); err == nil {
+				mlData.Financial = fp
+			} else {
+				fmt.Printf("[ML] Engine B failed for %s: %v\n", symbol, err)
+			}
+		}
+		// Engine A: 舆情+价格（使用日K简化特征）
+		if len(klines) >= 16 && sentimentData != nil {
+			mlKlines := make([]analyzer.MLKlineData, len(klines))
+			for i, k := range klines {
+				mlKlines[i] = analyzer.MLKlineData{
+					Time: k.Time, Open: k.Open, Close: k.Close,
+					Low: k.Low, High: k.High, Volume: k.Volume, Amount: k.Amount,
+				}
+			}
+			textSeq, priceSeq := analyzer.BuildMLEngineAInputFromKlines(mlKlines, sentimentData)
+			if textSeq != nil && priceSeq != nil {
+				if sp, err := analyzer.RunMLEngineA(textSeq, priceSeq); err == nil {
+					mlData.Sentiment = sp
+				} else {
+					fmt.Printf("[ML] Engine A failed for %s: %v\n", symbol, err)
+				}
+			}
+		}
+		if mlData.Financial == nil && mlData.Sentiment == nil {
+			mlData = nil
+		}
+	}
+
+	report, err := analyzer.RunAnalysisWithAll(a.storage.DataDir(), symbol, compAnalysis, quoteData, sentimentData, policyData, technicalData, activityData, mlData)
 	if err != nil {
 		return nil, err
 	}

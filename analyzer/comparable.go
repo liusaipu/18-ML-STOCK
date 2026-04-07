@@ -8,6 +8,7 @@ import (
 // ComparableMetrics 可比公司关键指标
 type ComparableMetrics struct {
 	Symbol        string  `json:"symbol"`
+	Name          string  `json:"name"`
 	ROE           float64 `json:"roe"`
 	GrossMargin   float64 `json:"grossMargin"`
 	RevenueGrowth float64 `json:"revenueGrowth"`
@@ -35,7 +36,7 @@ type ComparableAnalysis struct {
 }
 
 // BuildComparableAnalysis 构建可比公司分析数据
-func BuildComparableAnalysis(baseDir string, comparables []string) (*ComparableAnalysis, error) {
+func BuildComparableAnalysis(baseDir string, comparables []string, nameMap map[string]string) (*ComparableAnalysis, error) {
 	if len(comparables) == 0 {
 		return &ComparableAnalysis{Metrics: make(map[string]*ComparableMetrics)}, nil
 	}
@@ -70,6 +71,7 @@ func BuildComparableAnalysis(baseDir string, comparables []string) (*ComparableA
 		latest := data.Years[0]
 		m := &ComparableMetrics{
 			Symbol:        comp,
+			Name:          nameMap[comp],
 			ROE:           getStepValue(steps, 16, latest, "roe"),
 			GrossMargin:   getStepValue(steps, 10, latest, "grossMargin"),
 			RevenueGrowth: getStepValue(steps, 9, latest, "growthRate"),

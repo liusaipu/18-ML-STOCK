@@ -91,3 +91,10 @@ type SentimentData struct {
 	Summaries      []SentimentSummary `json:"summaries"`
 	HasData        bool               `json:"hasData"`
 }
+
+// MLPredictionData 机器学习预测结果
+type MLPredictionData struct {
+	Sentiment *MLSentimentPrediction `json:"sentiment,omitempty"`
+	Financial *MLFinancialPrediction `json:"financial,omitempty"`
+}
+

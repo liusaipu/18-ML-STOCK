@@ -269,6 +269,28 @@ body.light .watchlist li.active {
   border-left-color: #2563eb;
 }
 
+.watchlist li.flash-match {
+  animation: flash-match 1.5s ease;
+}
+
+@keyframes flash-match {
+  0% { background: transparent; }
+  20% { background: #f59e0b33; }
+  80% { background: #f59e0b33; }
+  100% { background: transparent; }
+}
+
+body.light .watchlist li.flash-match {
+  animation: flash-match-light 1.5s ease;
+}
+
+@keyframes flash-match-light {
+  0% { background: transparent; }
+  20% { background: #fbbf2433; }
+  80% { background: #fbbf2433; }
+  100% { background: transparent; }
+}
+
 .watch-info {
   flex: 1;
   min-width: 0;
@@ -495,9 +517,13 @@ body.light .stock-info-time {
 
 .actions {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   gap: 10px;
   margin-bottom: 8px;
+}
+
+.actions .btn {
+  flex: 1;
 }
 
 .actions-sub {
@@ -676,6 +702,13 @@ body.light .btn:hover {
   border-color: #3b82f6;
   color: #fff;
   font-weight: 500;
+}
+
+.btn-content {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
 }
 
 .btn.primary:hover {
@@ -1789,8 +1822,15 @@ body.light .cp-remove:hover {
   color: #dc2626;
 }
 
+.cp-actions {
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+  margin-top: 4px;
+}
+
 .cp-download {
-  width: 100%;
+  flex: 1;
   text-align: center;
   text-decoration: none;
   padding: 6px 0;
@@ -1799,7 +1839,7 @@ body.light .cp-remove:hover {
   color: #3b82f6;
   background: transparent;
   cursor: pointer;
-  margin-top: 4px;
+  font-size: 12px;
 }
 
 body.light .cp-download {
@@ -1815,7 +1855,91 @@ body.light .cp-download:hover {
   background: rgba(37, 99, 235, 0.08);
 }
 
+.cp-merge {
+  width: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid #3b82f6;
+  border-radius: 4px;
+  color: #3b82f6;
+  background: transparent;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+body.light .cp-merge {
+  border-color: #3b82f6;
+  color: #2563eb;
+}
+
+.cp-merge:hover {
+  background: rgba(59, 130, 246, 0.15);
+}
+
+body.light .cp-merge:hover {
+  background: rgba(37, 99, 235, 0.12);
+}
+
+.cp-merge:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.cp-merge.changed {
+  border-color: #f59e0b;
+  color: #f59e0b;
+  background: rgba(245, 158, 11, 0.12);
+  animation: pulse-border 1.5s infinite;
+}
+
+body.light .cp-merge.changed {
+  border-color: #d97706;
+  color: #d97706;
+  background: rgba(217, 119, 6, 0.12);
+}
+
+@keyframes pulse-border {
+  0% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.4); }
+  70% { box-shadow: 0 0 0 4px rgba(245, 158, 11, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0); }
+}
+
 /* 股票基本资料 */
+.policy-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 8px 0;
+}
+
+.policy-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 4px;
+  background: #1a2330;
+  border: 1px solid #2a3a4a;
+  font-size: 13px;
+  color: #e2e8f0;
+}
+
+body.light .policy-tag {
+  background: #f1f5f9;
+  border-color: #e2e8f0;
+  color: #334155;
+}
+
+.policy-tag .policy-name {
+  white-space: nowrap;
+}
+
+.policy-tag .policy-signal svg {
+  display: block;
+}
+
 .stock-profile {
   padding: 0;
   font-size: 12px;
