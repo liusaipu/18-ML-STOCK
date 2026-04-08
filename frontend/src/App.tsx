@@ -189,7 +189,7 @@ function App() {
   const [rimRf, setRimRf] = useState(1.83)
   const [rimRmRf, setRimRmRf] = useState(5.17)
   const [rimG, setRimG] = useState(5.0)
-  const [rimEPS, setRimEPS] = useState<number[]>([0, 0, 0, 0, 0, 0])
+  const [rimEPS, setRimEPS] = useState<(number | string)[]>(['0', '0', '0', '0', '0', '0'])
   const [rimBPS0, setRimBPS0] = useState(0)
   const [rimPrice, setRimPrice] = useState(0)
   const [rimLoading, setRimLoading] = useState(false)
@@ -735,14 +735,14 @@ function App() {
       setRimG((rim.params?.GTerminal ?? 0.05) * 100)
       setRimBPS0(rim.params?.BPS0 ?? 0)
       setRimPrice(rim.params?.CurrentPrice ?? 0)
-      let eps: number[] = []
+      let eps: (number | string)[] = []
       if (rim.epsRaw && Object.keys(rim.epsRaw).length > 0) {
         const years = Object.keys(rim.epsRaw).sort()
-        eps = years.slice(0, 6).map((y) => Number(rim.epsRaw![y].toFixed(2)))
+        eps = years.slice(0, 6).map((y) => rim.epsRaw![y].toFixed(2))
       }
       const forecast = rim.params?.Forecast?.EPS?.slice(0, 6) || []
       while (eps.length < 6) {
-        eps.push(Number((forecast[eps.length] ?? 0).toFixed(2)))
+        eps.push((forecast[eps.length] ?? 0).toFixed(2))
       }
       setRimEPS(eps)
     } else if (quote) {
@@ -770,7 +770,7 @@ function App() {
         BPS0: rimBPS0,
         KE: rimRf / 100 + rimBeta * (rimRmRf / 100),
         GTerminal: rimG / 100,
-        Forecast: { EPS: rimEPS.filter((v) => v > 0), DPS: [] },
+        Forecast: { EPS: rimEPS.map(Number).filter((v) => v > 0), DPS: [] },
         CurrentPrice: rimPrice,
       }
       const rimData = {
@@ -1889,7 +1889,7 @@ function App() {
                       const val = e.target.value
                       if (!/^\d*\.?\d*$/.test(val)) return
                       const next = [...rimEPS]
-                      next[i] = val === '' ? 0 : Number(val)
+                      next[i] = val === '' ? '0' : val
                       setRimEPS(next)
                     }} />
                   </div>
@@ -1900,7 +1900,7 @@ function App() {
               <button className="btn" onClick={() => setShowRIMModal(false)} disabled={rimLoading}>
                 取消
               </button>
-              <button className="btn primary" onClick={handleAnalyzeWithRIM} disabled={rimLoading || rimBPS0 <= 0 || rimEPS.filter((v) => v > 0).length < 1}>
+              <button className="btn primary" onClick={handleAnalyzeWithRIM} disabled={rimLoading || rimBPS0 <= 0 || rimEPS.map(Number).filter((v) => v > 0).length < 1}>
                 {rimLoading ? (
                   <>
                     <span className="btn-progress" style={{ width: `${rimProgress}%` }} />
