@@ -27,19 +27,42 @@ type MLFinancialPrediction struct {
 	HealthScore      float64 `json:"health_score"`
 }
 
+// findProjectRoot 从 binary 所在目录向上查找项目根目录（通过 ml_models/inference.py 标记）
+func findProjectRoot(start string) string {
+	dir := start
+	for i := 0; i < 10; i++ {
+		if _, err := os.Stat(filepath.Join(dir, "ml_models", "inference.py")); err == nil {
+			return dir
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			break
+		}
+		dir = parent
+	}
+	return ""
+}
+
 // mlInferenceScriptPath 返回推理脚本绝对路径
 func mlInferenceScriptPath() string {
 	_, b, _, _ := runtime.Caller(0)
 	base := filepath.Dir(b)
+	root := findProjectRoot(base)
+	if root != "" {
+		return filepath.Join(root, "ml_models", "inference.py")
+	}
 	return filepath.Join(base, "..", "ml_models", "inference.py")
 }
 
 func resolveMLPythonExecutable() string {
 	_, b, _, _ := runtime.Caller(0)
 	base := filepath.Dir(b)
-	venvPython := filepath.Join(base, "..", ".venv", "bin", "python3")
-	if _, err := os.Stat(venvPython); err == nil {
-		return venvPython
+	root := findProjectRoot(base)
+	if root != "" {
+		venvPython := filepath.Join(root, ".venv", "bin", "python3")
+		if _, err := os.Stat(venvPython); err == nil {
+			return venvPython
+		}
 	}
 	return "python3"
 }
@@ -62,6 +85,7 @@ func callMLInference(engine string, payload map[string]any) (map[string]any, err
 
 	python := resolveMLPythonExecutable()
 	cmd := exec.Command(python, script)
+	cmd.Env = append(os.Environ(), "TQDM_DISABLE=1", "PYTHONUNBUFFERED=1")
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		return nil, err

@@ -909,19 +909,19 @@ func (a *App) analyzeStockInternal(symbol string, overwriteLatest bool, customRI
 		if bps0 <= 0 {
 			// fallback: 财报股东权益 / 总股本
 			totalShares := 0.0
-			if ext != nil {
+			if ext != nil && ext.TotalShares > 0 {
 				totalShares = ext.TotalShares
+			} else if quoteData != nil && quoteData.CurrentPrice > 0 && quoteData.MarketCap > 0 {
+				totalShares = quoteData.MarketCap / quoteData.CurrentPrice
 			}
 			if finData, err := analyzer.LoadFinancialData(a.storage.DataDir(), symbol); err == nil && finData != nil && len(finData.Years) > 0 {
 				year := finData.Years[0]
-				if bs := finData.BalanceSheet[year]; bs != nil {
-					equity := bs["所有者权益合计"]
-					if equity == 0 {
-						equity = bs["总资产"] - bs["总负债"]
-					}
-					if equity > 0 && totalShares > 0 {
-						bps0 = equity / 1e8 / (totalShares / 1e8) // 元/股
-					}
+				equity := finData.GetValueOrZero(finData.BalanceSheet, "归母所有者权益合计", year)
+				if equity == 0 {
+					equity = finData.GetValueOrZero(finData.BalanceSheet, "所有者权益合计", year)
+				}
+				if equity > 0 && totalShares > 0 {
+					bps0 = equity / 1e8 / (totalShares / 1e8) // 元/股
 				}
 			}
 		}
@@ -951,30 +951,34 @@ func (a *App) analyzeStockInternal(symbol string, overwriteLatest bool, customRI
 		// 如果外部没有预测数据，用 trailing EPS 做起点然后外推
 		if len(epsSeq) == 0 {
 			trailingEPS := 0.0
-			var finYear string
-			var finProfit float64
 			if finData, err := analyzer.LoadFinancialData(a.storage.DataDir(), symbol); err == nil && finData != nil && len(finData.Years) > 0 {
-				finYear = finData.Years[0]
-				if inc := finData.IncomeStatement[finYear]; inc != nil {
-					finProfit = inc["净利润"]
+				finYear := finData.Years[0]
+				finProfit := finData.GetValueOrZero(finData.IncomeStatement, "归母净利润", finYear)
+				if finProfit == 0 {
+					finProfit = finData.GetValueOrZero(finData.IncomeStatement, "净利润", finYear)
 				}
-				if finProfit > 0 && ext != nil && ext.TotalShares > 0 {
-					trailingEPS = finProfit / 1e8 / (ext.TotalShares / 1e8)
+				totalShares := 0.0
+				if ext != nil && ext.TotalShares > 0 {
+					totalShares = ext.TotalShares
+				} else if quoteData != nil && quoteData.CurrentPrice > 0 && quoteData.MarketCap > 0 {
+					totalShares = quoteData.MarketCap / quoteData.CurrentPrice
+				}
+				if finProfit > 0 && totalShares > 0 {
+					trailingEPS = finProfit / 1e8 / (totalShares / 1e8)
 				}
 				if trailingEPS <= 0 && bps0 > 0 {
 					// 用 ROE × BPS0 推算
+					netProfit := finData.GetValueOrZero(finData.IncomeStatement, "归母净利润", finYear)
+					if netProfit == 0 {
+						netProfit = finData.GetValueOrZero(finData.IncomeStatement, "净利润", finYear)
+					}
+					equity := finData.GetValueOrZero(finData.BalanceSheet, "归母所有者权益合计", finYear)
+					if equity == 0 {
+						equity = finData.GetValueOrZero(finData.BalanceSheet, "所有者权益合计", finYear)
+					}
 					roe := 0.0
-					if inc := finData.IncomeStatement[finYear]; inc != nil {
-						netProfit := inc["净利润"]
-						if bs := finData.BalanceSheet[finYear]; bs != nil {
-							equity := bs["所有者权益合计"]
-							if equity == 0 {
-								equity = bs["总资产"] - bs["总负债"]
-							}
-							if equity > 0 {
-								roe = netProfit / equity * 100
-							}
-						}
+					if equity > 0 {
+						roe = netProfit / equity * 100
 					}
 					if roe > 0 {
 						trailingEPS = bps0 * (roe / 100)

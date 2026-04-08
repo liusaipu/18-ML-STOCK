@@ -26,10 +26,30 @@ type RIMExternalData struct {
 	Error       string             `json:"error,omitempty"`
 }
 
+// findProjectRoot 从 binary 所在目录向上查找项目根目录（通过 scripts/fetch_rim_data.py 标记）
+func findProjectRoot(start string) string {
+	dir := start
+	for i := 0; i < 10; i++ {
+		if _, err := os.Stat(filepath.Join(dir, "scripts", "fetch_rim_data.py")); err == nil {
+			return dir
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			break
+		}
+		dir = parent
+	}
+	return ""
+}
+
 // fetchRIMScriptPath 返回 fetch_rim_data.py 绝对路径
 func fetchRIMScriptPath() string {
 	_, b, _, _ := runtime.Caller(0)
 	base := filepath.Dir(b)
+	root := findProjectRoot(base)
+	if root != "" {
+		return filepath.Join(root, "scripts", "fetch_rim_data.py")
+	}
 	return filepath.Join(base, "..", "scripts", "fetch_rim_data.py")
 }
 
@@ -37,9 +57,12 @@ func fetchRIMScriptPath() string {
 func resolvePythonExecutable() string {
 	_, b, _, _ := runtime.Caller(0)
 	base := filepath.Dir(b)
-	venvPython := filepath.Join(base, "..", ".venv", "bin", "python3")
-	if _, err := os.Stat(venvPython); err == nil {
-		return venvPython
+	root := findProjectRoot(base)
+	if root != "" {
+		venvPython := filepath.Join(root, ".venv", "bin", "python3")
+		if _, err := os.Stat(venvPython); err == nil {
+			return venvPython
+		}
 	}
 	return "python3"
 }
@@ -59,6 +82,7 @@ func FetchRIMExternalData(symbol string) (*RIMExternalData, error) {
 
 	python := resolvePythonExecutable()
 	cmd := exec.Command(python, script)
+	cmd.Env = append(os.Environ(), "TQDM_DISABLE=1", "PYTHONUNBUFFERED=1")
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		return nil, err

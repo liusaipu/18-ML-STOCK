@@ -1,5 +1,15 @@
 # Changelog
 
+## [v1.1.2] - 2026-04-07
+
+### 修复 (Fixes)
+- **RIM 生产构建路径修复**：Go 后端从二进制位置向上递归搜索项目根目录，解决 Wails 打包后 `scripts/fetch_rim_data.py` 和 `ml_models/inference.py` 路径找不到的问题。
+- **RIM 回退逻辑强化**：当外部 EPS 预测获取失败时，使用行情数据（总市值/股价）计算总股本，不再依赖可能为 nil 的外部数据对象。
+- **财报字段兼容性**：回退计算中的净利润、股东权益通过 `GetValueOrZero` + 别名归一化读取，兼容网络下载与本地 CSV 导入的不同科目名。
+- **Python 子进程环境变量**：注入 `TQDM_DISABLE=1` 和 `PYTHONUNBUFFERED=1`，避免进度条和缓冲污染 JSON 输出。
+
+---
+
 ## [v1.1.1] - 2026-04-07
 
 ### 新增 (Features)
