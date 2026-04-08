@@ -41,15 +41,28 @@ def fetch(symbol: str):
         result["eps_forecast_error"] = str(e)
         result["eps_forecast"] = None
 
-    # 2. Risk-free rate (China 10-year bond yield)
+    # 2. Risk-free rate (China 10-year bond yield) - try fast interfaces first
+    rf = 0.0183
+    rf_date = ""
+    # Fast path: bond_zh_yield single-page interface
     try:
-        bond_df = ak.bond_zh_us_rate()
-        rf_row = bond_df.dropna(subset=["中国国债收益率10年"]).iloc[-1]
-        result["rf"] = float(rf_row["中国国债收益率10年"]) / 100
-        result["rf_date"] = str(rf_row["日期"])
-    except Exception as e:
-        result["rf_error"] = str(e)
-        result["rf"] = 0.0183  # fallback
+        bond_df = ak.bond_zh_yield(symbol="国债收益率10年", period="日", start_date="", end_date="")
+        if len(bond_df) > 0:
+            rf = float(bond_df.iloc[-1]["收盘价"]) / 100
+            rf_date = str(bond_df.index[-1]) if hasattr(bond_df, "index") else str(bond_df.iloc[-1].get("日期", ""))
+    except Exception:
+        pass
+    # Fallback path
+    if rf <= 0:
+        try:
+            bond_df = ak.bond_zh_us_rate()
+            rf_row = bond_df.dropna(subset=["中国国债收益率10年"]).iloc[-1]
+            rf = float(rf_row["中国国债收益率10年"]) / 100
+            rf_date = str(rf_row["日期"])
+        except Exception as e:
+            result["rf_error"] = str(e)
+    result["rf"] = rf
+    result["rf_date"] = rf_date
 
     # 3. Basic info for shares / price / pb
     try:

@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	analyzer "github.com/stock-analyzer/analyzer"
@@ -700,80 +701,98 @@ func (a *App) analyzeStockInternal(symbol string, overwriteLatest bool, customRI
 	}
 	compAnalysis, _ := analyzer.BuildComparableAnalysis(a.storage.DataDir(), comparables, nameMap)
 
-	// 尝试获取实时行情数据用于报告
+	// 并发获取网络数据：实时行情、K线、舆情情绪
 	var quoteData *analyzer.QuoteData
-	if q, err := a.GetStockQuote(symbol); err == nil && q != nil {
-		quoteData = &analyzer.QuoteData{
-			CurrentPrice:         q.CurrentPrice,
-			ChangePercent:        q.ChangePercent,
-			ChangeAmount:         q.ChangeAmount,
-			Volume:               q.Volume,
-			TurnoverAmount:       q.TurnoverAmount,
-			TurnoverRate:         q.TurnoverRate,
-			Amplitude:            q.Amplitude,
-			High:                 q.High,
-			Low:                  q.Low,
-			Open:                 q.Open,
-			PreviousClose:        q.PreviousClose,
-			CirculatingMarketCap: q.CirculatingMarketCap,
-			VolumeRatio:          q.VolumeRatio,
-			PE:                   q.PE,
-			PB:                   q.PB,
-			MarketCap:            q.MarketCap,
-		}
-	}
-
-	// 尝试获取舆情情绪数据（1小时缓存）
+	var klines []downloader.KlineData
 	var sentimentData *analyzer.SentimentData
-	if cachedSentiment, err := a.storage.LoadStockSentiment(symbol); err == nil && cachedSentiment != nil {
-		path := filepath.Join(a.storage.DataDir(), "data", symbol, "sentiment.json")
-		if info, err := os.Stat(path); err == nil && time.Since(info.ModTime()) < 60*time.Minute {
-			sentimentData = &analyzer.SentimentData{
-				Score:         cachedSentiment.Score,
-				HeatIndex:     cachedSentiment.HeatIndex,
-				PositiveWords: cachedSentiment.PositiveWords,
-				NegativeWords: cachedSentiment.NegativeWords,
-				Summaries:     make([]analyzer.SentimentSummary, len(cachedSentiment.Summaries)),
-				HasData:       cachedSentiment.HasData,
-			}
-			for i, s := range cachedSentiment.Summaries {
-				sentimentData.Summaries[i] = analyzer.SentimentSummary{
-					Title:     s.Title,
-					Source:    s.Source,
-					Date:      s.Date,
-					Sentiment: s.Sentiment,
-				}
+	var wgNet sync.WaitGroup
+	wgNet.Add(3)
+
+	go func() {
+		defer wgNet.Done()
+		if q, err := a.GetStockQuote(symbol); err == nil && q != nil {
+			quoteData = &analyzer.QuoteData{
+				CurrentPrice:         q.CurrentPrice,
+				ChangePercent:        q.ChangePercent,
+				ChangeAmount:         q.ChangeAmount,
+				Volume:               q.Volume,
+				TurnoverAmount:       q.TurnoverAmount,
+				TurnoverRate:         q.TurnoverRate,
+				Amplitude:            q.Amplitude,
+				High:                 q.High,
+				Low:                  q.Low,
+				Open:                 q.Open,
+				PreviousClose:        q.PreviousClose,
+				CirculatingMarketCap: q.CirculatingMarketCap,
+				VolumeRatio:          q.VolumeRatio,
+				PE:                   q.PE,
+				PB:                   q.PB,
+				MarketCap:            q.MarketCap,
 			}
 		}
-	}
-	if sentimentData == nil {
-		parts := strings.Split(symbol, ".")
-		if len(parts) == 2 {
-			code := parts[0]
-			market := strings.ToUpper(parts[1])
-			if s, err := downloader.FetchStockSentiment(market, code); err == nil && s != nil {
+	}()
+
+	go func() {
+		defer wgNet.Done()
+		if list, err := a.GetStockKlines(symbol); err == nil && len(list) >= 20 {
+			klines = list
+		}
+	}()
+
+	go func() {
+		defer wgNet.Done()
+		if cachedSentiment, err := a.storage.LoadStockSentiment(symbol); err == nil && cachedSentiment != nil {
+			path := filepath.Join(a.storage.DataDir(), "data", symbol, "sentiment.json")
+			if info, err := os.Stat(path); err == nil && time.Since(info.ModTime()) < 60*time.Minute {
 				sentimentData = &analyzer.SentimentData{
-					Score:         s.Score,
-					HeatIndex:     s.HeatIndex,
-					PositiveWords: s.PositiveWords,
-					NegativeWords: s.NegativeWords,
-					Summaries:     make([]analyzer.SentimentSummary, len(s.Summaries)),
-					HasData:       s.HasData,
+					Score:         cachedSentiment.Score,
+					HeatIndex:     cachedSentiment.HeatIndex,
+					PositiveWords: cachedSentiment.PositiveWords,
+					NegativeWords: cachedSentiment.NegativeWords,
+					Summaries:     make([]analyzer.SentimentSummary, len(cachedSentiment.Summaries)),
+					HasData:       cachedSentiment.HasData,
 				}
-				for i, summary := range s.Summaries {
+				for i, s := range cachedSentiment.Summaries {
 					sentimentData.Summaries[i] = analyzer.SentimentSummary{
-						Title:     summary.Title,
-						Source:    summary.Source,
-						Date:      summary.Date,
-						Sentiment: summary.Sentiment,
+						Title:     s.Title,
+						Source:    s.Source,
+						Date:      s.Date,
+						Sentiment: s.Sentiment,
 					}
 				}
-				_ = a.storage.SaveStockSentiment(symbol, s)
-			} else {
-				fmt.Printf("[Sentiment] fetch failed for %s: %v\n", symbol, err)
 			}
 		}
-	}
+		if sentimentData == nil {
+			parts := strings.Split(symbol, ".")
+			if len(parts) == 2 {
+				code := parts[0]
+				market := strings.ToUpper(parts[1])
+				if s, err := downloader.FetchStockSentiment(market, code); err == nil && s != nil {
+					sentimentData = &analyzer.SentimentData{
+						Score:         s.Score,
+						HeatIndex:     s.HeatIndex,
+						PositiveWords: s.PositiveWords,
+						NegativeWords: s.NegativeWords,
+						Summaries:     make([]analyzer.SentimentSummary, len(s.Summaries)),
+						HasData:       s.HasData,
+					}
+					for i, summary := range s.Summaries {
+						sentimentData.Summaries[i] = analyzer.SentimentSummary{
+							Title:     summary.Title,
+							Source:    summary.Source,
+							Date:      summary.Date,
+							Sentiment: summary.Sentiment,
+						}
+					}
+					_ = a.storage.SaveStockSentiment(symbol, s)
+				} else {
+					fmt.Printf("[Sentiment] fetch failed for %s: %v\n", symbol, err)
+				}
+			}
+		}
+	}()
+
+	wgNet.Wait()
 
 	// 构建十五五政策匹配数据
 	var policyData *analyzer.PolicyMatchData
@@ -788,12 +807,6 @@ func (a *App) analyzeStockInternal(symbol string, overwriteLatest bool, customRI
 			conceptList = concepts.Concepts
 		}
 		policyData = analyzer.BuildPolicyMatch(profile.Industry, conceptList)
-	}
-
-	// 获取K线数据
-	var klines []downloader.KlineData
-	if list, err := a.GetStockKlines(symbol); err == nil && len(list) >= 20 {
-		klines = list
 	}
 
 	// 技术形态分析
@@ -836,61 +849,93 @@ func (a *App) analyzeStockInternal(symbol string, overwriteLatest bool, customRI
 		qLite := &analyzer.StockQuoteLite{CirculatingMarketCap: quoteData.CirculatingMarketCap}
 		activityData = analyzer.CalculateActivity(aklines, qLite, industry, baselines)
 	}
+	// 加载财务数据（ML 和 RIM fallback 都需要）
+	var finData *analyzer.FinancialData
+	if fd, err := analyzer.LoadFinancialData(a.storage.DataDir(), symbol); err == nil && fd != nil {
+		finData = fd
+	}
 
-	// ML 双引擎预测
+	// ML 双引擎预测 + RIM 外部数据获取 并发执行
 	var mlData *analyzer.MLPredictionData
-	if finData, err := analyzer.LoadFinancialData(a.storage.DataDir(), symbol); err == nil && finData != nil {
-		mlData = &analyzer.MLPredictionData{}
-		// Engine B: 财务趋势
-		if finSeq := analyzer.BuildMLEngineBInput(finData); len(finSeq) > 0 {
-			if fp, err := analyzer.RunMLEngineB(finSeq); err == nil {
-				mlData.Financial = fp
-			} else {
-				fmt.Printf("[ML] Engine B failed for %s: %v\n", symbol, err)
-			}
-		}
-		// Engine A: 舆情+价格（使用日K简化特征）
-		if len(klines) >= 16 && sentimentData != nil {
-			mlKlines := make([]analyzer.MLKlineData, len(klines))
-			for i, k := range klines {
-				mlKlines[i] = analyzer.MLKlineData{
-					Time: k.Time, Open: k.Open, Close: k.Close,
-					Low: k.Low, High: k.High, Volume: k.Volume, Amount: k.Amount,
-				}
-			}
-			textSeq, priceSeq := analyzer.BuildMLEngineAInputFromKlines(mlKlines, sentimentData)
-			if textSeq != nil && priceSeq != nil {
-				if sp, err := analyzer.RunMLEngineA(textSeq, priceSeq); err == nil {
-					mlData.Sentiment = sp
+	var extRIM *downloader.RIMExternalData
+	var rimErr error
+	var wg sync.WaitGroup
+
+	// 并发 1: ML Engine B + Engine A
+	if finData != nil {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			mlLocal := &analyzer.MLPredictionData{}
+			// Engine B
+			if finSeq := analyzer.BuildMLEngineBInput(finData); len(finSeq) > 0 {
+				if fp, err := analyzer.RunMLEngineB(finSeq); err == nil {
+					mlLocal.Financial = fp
 				} else {
-					fmt.Printf("[ML] Engine A failed for %s: %v\n", symbol, err)
+					fmt.Printf("[ML] Engine B failed for %s: %v\n", symbol, err)
 				}
 			}
+			// Engine A
+			if len(klines) >= 16 && sentimentData != nil {
+				mlKlines := make([]analyzer.MLKlineData, len(klines))
+				for i, k := range klines {
+					mlKlines[i] = analyzer.MLKlineData{
+						Time: k.Time, Open: k.Open, Close: k.Close,
+						Low: k.Low, High: k.High, Volume: k.Volume, Amount: k.Amount,
+					}
+				}
+				textSeq, priceSeq := analyzer.BuildMLEngineAInputFromKlines(mlKlines, sentimentData)
+				if textSeq != nil && priceSeq != nil {
+					if sp, err := analyzer.RunMLEngineA(textSeq, priceSeq); err == nil {
+						mlLocal.Sentiment = sp
+					} else {
+						fmt.Printf("[ML] Engine A failed for %s: %v\n", symbol, err)
+					}
+				}
+			}
+			if mlLocal.Financial != nil || mlLocal.Sentiment != nil {
+				mlData = mlLocal
+			}
+		}()
+	}
+
+	// 并发 2: RIM 外部数据获取（带缓存）
+	if customRIM == nil && quoteData != nil {
+		pureCode := symbol
+		if idx := strings.Index(symbol, "."); idx > 0 {
+			pureCode = symbol[:idx]
 		}
-		if mlData.Financial == nil && mlData.Sentiment == nil {
-			mlData = nil
+		// 先读缓存
+		if cached, err := a.storage.LoadRIMCache(symbol); err == nil && cached != nil {
+			extRIM = cached
+		} else {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				extRIM, rimErr = downloader.FetchRIMExternalData(pureCode)
+				if rimErr != nil {
+					fmt.Printf("[RIM] fetch failed for %s: %v\n", symbol, rimErr)
+				}
+				if extRIM != nil {
+					_ = a.storage.SaveRIMCache(symbol, extRIM)
+				}
+			}()
 		}
 	}
 
-	// RIM 多期估值数据
+	wg.Wait()
+
+	// RIM 多期估值数据组装
 	var rimData *analyzer.RIMData
 	if customRIM != nil {
 		rimData = customRIM
 	} else if quoteData != nil {
 		rimData = &analyzer.RIMData{}
-		pureCode := symbol
-		if idx := strings.Index(symbol, "."); idx > 0 {
-			pureCode = symbol[:idx]
-		}
-		ext, extErr := downloader.FetchRIMExternalData(pureCode)
-		if extErr != nil {
-			fmt.Printf("[RIM] fetch failed for %s: %v\n", symbol, extErr)
-		}
-		if ext != nil {
-			rimData.Rf = ext.Rf
-			rimData.Beta = ext.Beta
-			rimData.RmRf = ext.RmRf
-			rimData.EPSRaw = ext.EPSForecast
+		if extRIM != nil {
+			rimData.Rf = extRIM.Rf
+			rimData.Beta = extRIM.Beta
+			rimData.RmRf = extRIM.RmRf
+			rimData.EPSRaw = extRIM.EPSForecast
 		} else {
 			// 使用默认参数（即使外部数据获取失败也尝试计算）
 			rimData.Rf = 0.0183
@@ -898,23 +943,21 @@ func (a *App) analyzeStockInternal(symbol string, overwriteLatest bool, customRI
 			rimData.RmRf = 0.0517
 		}
 
-		// 计算 BPS0
 		bps0 := 0.0
 		if quoteData.PB > 0 && quoteData.CurrentPrice > 0 {
 			bps0 = quoteData.CurrentPrice / quoteData.PB
 		}
-		if bps0 <= 0 && ext != nil && ext.PB > 0 && ext.Price > 0 {
-			bps0 = ext.Price / ext.PB
+		if bps0 <= 0 && extRIM != nil && extRIM.PB > 0 && extRIM.Price > 0 {
+			bps0 = extRIM.Price / extRIM.PB
 		}
 		if bps0 <= 0 {
-			// fallback: 财报股东权益 / 总股本
 			totalShares := 0.0
-			if ext != nil && ext.TotalShares > 0 {
-				totalShares = ext.TotalShares
-			} else if quoteData != nil && quoteData.CurrentPrice > 0 && quoteData.MarketCap > 0 {
+			if extRIM != nil && extRIM.TotalShares > 0 {
+				totalShares = extRIM.TotalShares
+			} else if quoteData.CurrentPrice > 0 && quoteData.MarketCap > 0 {
 				totalShares = quoteData.MarketCap / quoteData.CurrentPrice
 			}
-			if finData, err := analyzer.LoadFinancialData(a.storage.DataDir(), symbol); err == nil && finData != nil && len(finData.Years) > 0 {
+			if finData != nil && len(finData.Years) > 0 {
 				year := finData.Years[0]
 				equity := finData.GetValueOrZero(finData.BalanceSheet, "归母所有者权益合计", year)
 				if equity == 0 {
@@ -926,15 +969,12 @@ func (a *App) analyzeStockInternal(symbol string, overwriteLatest bool, customRI
 			}
 		}
 
-		// 构造 EPS 预测序列（按年份排序，至少6年）
 		var epsSeq []float64
-		if ext != nil && len(ext.EPSForecast) > 0 {
-			// 提取年份键并排序
-			years := make([]string, 0, len(ext.EPSForecast))
-			for y := range ext.EPSForecast {
+		if extRIM != nil && len(extRIM.EPSForecast) > 0 {
+			years := make([]string, 0, len(extRIM.EPSForecast))
+			for y := range extRIM.EPSForecast {
 				years = append(years, y)
 			}
-			// 简单字符串排序对年份有效
 			for i := 0; i < len(years)-1; i++ {
 				for j := i + 1; j < len(years); j++ {
 					if years[i] > years[j] {
@@ -943,7 +983,7 @@ func (a *App) analyzeStockInternal(symbol string, overwriteLatest bool, customRI
 				}
 			}
 			for _, y := range years {
-				if v, ok := ext.EPSForecast[y]; ok && v > 0 {
+				if v, ok := extRIM.EPSForecast[y]; ok && v > 0 {
 					epsSeq = append(epsSeq, v)
 				}
 			}
@@ -951,23 +991,22 @@ func (a *App) analyzeStockInternal(symbol string, overwriteLatest bool, customRI
 		// 如果外部没有预测数据，用 trailing EPS 做起点然后外推
 		if len(epsSeq) == 0 {
 			trailingEPS := 0.0
-			if finData, err := analyzer.LoadFinancialData(a.storage.DataDir(), symbol); err == nil && finData != nil && len(finData.Years) > 0 {
+			if finData != nil && len(finData.Years) > 0 {
 				finYear := finData.Years[0]
 				finProfit := finData.GetValueOrZero(finData.IncomeStatement, "归母净利润", finYear)
 				if finProfit == 0 {
 					finProfit = finData.GetValueOrZero(finData.IncomeStatement, "净利润", finYear)
 				}
 				totalShares := 0.0
-				if ext != nil && ext.TotalShares > 0 {
-					totalShares = ext.TotalShares
-				} else if quoteData != nil && quoteData.CurrentPrice > 0 && quoteData.MarketCap > 0 {
+				if extRIM != nil && extRIM.TotalShares > 0 {
+					totalShares = extRIM.TotalShares
+				} else if quoteData.CurrentPrice > 0 && quoteData.MarketCap > 0 {
 					totalShares = quoteData.MarketCap / quoteData.CurrentPrice
 				}
 				if finProfit > 0 && totalShares > 0 {
 					trailingEPS = finProfit / 1e8 / (totalShares / 1e8)
 				}
 				if trailingEPS <= 0 && bps0 > 0 {
-					// 用 ROE × BPS0 推算
 					netProfit := finData.GetValueOrZero(finData.IncomeStatement, "归母净利润", finYear)
 					if netProfit == 0 {
 						netProfit = finData.GetValueOrZero(finData.IncomeStatement, "净利润", finYear)
@@ -1007,8 +1046,8 @@ func (a *App) analyzeStockInternal(symbol string, overwriteLatest bool, customRI
 		ke := rimData.Rf + rimData.Beta*rimData.RmRf
 		gTerminal := 0.05
 		price := quoteData.CurrentPrice
-		if price <= 0 && ext != nil {
-			price = ext.Price
+		if price <= 0 && extRIM != nil {
+			price = extRIM.Price
 		}
 
 		if bps0 > 0 && ke > gTerminal {
@@ -1028,7 +1067,7 @@ func (a *App) analyzeStockInternal(symbol string, overwriteLatest bool, customRI
 		if !rimData.HasData {
 			rimData = nil
 		}
-}
+	}
 
 	report, err := analyzer.RunAnalysisWithAll(a.storage.DataDir(), symbol, compAnalysis, quoteData, sentimentData, policyData, technicalData, activityData, mlData, rimData)
 	if err != nil {

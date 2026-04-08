@@ -671,6 +671,8 @@ body.light .import-years {
 }
 
 .btn {
+  position: relative;
+  overflow: hidden;
   padding: 10px 14px;
   border: 1px solid #2a3a4a;
   border-radius: 6px;
@@ -702,6 +704,20 @@ body.light .btn:hover {
   border-color: #3b82f6;
   color: #fff;
   font-weight: 500;
+}
+
+.btn-progress {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  background: rgba(255, 255, 255, 0.25);
+  transition: width 0.3s ease;
+  z-index: 0;
+}
+
+body.light .btn-progress {
+  background: rgba(255, 255, 255, 0.35);
 }
 
 .btn-content {

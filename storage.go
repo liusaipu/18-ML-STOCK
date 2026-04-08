@@ -713,3 +713,52 @@ func (s *Storage) LoadActivityCache(symbol string) (*analyzer.ActivityData, erro
 	}
 	return &data, nil
 }
+
+// RIMCachePath 返回某只股票的RIM数据缓存文件路径
+func (s *Storage) RIMCachePath(symbol string) string {
+	return filepath.Join(s.DataDir(), "data", symbol, "rim_cache.json")
+}
+
+// rimCacheWrapper 带时间戳的RIM缓存包装器
+type rimCacheWrapper struct {
+	Timestamp time.Time              `json:"timestamp"`
+	Data      *downloader.RIMExternalData `json:"data"`
+}
+
+// SaveRIMCache 保存RIM外部数据缓存
+func (s *Storage) SaveRIMCache(symbol string, data *downloader.RIMExternalData) error {
+	path := s.RIMCachePath(symbol)
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		return err
+	}
+	wrapper := rimCacheWrapper{
+		Timestamp: time.Now(),
+		Data:      data,
+	}
+	b, err := json.MarshalIndent(wrapper, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, b, 0644)
+}
+
+// LoadRIMCache 加载RIM外部数据缓存（默认12小时有效）
+func (s *Storage) LoadRIMCache(symbol string) (*downloader.RIMExternalData, error) {
+	path := s.RIMCachePath(symbol)
+	info, err := os.Stat(path)
+	if err != nil {
+		return nil, err
+	}
+	if time.Since(info.ModTime()) > 12*time.Hour {
+		return nil, fmt.Errorf("缓存过期")
+	}
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	var wrapper rimCacheWrapper
+	if err := json.Unmarshal(b, &wrapper); err != nil {
+		return nil, err
+	}
+	return wrapper.Data, nil
+}

@@ -150,6 +150,7 @@ function App() {
   const [report, setReport] = useState<AnalysisReport | null>(null)
   const [snapshots, setSnapshots] = useState<Record<string, AnalysisReport>>({})
   const [analyzing, setAnalyzing] = useState(false)
+  const [analyzeProgress, setAnalyzeProgress] = useState(0)
   const [historyFiles, setHistoryFiles] = useState<string[]>([])
   const [viewingHistory, setViewingHistory] = useState<string | null>(null)
   const [historyContent, setHistoryContent] = useState<string>('')
@@ -192,6 +193,7 @@ function App() {
   const [rimBPS0, setRimBPS0] = useState(0)
   const [rimPrice, setRimPrice] = useState(0)
   const [rimLoading, setRimLoading] = useState(false)
+  const [rimProgress, setRimProgress] = useState(0)
 
   const tocSections = [
     { label: '模块1: 执行摘要', id: '模块1-执行摘要' },
@@ -677,6 +679,10 @@ function App() {
   const runAnalyze = async (overwriteLatest = false) => {
     if (!selectedStock) return
     setAnalyzing(true)
+    setAnalyzeProgress(5)
+    const interval = setInterval(() => {
+      setAnalyzeProgress((p) => (p >= 90 ? 90 : p + 3))
+    }, 400)
     try {
       const result = await AnalyzeStock(selectedStock.code, overwriteLatest)
       setReport(result)
@@ -691,7 +697,12 @@ function App() {
       console.error('分析失败:', err)
       alert(String(err))
     } finally {
-      setAnalyzing(false)
+      clearInterval(interval)
+      setAnalyzeProgress(100)
+      setTimeout(() => {
+        setAnalyzing(false)
+        setAnalyzeProgress(0)
+      }, 400)
     }
   }
 
@@ -743,6 +754,10 @@ function App() {
   const handleAnalyzeWithRIM = async () => {
     if (!selectedStock) return
     setRimLoading(true)
+    setRimProgress(5)
+    const interval = setInterval(() => {
+      setRimProgress((p) => (p >= 90 ? 90 : p + 3))
+    }, 400)
     try {
       const params = {
         BPS0: rimBPS0,
@@ -774,7 +789,12 @@ function App() {
       console.error('RIM分析失败:', err)
       alert(String(err))
     } finally {
-      setRimLoading(false)
+      clearInterval(interval)
+      setRimProgress(100)
+      setTimeout(() => {
+        setRimLoading(false)
+        setRimProgress(0)
+      }, 400)
     }
   }
 
@@ -877,6 +897,10 @@ function App() {
     if (!selectedStock || comparables.length === 0) return
     setCompDownloading(true)
     setAnalyzing(true)
+    setAnalyzeProgress(5)
+    const interval = setInterval(() => {
+      setAnalyzeProgress((p) => (p >= 90 ? 90 : p + 3))
+    }, 400)
     try {
       const downloadResult = await DownloadComparableReports(selectedStock.code)
       if (downloadResult && !downloadResult.success) {
@@ -899,8 +923,13 @@ function App() {
       console.error('分析失败:', err)
       alert(String(err))
     } finally {
-      setCompDownloading(false)
-      setAnalyzing(false)
+      clearInterval(interval)
+      setAnalyzeProgress(100)
+      setTimeout(() => {
+        setCompDownloading(false)
+        setAnalyzing(false)
+        setAnalyzeProgress(0)
+      }, 400)
     }
   }
 
@@ -1249,7 +1278,10 @@ function App() {
               </button>
               <button className="btn primary" onClick={handleAnalyze} disabled={analyzing || downloading || loading}>
                 {analyzing ? (
-                  '分析中...'
+                  <>
+                    <span className="btn-progress" style={{ width: `${analyzeProgress}%` }} />
+                    <span style={{ position: 'relative', zIndex: 1 }}>分析中 {analyzeProgress}%</span>
+                  </>
                 ) : (
                   <span className="btn-content">
                     18步分析
@@ -1445,7 +1477,7 @@ function App() {
                         disabled={analyzing || comparables.length === 0}
                       >
                         {analyzing ? (
-                          '...'
+                          '···'
                         ) : (
                           <svg
                             width="16"
@@ -1862,7 +1894,12 @@ function App() {
                 取消
               </button>
               <button className="btn primary" onClick={handleAnalyzeWithRIM} disabled={rimLoading || rimBPS0 <= 0 || rimEPS.filter((v) => v > 0).length < 1}>
-                {rimLoading ? '分析中...' : '应用并重新分析'}
+                {rimLoading ? (
+                  <>
+                    <span className="btn-progress" style={{ width: `${rimProgress}%` }} />
+                    <span style={{ position: 'relative', zIndex: 1 }}>分析中 {rimProgress}%</span>
+                  </>
+                ) : '应用并重新分析'}
               </button>
             </div>
           </div>

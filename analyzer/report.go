@@ -611,11 +611,6 @@ func writeModule7(b *strings.Builder, steps []StepResult, latest string, quote *
 		b.WriteString(fmt.Sprintf("| 基准 | %.2f%% | %.2f | %+.1f%% | %s |\n", rim.Result.Baseline.ROE, rim.Result.Baseline.Value, rim.Result.Baseline.DiffPct, rim.Result.Baseline.Grade))
 		b.WriteString(fmt.Sprintf("| 乐观 | %.2f%% | %.2f | %+.1f%% | %s |\n", rim.Result.Optimistic.ROE, rim.Result.Optimistic.Value, rim.Result.Optimistic.DiffPct, rim.Result.Optimistic.Grade))
 		b.WriteString("\n")
-		if currentPrice > 0 {
-			b.WriteString(fmt.Sprintf("> **基准情景内在价值**: %.2f 元/股，相对当前股价 %.2f 元 **%+.1f%%**。\n\n", rim.Result.Baseline.Value, currentPrice, rim.Result.Baseline.DiffPct))
-		} else {
-			b.WriteString(fmt.Sprintf("> **基准情景内在价值**: %.2f 元/股（未接入实时股价，无法计算涨幅）。\n\n", rim.Result.Baseline.Value))
-		}
 	} else {
 		b.WriteString("| 情景 | ROE假设 | 内在价值/净资产 | 评级 |\n")
 		b.WriteString("|------|---------|----------------|------|\n")
@@ -637,17 +632,22 @@ func writeModule7(b *strings.Builder, steps []StepResult, latest string, quote *
 		b.WriteString(fmt.Sprintf("| **持续价值 CV** | - | - | - | %.4f | - | **%.4f** |\n", rim.Result.CV, rim.Result.PVCV))
 		b.WriteString(fmt.Sprintf("| **每股价值** | - | - | - | - | - | **%.2f** |\n", rim.Result.Value))
 		b.WriteString("\n")
+		if currentPrice > 0 {
+			b.WriteString(fmt.Sprintf("> **多期模型估算每股价值**: %.2f 元/股，相对当前股价 %.2f 元 **%+.1f%%**。\n\n", rim.Result.Value, currentPrice, rim.Result.Upside))
+		} else {
+			b.WriteString(fmt.Sprintf("> **多期模型估算每股价值**: %.2f 元/股（未接入实时股价，无法计算涨幅）。\n\n", rim.Result.Value))
+		}
 	}
 
 	b.WriteString("> **解读**: RIM 估值的核心在于 ROE 能否持续高于资本成本。")
 	if hasRIM && currentPrice > 0 {
-		diff := rim.Result.Baseline.DiffPct
+		diff := rim.Result.Upside
 		if diff >= 20 {
-			b.WriteString(fmt.Sprintf("当前多期模型估算内在价值 %.2f 元显著高于市价 %.2f 元，存在约 %.0f%% 的潜在上行空间。", rim.Result.Baseline.Value, currentPrice, diff))
+			b.WriteString(fmt.Sprintf("当前多期模型估算每股价值 %.2f 元显著高于市价 %.2f 元，存在约 %.0f%% 的潜在上行空间。", rim.Result.Value, currentPrice, diff))
 		} else if diff >= 0 {
-			b.WriteString(fmt.Sprintf("当前多期模型估算内在价值 %.2f 元略高于市价 %.2f 元，上行空间约 %.0f%%，安全边际一般。", rim.Result.Baseline.Value, currentPrice, diff))
+			b.WriteString(fmt.Sprintf("当前多期模型估算每股价值 %.2f 元略高于市价 %.2f 元，上行空间约 %.0f%%，安全边际一般。", rim.Result.Value, currentPrice, diff))
 		} else {
-			b.WriteString(fmt.Sprintf("当前多期模型估算内在价值 %.2f 元低于市价 %.2f 元，当前价格可能已反映乐观预期。", rim.Result.Baseline.Value, currentPrice))
+			b.WriteString(fmt.Sprintf("当前多期模型估算每股价值 %.2f 元低于市价 %.2f 元，当前价格可能已反映乐观预期。", rim.Result.Value, currentPrice))
 		}
 	} else {
 		if roe >= 15 {

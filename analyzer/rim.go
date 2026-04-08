@@ -121,12 +121,21 @@ func CalculateMultiPeriodRIM(p RIMParams) *RIMResult {
 		avgROE = avgROE / float64(len(details)) * 100
 	}
 
+	grade := "中性"
+	if upside >= 30 {
+		grade = "积极"
+	} else if upside >= 10 {
+		grade = "谨慎推荐"
+	} else if upside <= -10 {
+		grade = "高估"
+	}
+	res.Baseline = RIMScenario{ROE: avgROE, Value: value, DiffPct: upside, Grade: grade}
+
 	scenarios := []struct {
 		name string
 		roe  float64
 	}{
 		{"pessimistic", avgROE - 3},
-		{"baseline", avgROE},
 		{"optimistic", avgROE + 3},
 	}
 	for _, s := range scenarios {
@@ -140,23 +149,21 @@ func CalculateMultiPeriodRIM(p RIMParams) *RIMResult {
 			scaledEPS[i] = d.EPS * scale
 		}
 		forecast := RIMForecast{EPS: scaledEPS}
-		sim := simulateRIM(p.BPS0, p.KE, p.GTerminal, forecast)
-		grade := "中性"
+		sim := simulateRIM(p.BPS0, p.KE, p.GTerminal, forecast, p.CurrentPrice)
+		sg := "中性"
 		if sim.DiffPct >= 30 {
-			grade = "积极"
+			sg = "积极"
 		} else if sim.DiffPct >= 10 {
-			grade = "谨慎推荐"
+			sg = "谨慎推荐"
 		} else if sim.DiffPct <= -10 {
-			grade = "高估"
+			sg = "高估"
 		}
-		sim.Grade = grade
+		sim.Grade = sg
 		sim.ROE = s.roe
 
 		switch s.name {
 		case "pessimistic":
 			res.Pessimistic = sim
-		case "baseline":
-			res.Baseline = sim
 		case "optimistic":
 			res.Optimistic = sim
 		}
@@ -165,27 +172,38 @@ func CalculateMultiPeriodRIM(p RIMParams) *RIMResult {
 	return res
 }
 
-func simulateRIM(bps0, ke, gTerminal float64, forecast RIMForecast) RIMScenario {
+func simulateRIM(bps0, ke, gTerminal float64, forecast RIMForecast, currentPrice float64) RIMScenario {
 	n := len(forecast.EPS)
 	if n == 0 || ke <= gTerminal {
 		return RIMScenario{}
 	}
 	bps := bps0
 	sumPVRE := 0.0
+	var lastBPS, lastEPS, lastDPS float64
 	for i := 0; i < n; i++ {
 		eps := forecast.EPS[i]
+		dps := 0.0
+		if i < len(forecast.DPS) {
+			dps = forecast.DPS[i]
+		}
 		re := eps - bps*ke
 		discount := math.Pow(1+ke, float64(i+1))
 		sumPVRE += re / discount
-		bps = bps + eps
+		lastBPS = bps
+		lastEPS = eps
+		lastDPS = dps
+		bps = bps + eps - dps
 	}
-	lastEPS := forecast.EPS[n-1]
-	reTerminal := lastEPS - bps*ke
+	reTerminal := lastEPS - (lastBPS-lastEPS+lastDPS)*ke
 	cv := reTerminal * (1 + gTerminal) / (ke - gTerminal)
 	discountTerminal := math.Pow(1+ke, float64(n))
 	pvcv := cv / discountTerminal
 	value := bps0 + sumPVRE + pvcv
-	return RIMScenario{Value: value}
+	diffPct := 0.0
+	if currentPrice > 0 {
+		diffPct = (value - currentPrice) / currentPrice * 100
+	}
+	return RIMScenario{Value: value, DiffPct: diffPct}
 }
 
 // rimGradeComment 生成评级描述
