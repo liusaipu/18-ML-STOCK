@@ -477,9 +477,20 @@ func writeModule5(b *strings.Builder, policy *PolicyMatchData) {
 	b.WriteString(fmt.Sprintf("| **政策评分** | %d / 100 |\n", policy.Score))
 	b.WriteString("\n")
 
+	// 按匹配程度从高到低排序
+	sortedPolicies := make([]PolicyItem, len(policy.Policies))
+	copy(sortedPolicies, policy.Policies)
+	for i := 0; i < len(sortedPolicies)-1; i++ {
+		for j := i + 1; j < len(sortedPolicies); j++ {
+			if sortedPolicies[i].Level < sortedPolicies[j].Level {
+				sortedPolicies[i], sortedPolicies[j] = sortedPolicies[j], sortedPolicies[i]
+			}
+		}
+	}
+
 	b.WriteString("## 5.2 重点政策方向\n\n")
 	b.WriteString(`<div class="policy-tags">` + "\n")
-	for _, p := range policy.Policies {
+	for _, p := range sortedPolicies {
 		b.WriteString(fmt.Sprintf(`  <span class="policy-tag"><span class="policy-name">%s</span><span class="policy-signal">%s</span></span>`+"\n", p.Name, policySignalSVG(p.Level)))
 	}
 	b.WriteString(`</div>` + "\n\n")
@@ -497,7 +508,7 @@ func policySignalSVG(level int) string {
 	if level > 5 {
 		level = 5
 	}
-	color := "#f59e0b"
+	color := "#22c55e"
 	var rects strings.Builder
 	bars := []struct{ x, y, h float64 }{
 		{0, 8, 2},
@@ -559,7 +570,7 @@ func writeModule6(b *strings.Builder, quote *QuoteData) {
 
 // ========== 模块6: RIM估值（基于多期预测） ==========
 func writeModule7(b *strings.Builder, steps []StepResult, latest string, quote *QuoteData, rim *RIMData) {
-	b.WriteString("# 模块7: 剩余收益模型估值(RIM)\n\n")
+	b.WriteString(`<h1 id="模块7-剩余收益模型估值rim">模块7: 剩余收益模型估值(RIM) <button class="rim-adjust-btn" style="float:right;margin-top:2px;">调整RIM</button></h1>` + "\n\n")
 
 	roe := getStepValue(steps, 16, latest, "roe")
 

@@ -735,8 +735,15 @@ function App() {
       setRimG((rim.params?.GTerminal ?? 0.05) * 100)
       setRimBPS0(rim.params?.BPS0 ?? 0)
       setRimPrice(rim.params?.CurrentPrice ?? 0)
-      const eps = rim.params?.Forecast?.EPS?.slice(0, 6) || []
-      while (eps.length < 6) eps.push(0)
+      let eps: number[] = []
+      if (rim.epsRaw && Object.keys(rim.epsRaw).length > 0) {
+        const years = Object.keys(rim.epsRaw).sort()
+        eps = years.slice(0, 6).map((y) => Number(rim.epsRaw![y].toFixed(2)))
+      }
+      const forecast = rim.params?.Forecast?.EPS?.slice(0, 6) || []
+      while (eps.length < 6) {
+        eps.push(Number((forecast[eps.length] ?? 0).toFixed(2)))
+      }
       setRimEPS(eps)
     } else if (quote) {
       // 从行情推算默认值
@@ -1686,19 +1693,17 @@ function App() {
             >
               下载报告
             </button>
-            <button
-              className="btn-rim"
-              onClick={openRIMModal}
-              disabled={!selectedStock}
-              title={!selectedStock ? '请先选择股票' : '调整RIM估值参数并重新分析'}
-            >
-              调整RIM
-            </button>
           </div>
         </div>
         <div className="report-content" ref={reportContentRef}>
           {displayContent ? (
-            <div className="markdown-body">
+            <div className="markdown-body" onClick={(e) => {
+              const target = e.target as HTMLElement
+              if (target.closest('.rim-adjust-btn')) {
+                e.preventDefault()
+                openRIMModal()
+              }
+            }}>
               <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeSlug, rehypeRaw]} components={markdownComponents}>
                 {displayContent}
               </ReactMarkdown>
@@ -1880,9 +1885,11 @@ function App() {
                 {rimEPS.map((v, i) => (
                   <div className="rim-eps-item" key={i}>
                     <label>第{i + 1}年</label>
-                    <input type="number" step={0.01} value={v} onChange={(e) => {
+                    <input type="text" inputMode="decimal" value={v} onChange={(e) => {
+                      const val = e.target.value
+                      if (!/^\d*\.?\d*$/.test(val)) return
                       const next = [...rimEPS]
-                      next[i] = Number(e.target.value)
+                      next[i] = val === '' ? 0 : Number(val)
                       setRimEPS(next)
                     }} />
                   </div>

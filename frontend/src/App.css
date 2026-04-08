@@ -2127,7 +2127,7 @@ body.light .quote-error {
   cursor: pointer;
 }
 .btn-rim:hover {
-  background: #2a3a4a;
+  background: #2a3a4d;
 }
 .btn-rim:disabled {
   opacity: 0.5;
@@ -2142,9 +2142,31 @@ body.light .btn-rim:hover {
   background: #e5e7eb;
 }
 
+.rim-adjust-btn {
+  float: right;
+  margin-top: 2px;
+  padding: 4px 10px;
+  border-radius: 4px;
+  border: 1px solid #3b82f6;
+  background: transparent;
+  color: #3b82f6;
+  font-size: 12px;
+  cursor: pointer;
+}
+.rim-adjust-btn:hover {
+  background: rgba(59, 130, 246, 0.12);
+}
+body.light .rim-adjust-btn {
+  border-color: #3b82f6;
+  color: #2563eb;
+}
+body.light .rim-adjust-btn:hover {
+  background: rgba(37, 99, 235, 0.10);
+}
+
 /* RIM 弹窗 */
 .rim-modal {
-  width: 480px;
+  width: 540px;
   max-width: 90vw;
 }
 .rim-form {
@@ -2192,22 +2214,25 @@ body.light .rim-eps-title {
 .rim-eps-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
+  gap: 4px;
+  margin-bottom: 16px;
 }
 .rim-eps-item {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
 }
 .rim-eps-item label {
-  font-size: 12px;
+  font-size: 11px;
   color: #94a3b8;
 }
 body.light .rim-eps-item label {
   color: #6b7280;
 }
 .rim-eps-item input {
-  padding: 6px 8px;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 4px 2px;
   border-radius: 4px;
   border: 1px solid #2a3a4a;
   background: #141b24;
