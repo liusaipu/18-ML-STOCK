@@ -636,8 +636,13 @@ func writeModule7(b *strings.Builder, steps []StepResult, latest string, quote *
 		b.WriteString("## 7.3 多期计算明细\n\n")
 		b.WriteString("| 年度 | EPS(元) | DPS(元) | BPS(元) | RE(元) | 折现率 | RE现值(元) |\n")
 		b.WriteString("|------|---------|---------|---------|--------|--------|------------|\n")
+		runningBPS := 0.0
+		if rim != nil {
+			runningBPS = rim.Params.BPS0
+		}
 		for _, d := range rim.Result.Details {
-			b.WriteString(fmt.Sprintf("| 第%d年 | %.2f | %.2f | %.2f | %.4f | %.4f | %.4f |\n", d.Year, d.EPS, d.DPS, d.BPS, d.RE, d.Discount, d.PVRE))
+			runningBPS = runningBPS + d.EPS - d.DPS
+			b.WriteString(fmt.Sprintf("| 第%d年 | %.2f | %.2f | %.2f | %.4f | %.4f | %.4f |\n", d.Year, d.EPS, d.DPS, runningBPS, d.RE, d.Discount, d.PVRE))
 		}
 		b.WriteString(fmt.Sprintf("| **RE现值之和** | - | - | - | - | - | **%.4f** |\n", rim.Result.SumPVRE))
 		b.WriteString(fmt.Sprintf("| **持续价值 CV** | - | - | - | %.4f | - | **%.4f** |\n", rim.Result.CV, rim.Result.PVCV))
