@@ -132,15 +132,15 @@ func computeDeduction(step StepResult, year string, yd map[string]any) Deduction
 		}
 		d.Reason = fmt.Sprintf("%s年投资类资产占比=%.2f%%", year, ratio)
 	case 8:
-		mscore := anyToFloat64(yd["MScore"])
-		if mscore > -1.78 {
+		ascore := anyToFloat64(yd["AScore"])
+		if ascore > 70 {
 			d.Points = 3
-		} else if mscore > -2.22 {
+		} else if ascore > 50 {
 			d.Points = 2
 		} else {
 			d.Points = 1
 		}
-		d.Reason = fmt.Sprintf("%s年M-Score=%.3f，存在财务操纵嫌疑", year, mscore)
+		d.Reason = fmt.Sprintf("%s年A-Score=%.1f，综合财务风险%s", year, ascore, riskComment(ascore))
 	case 9:
 		v := anyToFloat64(yd["growthRate"])
 		if v < 0 {
@@ -313,4 +313,14 @@ func anyToFloat64(v any) float64 {
 	default:
 		return 0
 	}
+}
+
+func riskComment(ascore float64) string {
+	if ascore >= 70 {
+		return "较高，建议深入核查"
+	}
+	if ascore >= 50 {
+		return "中等，需保持关注"
+	}
+	return "可控"
 }

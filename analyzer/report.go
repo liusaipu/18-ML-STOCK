@@ -85,12 +85,12 @@ func GenerateMarkdown(symbol string, years []string, steps []StepResult, scores 
 // ========== 重大风险提示 ==========
 func writeMajorRisks(b *strings.Builder, symbol string, steps []StepResult, latest, prev string, score *YearScore) {
 	var risks []string
-	ms := getStepValue(steps, 8, latest, "MScore")
-	if ms > -2.22 {
-		if ms > -1.78 {
-			risks = append(risks, fmt.Sprintf("**M-Score 异常**: %.3f，财务造假风险较高 🔴**", ms))
+	ascore := getStepValue(steps, 8, latest, "AScore")
+	if ascore >= 60 {
+		if ascore >= 70 {
+			risks = append(risks, fmt.Sprintf("**A-Score 偏高**: %.1f，综合财务风险较高 🔴**", ascore))
 		} else {
-			risks = append(risks, fmt.Sprintf("**M-Score 偏高**: %.3f，存在财报操纵嫌疑 ⚠️**", ms))
+			risks = append(risks, fmt.Sprintf("**A-Score 中等**: %.1f，需关注财务健康度 ⚠️**", ascore))
 		}
 	}
 	growth := getStepValue(steps, 9, latest, "growthRate")
@@ -339,7 +339,7 @@ func writeModule3(b *strings.Builder, steps []StepResult, years []string, latest
 		))
 	}
 	b.WriteString("\n")
-	b.WriteString("> **解读**: 持续观察ROE和毛利率的趋势变化，若连续下滑需警惕竞争力衰退；资产负债率稳定或下降为加分项；M-Score若持续高于-2.22建议核查财报真实性。\n\n")
+	b.WriteString("> **解读**: 持续观察ROE和毛利率的趋势变化，若连续下滑需警惕竞争力衰退；资产负债率稳定或下降为加分项。M-Score已纳入A-Score综合风险体系，A-Score≥60时建议重点核查财报真实性与偿债能力。\n\n")
 
 	b.WriteString(fmt.Sprintf("## 3.3 十八步分析详情（%s）\n\n", latest))
 	categories := []struct {
@@ -434,7 +434,7 @@ func writeModule4(b *strings.Builder, steps []StepResult, latest string, comp *C
 		comp.Average.ROE, comp.Average.GrossMargin, comp.Average.RevenueGrowth, comp.Average.DebtRatio, comp.Average.CashRatio, comp.Average.MScore))
 	b.WriteString("\n")
 
-	b.WriteString("> **解读**: 排名百分位表示当前公司在可比公司中的相对位置（越高越好，负债率与 M-Score 为反向指标）。\n\n")
+	b.WriteString("> **解读**: 排名百分位表示当前公司在可比公司中的相对位置（越高越好，负债率与 M-Score 为反向指标）。M-Score 已作为子指标纳入 A-Score 综合风险体系。\n\n")
 
 	// 多年度趋势对比
 	if len(comp.YearlyTrends) >= 2 && len(comp.CommonYears) >= 2 {
@@ -858,8 +858,8 @@ func writeModule9(b *strings.Builder, steps []StepResult, latest, prev string, m
 		if gm := getStepValue(steps, 10, latest, "grossMargin"); gm < 40 {
 			neg = append(neg, fmt.Sprintf("- 毛利率 %.2f%%，产品竞争力未达高毛利标准", gm))
 		}
-		if ms := getStepValue(steps, 8, latest, "MScore"); ms > -2.22 {
-			neg = append(neg, fmt.Sprintf("- M-Score %.3f，财报真实性需核查", ms))
+		if ascore := getStepValue(steps, 8, latest, "AScore"); ascore >= 60 {
+			neg = append(neg, fmt.Sprintf("- A-Score %.1f，综合财务风险需关注", ascore))
 		}
 		if dr := getStepValue(steps, 3, latest, "debtRatio"); dr > 60 {
 			neg = append(neg, fmt.Sprintf("- 资产负债率 %.2f%%，偿债压力偏大", dr))
@@ -891,8 +891,8 @@ func writeModule9(b *strings.Builder, steps []StepResult, latest, prev string, m
 		if cr := getStepValue(steps, 15, latest, "cashRatio"); cr >= 100 {
 			pos = append(pos, fmt.Sprintf("- 净利润现金含量 %.2f%%，盈利质量高", cr))
 		}
-		if ms := getStepValue(steps, 8, latest, "MScore"); ms <= -2.22 {
-			pos = append(pos, fmt.Sprintf("- M-Score %.3f，财报操纵风险低", ms))
+		if ascore := getStepValue(steps, 8, latest, "AScore"); ascore < 50 {
+			pos = append(pos, fmt.Sprintf("- A-Score %.1f，综合财务风险可控", ascore))
 		}
 		if len(pos) == 0 {
 			pos = append(pos, "- 暂无显著正向因子")
@@ -921,7 +921,6 @@ func writeModule10(b *strings.Builder, steps []StepResult, latest, prev string) 
 	roe := getStepValue(steps, 16, latest, "roe")
 	gm := getStepValue(steps, 10, latest, "grossMargin")
 	growth := getStepValue(steps, 9, latest, "growthRate")
-	ms := getStepValue(steps, 8, latest, "MScore")
 	dr := getStepValue(steps, 3, latest, "debtRatio")
 	cashDiff := getStepValue(steps, 3, latest, "cashDebtDiff")
 	cr := getStepValue(steps, 15, latest, "cashRatio")
@@ -937,7 +936,7 @@ func writeModule10(b *strings.Builder, steps []StepResult, latest, prev string) 
 		{"① ROE ≥ 15%", "≥15%", fmt.Sprintf("%.2f%%", roe), roe >= 15, 20, 20},
 		{"② 毛利率 ≥ 40%", "≥40%", fmt.Sprintf("%.2f%%", gm), gm >= 40, 15, 15},
 		{"③ 营收增长 ≥ 10%", "≥10%", fmt.Sprintf("%.2f%%", growth), growth >= 10, 15, 15},
-		{"④ M-Score ≤ -2.22", "≤-2.22", fmt.Sprintf("%.3f", ms), ms <= -2.22, 15, 15},
+		{"④ A-Score < 60", "<60", fmt.Sprintf("%.1f", getStepValue(steps, 8, latest, "AScore")), getStepValue(steps, 8, latest, "AScore") < 60, 15, 15},
 		{"⑤ 资产负债率 ≤ 60%", "≤60%", fmt.Sprintf("%.2f%%", dr), dr <= 60, 10, 10},
 		{"⑥ 净利润现金含量 ≥ 100%", "≥100%", fmt.Sprintf("%.2f%%", cr), cr >= 100, 15, 15},
 		{"⑦ 准货币资金-有息负债 ≥ 0", "≥0", fmt.Sprintf("%.2f亿", cashDiff/1e8), cashDiff >= 0, 10, 10},
@@ -1003,8 +1002,8 @@ func writeModule11(b *strings.Builder, steps []StepResult, latest string, score 
 	if cr := getStepValue(steps, 15, latest, "cashRatio"); cr >= 100 {
 		positives = append(positives, fmt.Sprintf("- 经营现金流充沛，净利润含金量 %.2f%%", cr))
 	}
-	if ms := getStepValue(steps, 8, latest, "MScore"); ms <= -2.22 {
-		positives = append(positives, fmt.Sprintf("- M-Score %.3f，财报质量可信", ms))
+	if ascore := getStepValue(steps, 8, latest, "AScore"); ascore < 50 {
+		positives = append(positives, fmt.Sprintf("- A-Score %.1f，财报质量可信", ascore))
 	}
 	if len(positives) == 0 {
 		positives = append(positives, "- 当前财务数据中积极因素不明显，需等待基本面改善信号。")
@@ -1019,7 +1018,7 @@ func writeModule11(b *strings.Builder, steps []StepResult, latest string, score 
 	b.WriteString("1. ROE 持续回升并稳定在 15% 以上\n")
 	b.WriteString("2. 毛利率止跌回升，定价权修复\n")
 	b.WriteString("3. 经营现金流持续覆盖净利润\n")
-	b.WriteString("4. M-Score 回落至 -2.22 以下\n")
+	b.WriteString("4. A-Score 回落至 60 以下\n")
 	b.WriteString("\n")
 
 	b.WriteString("## 11.2 逆向检查评分\n\n")
@@ -1046,7 +1045,6 @@ func writeModule12(b *strings.Builder, steps []StepResult, latest string, score 
 	gm := getStepValue(steps, 10, latest, "grossMargin")
 	growth := getStepValue(steps, 9, latest, "growthRate")
 	pg := getStepValue(steps, 16, latest, "profitGrowth")
-	ms := getStepValue(steps, 8, latest, "MScore")
 	dr := getStepValue(steps, 3, latest, "debtRatio")
 	cr := getStepValue(steps, 15, latest, "cashRatio")
 	divRatio := getStepValue(steps, 18, latest, "ratio")
@@ -1062,7 +1060,7 @@ func writeModule12(b *strings.Builder, steps []StepResult, latest string, score 
 		{"能力圈", "10%", "业务可理解（主业专注度）", mapScore(getStepValue(steps, 7, latest, "ratio"), 10, 30, 5), "投资类资产占比反映主业专注度"},
 		{"安全边际", "20%", "估值有折扣（暂缺股价）", 3, "未接入实时股价，无法计算安全边际"},
 		{"长期价值", "10%", "持续经营能力（现金流/分红）", mapScore(divRatio, 45, 70, 5), fmt.Sprintf("分红占比 %.1f%%，分红可持续性待观察", divRatio)},
-		{"管理层", "10%", "诚信可靠（M-Score审计质量）", mapScore(-ms, 2.22, 1.0, 5), fmt.Sprintf("M-Score=%.3f%s", ms, auditComment(ms))},
+		{"管理层", "10%", "诚信可靠（A-Score审计质量）", mapScore(100-getStepValue(steps, 8, latest, "AScore"), 40, 1.0, 5), fmt.Sprintf("A-Score=%.1f%s", getStepValue(steps, 8, latest, "AScore"), auditCommentAScore(getStepValue(steps, 8, latest, "AScore")))},
 		{"财务稳健", "20%", "现金流健康/负债率低", (mapScore(dr, 60, 80, 5) + mapScore(cr, 100, 50, 5)) / 2, fmt.Sprintf("负债率%.1f%%，现金含量%.1f%%", dr, cr)},
 		{"供需格局", "15%", "成长空间（营收增长率）", mapScore(growth, 20, 0, 5), growthComment(steps, latest)},
 	}
@@ -1088,11 +1086,11 @@ func writeModule12(b *strings.Builder, steps []StepResult, latest string, score 
 	} else {
 		b.WriteString(fmt.Sprintf("- ✅ 业绩正增长？**是**（营收%.2f%%，净利润%.2f%%）\n", growth, pg))
 	}
-	if ms > -2.22 {
-		b.WriteString(fmt.Sprintf("- ❌ 财报可信？**存疑**（M-Score %.3f）\n", ms))
-	} else {
-		b.WriteString(fmt.Sprintf("- ✅ 财报可信？**通过**（M-Score %.3f）\n", ms))
-	}
+		if ascore := getStepValue(steps, 8, latest, "AScore"); ascore >= 60 {
+			b.WriteString(fmt.Sprintf("- ❌ 财报可信？**存疑**（A-Score %.1f）\n", ascore))
+		} else {
+			b.WriteString(fmt.Sprintf("- ✅ 财报可信？**通过**（A-Score %.1f）\n", ascore))
+		}
 	b.WriteString("\n---\n\n")
 }
 
@@ -1203,7 +1201,7 @@ func writeModule14(b *strings.Builder, symbol string, steps []StepResult, latest
 		b.WriteString("**策略A：逢低试探（推荐）**\n")
 		b.WriteString("- 财务整体尚可，存在部分短板\n")
 		b.WriteString("- 建议仓位 3-5%，分批试探\n")
-		b.WriteString("- 等待 M-Score 或毛利率改善后再加仓\n\n")
+		b.WriteString("- 等待 A-Score 或毛利率改善后再加仓\n\n")
 		b.WriteString("**策略B：持有者**\n")
 		b.WriteString("- 维持现有仓位，观察关键指标修复情况\n")
 	} else if weighted >= 60 {
@@ -1250,7 +1248,7 @@ func writeModule15(b *strings.Builder, symbol string, steps []StepResult, years 
 	b.WriteString(fmt.Sprintf("| 归母净利润 | %.2f亿 | %s | %s |\n", prof/1e8, yoyFmt(prof, prevProf), yoyEmoji(prof, prevProf)))
 	b.WriteString(fmt.Sprintf("| 毛利率 | %.2f%% | - | %s |\n", getStepValue(steps, 10, latest, "grossMargin"), gmEmoji(getStepValue(steps, 10, latest, "grossMargin"))))
 	b.WriteString(fmt.Sprintf("| 资产负债率 | %.2f%% | - | %s |\n", getStepValue(steps, 3, latest, "debtRatio"), drEmoji(getStepValue(steps, 3, latest, "debtRatio"))))
-	b.WriteString(fmt.Sprintf("| M-Score | %.3f | - | %s |\n", getStepValue(steps, 8, latest, "MScore"), msEmoji(getStepValue(steps, 8, latest, "MScore"))))
+	b.WriteString(fmt.Sprintf("| A-Score | %.1f | - | %s |\n", getStepValue(steps, 8, latest, "AScore"), asEmoji(getStepValue(steps, 8, latest, "AScore"))))
 	if score != nil {
 		b.WriteString(fmt.Sprintf("| 十八步评分 | %.0f分（%s） | - | - |\n", score.RawScore, score.Grade))
 	}
@@ -1404,9 +1402,9 @@ func oneSentenceAdvice(symbol string, score float64, steps []StepResult, year st
 		parts = append(parts, "负债率偏高，需关注偿债压力")
 	}
 
-	ms := getStepValue(steps, 8, year, "MScore")
-	if ms > -2.22 {
-		parts = append(parts, fmt.Sprintf("M-Score %.2f提示需警惕财报操纵嫌疑", ms))
+	ascore := getStepValue(steps, 8, year, "AScore")
+	if ascore >= 60 {
+		parts = append(parts, fmt.Sprintf("A-Score %.1f 提示需警惕财报操纵或偿债风险", ascore))
 	}
 
 	parts = append(parts, fmt.Sprintf("建议%s", strategyAdvice(score)))
@@ -1623,7 +1621,6 @@ func reverseComment(steps []StepResult, year string, score *YearScore) string {
 func buffettScore(steps []StepResult, year string, score *YearScore) float64 {
 	roe := getStepValue(steps, 16, year, "roe")
 	gm := getStepValue(steps, 10, year, "grossMargin")
-	ms := getStepValue(steps, 8, year, "MScore")
 	cr := getStepValue(steps, 15, year, "cashRatio")
 	dr := getStepValue(steps, 3, year, "debtRatio")
 	ia := getStepValue(steps, 7, year, "ratio")
@@ -1635,7 +1632,7 @@ func buffettScore(steps []StepResult, year string, score *YearScore) float64 {
 	if gm >= 40 {
 		s += 1
 	}
-	if ms <= -2.22 {
+	if getStepValue(steps, 8, year, "AScore") < 50 {
 		s += 1
 	}
 	if cr >= 100 {
@@ -1682,8 +1679,8 @@ func positiveFactors(steps []StepResult, year string) []string {
 	if cr := getStepValue(steps, 15, year, "cashRatio"); cr >= 100 {
 		ps = append(ps, fmt.Sprintf("净利润现金含量 %.2f%%，盈利质量高", cr))
 	}
-	if ms := getStepValue(steps, 8, year, "MScore"); ms <= -2.22 {
-		ps = append(ps, fmt.Sprintf("M-Score %.3f，财报操纵风险低", ms))
+	if ascore := getStepValue(steps, 8, year, "AScore"); ascore < 50 {
+		ps = append(ps, fmt.Sprintf("A-Score %.1f，综合财务风险可控", ascore))
 	}
 	return ps
 }
@@ -1760,13 +1757,13 @@ func extractRisks(steps []StepResult, year string) []RiskItem {
 			ratio := getStepValue(steps, 7, year, "ratio")
 			risks = append(risks, RiskItem{"主业专注", fmt.Sprintf("投资类资产占比%.1f%%", ratio), "🟠 中高", "主业专注度不足"})
 		case 8:
-			ms := getStepValue(steps, 8, year, "MScore")
-			if ms > -2.22 {
+			ascore := getStepValue(steps, 8, year, "AScore")
+			if ascore >= 60 {
 				severity := "🟠 中高"
-				if ms > -1.78 {
+				if ascore >= 70 {
 					severity = "🔴 高"
 				}
-				risks = append(risks, RiskItem{"财务造假风险", fmt.Sprintf("M-Score %.2f", ms), severity, "存在财报操纵嫌疑，建议深入核查"})
+				risks = append(risks, RiskItem{"财务造假/偿债风险", fmt.Sprintf("A-Score %.1f", ascore), severity, "存在财报操纵或偿债压力嫌疑，建议深入核查"})
 			}
 		case 9:
 			g := getStepValue(steps, 9, year, "growthRate")
@@ -1909,10 +1906,10 @@ func drEmoji(v float64) string {
 	return "🔴 危险"
 }
 
-func msEmoji(v float64) string {
-	if v <= -2.22 {
+func asEmoji(v float64) string {
+	if v < 50 {
 		return "🟢 安全"
-	} else if v <= -1.78 {
+	} else if v < 60 {
 		return "🟡 关注"
 	}
 	return "🔴 风险"
@@ -1927,10 +1924,10 @@ func moatComment(gm, roe float64) string {
 	return "毛利率偏低，护城河待验证"
 }
 
-func auditComment(ms float64) string {
-	if ms <= -2.22 {
+func auditCommentAScore(ascore float64) string {
+	if ascore < 50 {
 		return "，审计质量可信"
-	} else if ms <= -1.78 {
+	} else if ascore < 60 {
 		return "，需关注"
 	}
 	return "，风险较高"

@@ -47,7 +47,7 @@ func RunAnalysisWithAll(baseDir, symbol string, comp *ComparableAnalysis, quote 
 		step5Receivables(data),
 		step6FixedAssets(data),
 		step7InvestmentAssets(data),
-		step8MScore(data),
+		step8RiskAnalysis(data),
 		step9RevenueGrowth(data),
 		step10GrossMargin(data),
 		step11OperationEfficiency(data),

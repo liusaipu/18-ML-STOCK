@@ -61,7 +61,7 @@ func BuildComparableAnalysis(baseDir string, comparables []string, nameMap map[s
 
 		steps := []StepResult{
 			step3Solvency(data),
-			step8MScore(data),
+			step8RiskAnalysis(data),
 			step9RevenueGrowth(data),
 			step10GrossMargin(data),
 			step15CashFlowQuality(data),
