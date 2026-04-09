@@ -875,8 +875,8 @@ func (a *App) analyzeStockInternal(symbol string, overwriteLatest bool, customRI
 					fmt.Printf("[ML] Engine B failed for %s: %v\n", symbol, err)
 				}
 			}
-			// Engine A
-			if len(klines) >= 16 && sentimentData != nil {
+			// Engine A（价格序列始终可用；sentiment 为 nil 时 text_seq 补 0）
+			if len(klines) >= 16 {
 				mlKlines := make([]analyzer.MLKlineData, len(klines))
 				for i, k := range klines {
 					mlKlines[i] = analyzer.MLKlineData{

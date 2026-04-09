@@ -3,10 +3,12 @@ package analyzer
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 )
 
 // MLSentimentPrediction A 舆情+量价高频预警结果
@@ -27,7 +29,7 @@ type MLFinancialPrediction struct {
 	HealthScore      float64 `json:"health_score"`
 }
 
-// findProjectRoot 从 binary 所在目录向上查找项目根目录（通过 ml_models/inference.py 标记）
+// findProjectRoot 从指定目录向上查找项目根目录（通过 ml_models/inference.py 标记）
 func findProjectRoot(start string) string {
 	dir := start
 	for i := 0; i < 10; i++ {
@@ -43,22 +45,53 @@ func findProjectRoot(start string) string {
 	return ""
 }
 
+// projectRootCandidates 返回可能的项目根目录候选列表
+func projectRootCandidates() []string {
+	seen := make(map[string]bool)
+	var roots []string
+
+	add := func(p string) {
+		if p == "" || seen[p] {
+			return
+		}
+		seen[p] = true
+		roots = append(roots, p)
+	}
+
+	// 1. runtime.Caller(0) 路径
+	if _, b, _, ok := runtime.Caller(0); ok {
+		add(findProjectRoot(filepath.Dir(b)))
+	}
+
+	// 2. 当前工作目录
+	if cwd, err := os.Getwd(); err == nil {
+		add(findProjectRoot(cwd))
+	}
+
+	// 3. 可执行文件所在目录
+	if exe, err := os.Executable(); err == nil {
+		exe, _ = filepath.EvalSymlinks(exe)
+		add(findProjectRoot(filepath.Dir(exe)))
+	}
+
+	return roots
+}
+
 // mlInferenceScriptPath 返回推理脚本绝对路径
 func mlInferenceScriptPath() string {
-	_, b, _, _ := runtime.Caller(0)
-	base := filepath.Dir(b)
-	root := findProjectRoot(base)
-	if root != "" {
-		return filepath.Join(root, "ml_models", "inference.py")
+	for _, root := range projectRootCandidates() {
+		p := filepath.Join(root, "ml_models", "inference.py")
+		if _, err := os.Stat(p); err == nil {
+			return p
+		}
 	}
-	return filepath.Join(base, "..", "ml_models", "inference.py")
+	// fallback
+	_, b, _, _ := runtime.Caller(0)
+	return filepath.Join(filepath.Dir(b), "..", "ml_models", "inference.py")
 }
 
 func resolveMLPythonExecutable() string {
-	_, b, _, _ := runtime.Caller(0)
-	base := filepath.Dir(b)
-	root := findProjectRoot(base)
-	if root != "" {
+	for _, root := range projectRootCandidates() {
 		venvPython := filepath.Join(root, ".venv", "bin", "python3")
 		if _, err := os.Stat(venvPython); err == nil {
 			return venvPython
@@ -127,18 +160,209 @@ func RunMLEngineA(textSeq [][]float64, priceSeq [][]float64) (*MLSentimentPredic
 		result.MovementLabel = d
 	}
 	if p, ok := resp["direction_probs"].(map[string]any); ok {
-		if up, ok := p["up"].(float64); ok {
-			result.MovementProb = up
-		} else if stay, ok := p["stay"].(float64); ok {
-			result.MovementProb = stay
-		} else if down, ok := p["down"].(float64); ok {
-			result.MovementProb = down
+		key := result.MovementLabel
+		if prob, ok := p[key].(float64); ok {
+			result.MovementProb = prob
 		}
 	}
 	if a, ok := resp["abnormal_prob"].(float64); ok {
 		result.AnomalyProb = a
 	}
 	return result, nil
+}
+
+// BuildMLSummary 基于 Engine A/B + 技术面 + 活跃度 + 舆情 融合生成 2-4 周综合预测
+func BuildMLSummary(ml *MLPredictionData, technical *TechnicalData, activity *ActivityData, sentiment *SentimentData) *MLSummary {
+	if ml == nil || (ml.Sentiment == nil && ml.Financial == nil) {
+		return nil
+	}
+
+	a := ml.Sentiment
+	b := ml.Financial
+
+	// 1. 方向得分 (-3 ~ +3)
+	dirScore := 0.0
+
+	if a != nil {
+		w := a.MovementProb / 0.55
+		if w > 1.0 {
+			w = 1.0
+		}
+		switch a.MovementLabel {
+		case "up":
+			dirScore += 1.5 * w
+		case "down":
+			dirScore -= 1.5 * w
+		}
+	}
+
+	if b != nil {
+		if b.HealthScore >= 6.0 {
+			dirScore += 1.0
+		} else if b.HealthScore <= 4.0 {
+			dirScore -= 1.0
+		}
+		if b.ROEDirection == "up" {
+			dirScore += 0.5
+		} else if b.ROEDirection == "down" {
+			dirScore -= 0.5
+		}
+		if b.RevenueDirection == "up" {
+			dirScore += 0.5
+		} else if b.RevenueDirection == "down" {
+			dirScore -= 0.5
+		}
+	}
+
+	techBull := technical != nil && technical.Score >= 65 &&
+		(technical.Trend == "上升" || technical.MAStatus == "多头排列" || technical.MACDStatus == "金叉" || technical.MACDStatus == "零轴上")
+	techBear := technical != nil && technical.Score <= 45 &&
+		(technical.Trend == "下降" || technical.MAStatus == "空头排列" || technical.MACDStatus == "死叉" || technical.MACDStatus == "零轴下")
+
+	if techBull {
+		dirScore += 1.0
+	} else if techBear {
+		dirScore -= 1.0
+	}
+
+	if activity != nil {
+		if activity.Score >= 75 && activity.AmountScore >= 70 {
+			dirScore += 0.8
+		} else if activity.Score >= 60 {
+			dirScore += 0.4
+		} else if activity.Score <= 40 {
+			dirScore -= 0.6
+		}
+	}
+
+	sentimentHot := sentiment != nil && sentiment.HasData && sentiment.Score >= 0.4 && sentiment.HeatIndex >= 60
+	sentimentWarm := sentiment != nil && sentiment.HasData && sentiment.Score >= 0.2
+	sentimentCold := sentiment != nil && sentiment.HasData && sentiment.Score <= -0.3
+
+	if sentimentHot {
+		dirScore += 0.8
+	} else if sentimentWarm {
+		dirScore += 0.4
+	} else if sentimentCold {
+		dirScore -= 0.6
+	}
+
+	if dirScore > 3.0 {
+		dirScore = 3.0
+	}
+	if dirScore < -3.0 {
+		dirScore = -3.0
+	}
+
+	// 2. 波动宽度
+	width := 6.0
+	if math.Abs(dirScore) >= 2.0 {
+		width = 10.0
+	} else if math.Abs(dirScore) >= 1.2 {
+		width = 7.0
+	} else if math.Abs(dirScore) >= 0.5 {
+		width = 5.0
+	}
+
+	if a != nil && a.AnomalyProb >= 0.35 {
+		width += 3.0
+	}
+	if activity != nil && activity.Score >= 80 {
+		width += 2.0
+	}
+	if technical != nil && (technical.Score >= 85 || technical.Score <= 25) {
+		width += 2.0
+	}
+
+	center := dirScore * 2.5
+	if center > 8.0 {
+		center = 8.0
+	}
+	if center < -8.0 {
+		center = -8.0
+	}
+
+	half := width / 2.0
+	low := center - half
+	high := center + half
+
+	// 3. 映射方向文案
+	var direction string
+	switch {
+	case dirScore >= 1.8:
+		direction = "上涨"
+	case dirScore >= 1.0:
+		direction = "谨慎观望（偏暖）"
+	case dirScore >= -0.3 && dirScore <= 0.3:
+		direction = "震荡"
+	case dirScore > -1.8:
+		direction = "谨慎观望（偏冷）"
+	default:
+		direction = "下跌"
+	}
+
+	// 4. 动态生成理由
+	var parts []string
+	if techBull {
+		parts = append(parts, "技术面呈多头信号")
+	} else if techBear {
+		parts = append(parts, "技术面存在空头压力")
+	} else if technical != nil && technical.Score > 0 {
+		parts = append(parts, "技术形态"+technical.Grade)
+	}
+
+	if activity != nil && activity.Score >= 75 {
+		parts = append(parts, "交易活跃度较高")
+	} else if activity != nil && activity.Score <= 40 {
+		parts = append(parts, "交易活跃度低迷")
+	} else if activity != nil && activity.Score > 0 {
+		parts = append(parts, "交易活跃度"+activity.Grade)
+	}
+
+	if sentimentHot {
+		parts = append(parts, "舆情情绪偏暖且市场关注度较高")
+	} else if sentimentCold {
+		parts = append(parts, "舆情情绪偏冷")
+	} else if sentimentWarm {
+		parts = append(parts, "舆情情绪温和偏暖")
+	}
+
+	if b != nil {
+		if b.HealthScore >= 6.0 && (b.ROEDirection == "up" || b.RevenueDirection == "up") {
+			parts = append(parts, "财务基本面持续改善")
+		} else if b.HealthScore <= 4.0 && (b.ROEDirection == "down" || b.RevenueDirection == "down") {
+			parts = append(parts, "财务基本面承压")
+		} else if b.HealthScore >= 6.0 {
+			parts = append(parts, "财务健康度良好")
+		} else if b.HealthScore <= 4.0 {
+			parts = append(parts, "财务健康度偏弱")
+		}
+	}
+
+	if a != nil {
+		switch a.MovementLabel {
+		case "up":
+			parts = append(parts, "Engine-A 情绪价格模型显示上涨动能")
+		case "down":
+			parts = append(parts, "Engine-A 情绪价格模型显示调整压力")
+		case "flat":
+			parts = append(parts, "Engine-A 情绪价格模型信号中性")
+		}
+	}
+
+	reason := "未来2-4周"
+	if len(parts) > 0 {
+		reason += "，" + strings.Join(parts, "，")
+	}
+	reason += "。综合判断为" + direction + "。"
+
+	return &MLSummary{
+		HasData:   true,
+		Direction: direction,
+		RangeLow:  low,
+		RangeHigh: high,
+		Reason:    reason,
+	}
 }
 
 // RunMLEngineB 运行引擎 B 推理

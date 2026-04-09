@@ -97,6 +97,11 @@ func RunAnalysisWithAll(baseDir, symbol string, comp *ComparableAnalysis, quote 
 		}
 	}
 
+	// 生成 ML 综合预测摘要
+	if ml != nil {
+		ml.Summary = BuildMLSummary(ml, technical, activity, sentiment)
+	}
+
 	md := GenerateMarkdown(symbol, data.Years, steps, scores, comp, quote, sentiment, policy, technical, activity, ml, rim)
 
 	report := &AnalysisReport{

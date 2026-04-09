@@ -93,10 +93,20 @@ type SentimentData struct {
 	HasData        bool               `json:"hasData"`
 }
 
+// MLSummary 基于双引擎融合的2-4周综合预测摘要
+type MLSummary struct {
+	Direction string  `json:"direction"`
+	RangeLow  float64 `json:"rangeLow"`
+	RangeHigh float64 `json:"rangeHigh"`
+	Reason    string  `json:"reason"`
+	HasData   bool    `json:"hasData"`
+}
+
 // MLPredictionData 机器学习预测结果
 type MLPredictionData struct {
 	Sentiment *MLSentimentPrediction `json:"sentiment,omitempty"`
 	Financial *MLFinancialPrediction `json:"financial,omitempty"`
+	Summary   *MLSummary             `json:"summary,omitempty"`
 }
 
 // RIMData 剩余收益模型数据

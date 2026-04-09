@@ -808,6 +808,18 @@ func writeModule9(b *strings.Builder, steps []StepResult, latest, prev string, m
 		b.WriteString("> **说明**: 以下预测结果由 ONNX 双引擎模型生成。\n\n")
 	}
 
+	// 双引擎融合总结（2-4周预测）
+	if ml != nil && ml.Summary != nil && ml.Summary.HasData {
+		sum := ml.Summary
+		if sum.RangeHigh > 0 && sum.RangeLow >= 0 {
+			b.WriteString(fmt.Sprintf("> **未来 2-4 周预测**: %s，预计涨幅 **+%.0f%% ~ +%.0f%%**。%s\n\n", sum.Direction, sum.RangeLow, sum.RangeHigh, sum.Reason))
+		} else if sum.RangeHigh <= 0 && sum.RangeLow < 0 {
+			b.WriteString(fmt.Sprintf("> **未来 2-4 周预测**: %s，预计跌幅 **%.0f%% ~ %.0f%%**。%s\n\n", sum.Direction, math.Abs(sum.RangeHigh), math.Abs(sum.RangeLow), sum.Reason))
+		} else {
+			b.WriteString(fmt.Sprintf("> **未来 2-4 周预测**: %s，预计波动区间 **%.0f%% ~ +%.0f%%**。%s\n\n", sum.Direction, sum.RangeLow, sum.RangeHigh, sum.Reason))
+		}
+	}
+
 	// 引擎B：财务LSTM
 	if ml != nil && ml.Financial != nil {
 		fp := ml.Financial
