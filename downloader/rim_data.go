@@ -53,16 +53,26 @@ func fetchRIMScriptPath() string {
 	return filepath.Join(base, "..", "scripts", "fetch_rim_data.py")
 }
 
-// resolvePythonExecutable 优先使用项目 .venv/bin/python3
+// resolvePythonExecutable 优先使用项目 .venv 中的 Python
 func resolvePythonExecutable() string {
 	_, b, _, _ := runtime.Caller(0)
 	base := filepath.Dir(b)
 	root := findProjectRootByMarker(base, filepath.Join("scripts", "fetch_rim_data.py"))
 	if root != "" {
+		// Windows: .venv\Scripts\python.exe
+		// Unix: .venv/bin/python3
 		venvPython := filepath.Join(root, ".venv", "bin", "python3")
 		if _, err := os.Stat(venvPython); err == nil {
 			return venvPython
 		}
+		venvPythonWin := filepath.Join(root, ".venv", "Scripts", "python.exe")
+		if _, err := os.Stat(venvPythonWin); err == nil {
+			return venvPythonWin
+		}
+	}
+	// Windows fallback
+	if runtime.GOOS == "windows" {
+		return "python"
 	}
 	return "python3"
 }

@@ -22,10 +22,20 @@ func resolveRiskCrawlerPython() string {
 	base := filepath.Dir(b)
 	root := findProjectRootByMarker(base, filepath.Join("ml_models", "risk_crawler.py"))
 	if root != "" {
+		// Windows: .venv\Scripts\python.exe
+		// Unix: .venv/bin/python3
 		venvPython := filepath.Join(root, ".venv", "bin", "python3")
 		if _, err := os.Stat(venvPython); err == nil {
 			return venvPython
 		}
+		venvPythonWin := filepath.Join(root, ".venv", "Scripts", "python.exe")
+		if _, err := os.Stat(venvPythonWin); err == nil {
+			return venvPythonWin
+		}
+	}
+	// Windows fallback
+	if runtime.GOOS == "windows" {
+		return "python"
 	}
 	return "python3"
 }

@@ -203,14 +203,15 @@ function App() {
     { label: '模块5: 十五五政策匹配度评估', id: '模块5-十五五政策匹配度评估' },
     { label: '模块6: 实时行情数据', id: '模块6-实时行情数据' },
     { label: '模块7: 剩余收益模型估值(RIM)', id: '模块7-剩余收益模型估值rim' },
-    { label: '模块8: 技术面分析', id: '模块8-技术面分析' },
-    { label: '模块9: ML机器学习预测', id: '模块9-ml机器学习预测' },
-    { label: '模块10: 智能选股6大条件', id: '模块10-智能选股6大条件' },
-    { label: '模块11: 芒格逆向思维检查', id: '模块11-芒格逆向思维检查' },
-    { label: '模块12: 巴菲特-芒格投资检查清单', id: '模块12-巴菲特-芒格投资检查清单' },
-    { label: '模块13: 社交媒体情绪监控', id: '模块13-社交媒体情绪监控' },
-    { label: '模块14: 综合投资建议', id: '模块14-综合投资建议' },
-    { label: '模块15: 结论与附录', id: '模块15-结论与附录' },
+    { label: '模块8: A-Score 综合风险画像', id: '模块8-a-score-综合风险画像' },
+    { label: '模块9: 技术面分析', id: '模块9-技术面分析' },
+    { label: '模块10: ML机器学习预测', id: '模块10-ml机器学习预测' },
+    { label: '模块11: 智能选股6大条件', id: '模块11-智能选股6大条件' },
+    { label: '模块12: 芒格逆向思维检查', id: '模块12-芒格逆向思维检查' },
+    { label: '模块13: 巴菲特-芒格投资检查清单', id: '模块13-巴菲特-芒格投资检查清单' },
+    { label: '模块14: 社交媒体情绪监控', id: '模块14-社交媒体情绪监控' },
+    { label: '模块15: 综合投资建议', id: '模块15-综合投资建议' },
+    { label: '模块16: 结论与附录', id: '模块16-结论与附录' },
   ]
 
   const handleTocJump = (id: string) => {
@@ -1631,7 +1632,6 @@ function App() {
       <section className="report-panel">
         <div className="report-tabs">
           <div className="report-tabs-left">
-            <span className="tab active">分析报告</span>
             {historyFiles.length > 0 && (
               <select
                 className="history-select"
@@ -1651,8 +1651,19 @@ function App() {
                 className="toc-select"
                 value=""
                 onChange={(e) => {
-                  handleTocJump(e.target.value)
-                  e.target.value = ''
+                  const id = e.target.value
+                  if (id) {
+                    handleTocJump(id)
+                    const select = e.target
+                    const label = tocSections.find((s) => s.id === id)?.label || '📑 跳转章节'
+                    // 临时改写第一个 option 文本来模拟显示选中项
+                    const firstOpt = select.querySelector('option:first-child') as HTMLOptionElement | null
+                    if (firstOpt) {
+                      firstOpt.textContent = '⬅ ' + label
+                      firstOpt.value = ''
+                    }
+                    select.value = ''
+                  }
                 }}
               >
                 <option value="" disabled>📑 跳转章节</option>
