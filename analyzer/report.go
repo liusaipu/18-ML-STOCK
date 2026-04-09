@@ -379,7 +379,37 @@ func writeModule3(b *strings.Builder, steps []StepResult, years []string, latest
 			b.WriteString(fmt.Sprintf("| %s | %s | %s |\n", r.Category, r.Indicator, r.Severity))
 		}
 	}
-	b.WriteString("\n---\n\n")
+	b.WriteString("\n")
+
+	b.WriteString("## 3.5 A-Score 综合风险分析\n\n")
+	b.WriteString("A-Score 是基于 Beneish M-Score、Altman Z-Score、现金流偏离度、应收账款异常及毛利率波动构建的 A 股适配综合风险评分（0-100，越高越危险）。\n\n")
+	step8 := steps[7]
+	if yd, ok := step8.YearlyData[latest]; ok && yd != nil {
+		if _, hasAScore := yd["AScore"]; hasAScore {
+			ms := anyToFloat64(yd["MScore"])
+			zs := anyToFloat64(yd["ZScore"])
+			cd := anyToFloat64(yd["CashDev"])
+			ar := anyToFloat64(yd["ARRisk"])
+			gm := anyToFloat64(yd["GMRisk"])
+			as := anyToFloat64(yd["AScore"])
+			b.WriteString("| 子指标 | 数值 | 风险说明 |\n")
+			b.WriteString("|--------|------|----------|\n")
+			b.WriteString(fmt.Sprintf("| **M-Score** | %.3f | Beneish 财务造假风险指标 |\n", ms))
+			b.WriteString(fmt.Sprintf("| **Z-Score** | %.2f | Altman 破产风险评分 |\n", zs))
+			b.WriteString(fmt.Sprintf("| **现金流偏离度** | %.1f%% | 净利润与经营现金流背离程度 |\n", cd))
+			b.WriteString(fmt.Sprintf("| **应收账款异常度** | %.1f%% | 应收增速 vs 营收增速偏离 |\n", ar))
+			b.WriteString(fmt.Sprintf("| **毛利率异常波动** | %.1f%% | 毛利率连续恶化信号 |\n", gm))
+			b.WriteString(fmt.Sprintf("| **A-Score（综合）** | **%.1f** | **%s** |\n", as, ascoreComment(as)))
+			b.WriteString("\n")
+			b.WriteString(fmt.Sprintf("> **风险评级**: %s\n\n", ascoreBadge(as)))
+		} else {
+			b.WriteString("> 当前数据不足以计算 A-Score。\n\n")
+		}
+	} else {
+		b.WriteString("> 当前数据不足以计算 A-Score。\n\n")
+	}
+
+	b.WriteString("---\n\n")
 }
 
 // ========== 模块4: 行业横向对比分析 ==========
@@ -2033,4 +2063,30 @@ func writeComparableTrendComment(b *strings.Builder, steps []StepResult, comp *C
 	} else if latestCR < oldestCR-10 {
 		b.WriteString("- **现金流质量下滑**：净利润中的现金比例在下降。\n")
 	}
+}
+
+func ascoreComment(v float64) string {
+	if v >= 70 {
+		return "综合财务风险较高，建议深入核查"
+	}
+	if v >= 60 {
+		return "综合财务风险中等，需保持关注"
+	}
+	if v >= 40 {
+		return "综合财务风险可控"
+	}
+	return "综合财务风险低，基本面相对稳健"
+}
+
+func ascoreBadge(v float64) string {
+	if v >= 70 {
+		return "🔴 高风险（A-Score ≥ 70）"
+	}
+	if v >= 60 {
+		return "🟡 中风险（A-Score 60-70）"
+	}
+	if v >= 40 {
+		return "🟢 低风险（A-Score 40-60）"
+	}
+	return "🟢 安全（A-Score < 40）"
 }

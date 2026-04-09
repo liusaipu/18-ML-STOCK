@@ -135,8 +135,46 @@ func step8RiskAnalysis(data *FinancialData) StepResult {
 		mRisk := mapMScoreToRisk(mscore)
 		zRisk := mapZScoreToRisk(zscore)
 
-		// 7. A-Score 综合（预留 20% 给股权质押+监管问询，缺失时以中性 50 分填充）
-		ascore := mRisk*0.15 + zRisk*0.20 + cashDev*0.20 + arRisk*0.15 + gmRisk*0.10 + 50.0*0.20
+		// 7. 非财务爬虫风险分（0-100），缺失时以中性 50 分填充
+		crawlerRisk := 50.0
+		crawlerParts := 0
+		if data.Extras != nil {
+			if pr, ok := data.Extras["pledge_ratio"]; ok {
+				crawlerParts++
+				if pr >= 30 {
+					crawlerRisk += 50.0 // 质押比例极高
+				} else if pr >= 15 {
+					crawlerRisk += 20.0
+				} else if pr > 0 {
+					crawlerRisk += 5.0
+				}
+			}
+			if iq, ok := data.Extras["inquiry_count_1y"]; ok {
+				crawlerParts++
+				if iq >= 2 {
+					crawlerRisk += 30.0
+				} else if iq >= 1 {
+					crawlerRisk += 15.0
+				}
+			}
+			if rc, ok := data.Extras["reduction_count_1y"]; ok {
+				crawlerParts++
+				if rc >= 3 {
+					crawlerRisk += 20.0
+				} else if rc >= 1 {
+					crawlerRisk += 8.0
+				}
+			}
+			if crawlerParts > 0 {
+				// 将累加值标准化到 0-100（基础 50 + 各维度累加，最多约 100）
+				if crawlerRisk > 100.0 {
+					crawlerRisk = 100.0
+				}
+			}
+		}
+
+		// 8. A-Score 综合
+		ascore := mRisk*0.15 + zRisk*0.20 + cashDev*0.20 + arRisk*0.15 + gmRisk*0.10 + crawlerRisk*0.20
 		if ascore > 100.0 {
 			ascore = 100.0
 		}

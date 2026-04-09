@@ -923,6 +923,28 @@ func (a *App) analyzeStockInternal(symbol string, overwriteLatest bool, customRI
 		}
 	}
 
+	// 并发 3: A-Score 非财务风险爬虫（股权质押、问询函、减持）
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		if rc, err := downloader.FetchRiskCrawlerData(symbol); err == nil {
+			if finData != nil {
+				finData.Extras = make(map[string]float64)
+				if rc.PledgeRatio != nil {
+					finData.Extras["pledge_ratio"] = *rc.PledgeRatio
+				}
+				if rc.InquiryCount1Y != nil {
+					finData.Extras["inquiry_count_1y"] = float64(*rc.InquiryCount1Y)
+				}
+				if rc.ReductionCount1Y != nil {
+					finData.Extras["reduction_count_1y"] = float64(*rc.ReductionCount1Y)
+				}
+			}
+		} else {
+			fmt.Printf("[RiskCrawler] failed for %s: %v\n", symbol, err)
+		}
+	}()
+
 	wg.Wait()
 
 	// RIM 多期估值数据组装

@@ -14,6 +14,7 @@ type FinancialData struct {
 	BalanceSheet    map[string]map[string]float64
 	IncomeStatement map[string]map[string]float64
 	CashFlow        map[string]map[string]float64
+	Extras          map[string]float64 // 非财务风险爬虫数据（股权质押、问询函、减持等）
 }
 
 // LoadFinancialData 从 stock-analyzer 存储目录加载某股票的财务报表 JSON
