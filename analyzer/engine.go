@@ -97,9 +97,10 @@ func RunAnalysisWithAll(baseDir, symbol string, comp *ComparableAnalysis, quote 
 		}
 	}
 
-	// 生成 ML 综合预测摘要
+	// 生成 ML 综合预测摘要（融入 A-Score）
 	if ml != nil {
-		ml.Summary = BuildMLSummary(ml, technical, activity, sentiment)
+		ascore := getAScore(steps[7].YearlyData, data.Years)
+		ml.Summary = BuildMLSummary(ml, technical, activity, sentiment, ascore)
 	}
 
 	md := GenerateMarkdown(symbol, data.Years, steps, scores, comp, quote, sentiment, policy, technical, activity, ml, rim)

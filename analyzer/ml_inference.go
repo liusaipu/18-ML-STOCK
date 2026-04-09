@@ -171,8 +171,8 @@ func RunMLEngineA(textSeq [][]float64, priceSeq [][]float64) (*MLSentimentPredic
 	return result, nil
 }
 
-// BuildMLSummary 基于 Engine A/B + 技术面 + 活跃度 + 舆情 融合生成 2-4 周综合预测
-func BuildMLSummary(ml *MLPredictionData, technical *TechnicalData, activity *ActivityData, sentiment *SentimentData) *MLSummary {
+// BuildMLSummary 基于 Engine A/B + 技术面 + 活跃度 + 舆情 + A-Score 融合生成 2-4 周综合预测
+func BuildMLSummary(ml *MLPredictionData, technical *TechnicalData, activity *ActivityData, sentiment *SentimentData, ascore float64) *MLSummary {
 	if ml == nil || (ml.Sentiment == nil && ml.Financial == nil) {
 		return nil
 	}
@@ -274,6 +274,17 @@ func BuildMLSummary(ml *MLPredictionData, technical *TechnicalData, activity *Ac
 		width += 2.0
 	}
 
+	// A-Score 财务风险修正
+	if ascore >= 70 {
+		dirScore -= 1.0
+		width += 2.0
+	} else if ascore >= 60 {
+		dirScore -= 0.5
+		width += 1.0
+	} else if ascore < 40 {
+		dirScore += 0.5
+	}
+
 	center := dirScore * 2.5
 	if center > 8.0 {
 		center = 8.0
@@ -337,6 +348,14 @@ func BuildMLSummary(ml *MLPredictionData, technical *TechnicalData, activity *Ac
 		} else if b.HealthScore <= 4.0 {
 			parts = append(parts, "财务健康度偏弱")
 		}
+	}
+
+	if ascore >= 70 {
+		parts = append(parts, "A-Score 综合财务风险较高，基本面存在明显隐患")
+	} else if ascore >= 60 {
+		parts = append(parts, "A-Score 综合财务风险偏高，需警惕基本面隐患")
+	} else if ascore < 40 {
+		parts = append(parts, "A-Score 综合财务风险较低，基本面相对稳健")
 	}
 
 	if a != nil {
