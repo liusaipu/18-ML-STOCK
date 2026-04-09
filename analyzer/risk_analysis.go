@@ -101,16 +101,31 @@ func step8RiskAnalysis(data *FinancialData) StepResult {
 		x5 := safeDiv(curRev, curAsset)
 		zscore := 1.2*x1 + 1.4*x2 + 3.3*x3 + 0.6*x4 + 1.0*x5
 
-		// 3. 现金流偏离度（0-100）
+		// 3. 现金流偏离度（-20 ~ 80），双向评分
 		cashDev := 0.0
 		if curNetProfit != 0 {
-			cashDev = math.Max(0, 1.0-curOCF/curNetProfit) * 50.0
+			ratio := curOCF / curNetProfit
+			if ratio < 1.0 {
+				cashDev = (1.0 - ratio) * 50.0
+			} else if ratio > 1.2 {
+				cashDev = -15.0 // 现金流大幅优于净利润，降低风险分
+			} else if ratio > 1.0 {
+				cashDev = -5.0
+			}
 		}
-		if curRev != 0 && curSalesCash/curRev < 0.8 {
-			cashDev += 15.0
+		if curRev != 0 {
+			salesRatio := curSalesCash / curRev
+			if salesRatio < 0.8 {
+				cashDev += 15.0
+			} else if salesRatio > 1.0 {
+				cashDev -= 5.0
+			}
 		}
-		if cashDev > 100.0 {
-			cashDev = 100.0
+		if cashDev > 80.0 {
+			cashDev = 80.0
+		}
+		if cashDev < -20.0 {
+			cashDev = -20.0
 		}
 
 		// 4. 应收账款异常度（0-100）
@@ -135,40 +150,50 @@ func step8RiskAnalysis(data *FinancialData) StepResult {
 		mRisk := mapMScoreToRisk(mscore)
 		zRisk := mapZScoreToRisk(zscore)
 
-		// 7. 非财务爬虫风险分（0-100），缺失时以中性 50 分填充
-		crawlerRisk := 50.0
+		// 7. 非财务爬虫风险分（0-100），基础分 30，双向调整
+		crawlerRisk := 30.0
 		crawlerParts := 0
 		if data.Extras != nil {
 			if pr, ok := data.Extras["pledge_ratio"]; ok {
 				crawlerParts++
 				if pr >= 30 {
-					crawlerRisk += 50.0 // 质押比例极高
+					crawlerRisk += 60.0 // 质押比例极高
 				} else if pr >= 15 {
-					crawlerRisk += 20.0
+					crawlerRisk += 25.0
+				} else if pr >= 5 {
+					crawlerRisk += 8.0
 				} else if pr > 0 {
-					crawlerRisk += 5.0
+					crawlerRisk -= 5.0 // 极低质押，加分
+				} else {
+					crawlerRisk -= 10.0 // 无质押，显著加分
 				}
 			}
 			if iq, ok := data.Extras["inquiry_count_1y"]; ok {
 				crawlerParts++
 				if iq >= 2 {
-					crawlerRisk += 30.0
+					crawlerRisk += 40.0
 				} else if iq >= 1 {
-					crawlerRisk += 15.0
+					crawlerRisk += 20.0
+				} else {
+					crawlerRisk -= 10.0 // 无问询函，加分
 				}
 			}
 			if rc, ok := data.Extras["reduction_count_1y"]; ok {
 				crawlerParts++
 				if rc >= 3 {
-					crawlerRisk += 20.0
+					crawlerRisk += 25.0
 				} else if rc >= 1 {
-					crawlerRisk += 8.0
+					crawlerRisk += 10.0
+				} else {
+					crawlerRisk -= 5.0 // 无减持公告，加分
 				}
 			}
 			if crawlerParts > 0 {
-				// 将累加值标准化到 0-100（基础 50 + 各维度累加，最多约 100）
 				if crawlerRisk > 100.0 {
 					crawlerRisk = 100.0
+				}
+				if crawlerRisk < 0.0 {
+					crawlerRisk = 0.0
 				}
 			}
 		}
@@ -210,26 +235,28 @@ func step8RiskAnalysis(data *FinancialData) StepResult {
 	return result
 }
 
-// mapMScoreToRisk 把原始 M-Score 映射到 0-100 风险分
+// mapMScoreToRisk 把原始 M-Score 平滑映射到 0-100 风险分
 func mapMScoreToRisk(mscore float64) float64 {
-	if mscore > -1.78 {
+	// -2.22 -> 0, -1.78 -> 100，之间线性插值
+	if mscore <= -2.22 {
+		return 0.0
+	}
+	if mscore >= -1.78 {
 		return 100.0
 	}
-	if mscore > -2.22 {
-		return 50.0
-	}
-	return 0.0
+	return (mscore + 2.22) / (-1.78 + 2.22) * 100.0
 }
 
-// mapZScoreToRisk 把 Z-Score 映射到 0-100 风险分（A股适配）
+// mapZScoreToRisk 把 Z-Score 平滑映射到 0-100 风险分（A股适配）
 func mapZScoreToRisk(z float64) float64 {
-	if z < 1.81 {
+	// 2.99 -> 0, 1.81 -> 100，之间线性插值
+	if z >= 2.99 {
+		return 0.0
+	}
+	if z <= 1.81 {
 		return 100.0
 	}
-	if z < 2.99 {
-		return 40.0
-	}
-	return 0.0
+	return (2.99 - z) / (2.99 - 1.81) * 100.0
 }
 
 // getAScore 获取最新年度的 A-Score

@@ -52,6 +52,9 @@ func GenerateMarkdown(symbol string, years []string, steps []StepResult, scores 
 	// ==================== 模块7: 剩余收益模型估值(RIM) ====================
 	writeModule7(&b, steps, latest, quote, rim)
 
+	// ==================== A-Score 综合风险画像 ====================
+	writeAScoreProfile(&b, steps, years, latest, comp)
+
 	// ==================== 模块8: 技术面分析 ====================
 	writeModule8(&b, quote, technical, activity)
 
@@ -142,6 +145,7 @@ func writeTOC(b *strings.Builder) {
 	b.WriteString("- [模块5: 十五五政策匹配度评估](#模块5-十五五政策匹配度评估)\n")
 	b.WriteString("- [模块6: 实时行情数据](#模块6-实时行情数据)\n")
 	b.WriteString("- [模块7: 剩余收益模型估值(RIM)](#模块7-剩余收益模型估值rim)\n")
+	b.WriteString("- [A-Score 综合风险画像](#a-score-综合风险画像)\n")
 	b.WriteString("- [模块8: 技术面分析](#模块8-技术面分析)\n")
 	b.WriteString("- [模块9: ML机器学习预测](#模块9-ml机器学习预测)\n")
 	b.WriteString("- [模块10: 智能选股6大条件](#模块10-智能选股6大条件)\n")
@@ -246,6 +250,8 @@ func writeModule1(b *strings.Builder, symbol string, steps []StepResult, latest,
 	} else {
 		b.WriteString(fmt.Sprintf("| **交易活跃度** | - | -/100 | 数据不足 |\n"))
 	}
+	ascore := getStepValue(steps, 8, latest, "AScore")
+	b.WriteString(fmt.Sprintf("| **A-Score风险** | %s | %.0f/100 | %s |\n", asEmoji(ascore), ascore, ascoreComment(ascore)))
 	b.WriteString(fmt.Sprintf("| **ML预测** | - | -/30 | 待接入机器学习模型 |\n"))
 	b.WriteString(fmt.Sprintf("| **逆向检查** | %s | %.0f/100 | %s |\n", scoreToStars(reverseScore(steps, latest, score)), reverseScore(steps, latest, score), reverseComment(steps, latest, score)))
 	b.WriteString(fmt.Sprintf("| **巴芒清单** | %s | %.1f/10 | %s |\n", scoreToStars(buffettScore(steps, latest, score)*10), buffettScore(steps, latest, score), buffettComment(steps, latest, score)))
