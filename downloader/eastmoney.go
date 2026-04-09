@@ -451,12 +451,13 @@ func extractNationality(jj string) string {
 	if strings.Contains(jj, "德国") {
 		return "德国"
 	}
-	// 默认中国
-	if strings.Contains(jj, "中国国籍") || strings.Contains(jj, "中国公民") || strings.Contains(jj, "无境外永久居留权") {
+	// 默认中国（东方财富接口常返回“中国籍”而非“中国国籍”）
+	if strings.Contains(jj, "中国国籍") || strings.Contains(jj, "中国籍") || strings.Contains(jj, "中国公民") ||
+		strings.Contains(jj, "无境外永久居留权") || strings.Contains(jj, "无永久境外居留权") {
 		return "中国"
 	}
-	// 兜底正则
-	re := regexp.MustCompile(`([^，。；、]{1,10})国籍`)
+	// 兜底正则：仅匹配连续汉字（避免跨越英文标点）
+	re := regexp.MustCompile(`([\p{Han}]{1,10})国籍`)
 	if m := re.FindStringSubmatch(jj); len(m) > 1 {
 		n := strings.TrimSpace(m[1])
 		if n != "" && n != "先生" && n != "女士" && n != "男" && n != "女" {
