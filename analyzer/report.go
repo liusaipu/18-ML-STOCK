@@ -74,7 +74,7 @@ func GenerateMarkdown(symbol string, years []string, steps []StepResult, scores 
 	writeModule13(&b, sentiment)
 
 	// ==================== 模块15: 综合投资建议 ====================
-	writeModule14(&b, symbol, steps, latest, latestScore, quote, rim)
+	writeModule14(&b, symbol, steps, latest, latestScore, quote, rim, technical, ml)
 
 	// ==================== 模块16: 结论与附录 ====================
 	writeModule15(&b, symbol, steps, years, latest, latestScore)
@@ -822,6 +822,13 @@ func writeModule8(b *strings.Builder, quote *QuoteData, technical *TechnicalData
 		b.WriteString(fmt.Sprintf("| 技术形态 | %s | %s |\n", technical.Pattern, technical.SupportResistance))
 		b.WriteString("\n")
 		b.WriteString(fmt.Sprintf("> **综合结论**: %s\n\n", technical.Comment))
+
+		b.WriteString("### MACD 走势图\n\n")
+		b.WriteString("<div class=\"chart-macd\"></div>\n\n")
+		b.WriteString("### RSI(14) 走势图\n\n")
+		b.WriteString("<div class=\"chart-rsi\"></div>\n\n")
+		b.WriteString("### 布林带走势图\n\n")
+		b.WriteString("<div class=\"chart-bollinger\"></div>\n\n")
 	}
 
 	if activity != nil && activity.Score > 0 && activity.PotentialHint != "" {
@@ -1203,7 +1210,7 @@ func writeModule13(b *strings.Builder, sentiment *SentimentData) {
 }
 
 // ========== 模块15: 综合投资建议 ==========
-func writeModule14(b *strings.Builder, symbol string, steps []StepResult, latest string, score *YearScore, quote *QuoteData, rim *RIMData) {
+func writeModule14(b *strings.Builder, symbol string, steps []StepResult, latest string, score *YearScore, quote *QuoteData, rim *RIMData, technical *TechnicalData, ml *MLPredictionData) {
 	b.WriteString("# 模块15: 综合投资建议\n\n")
 
 	weighted := 0.0
@@ -1226,7 +1233,8 @@ func writeModule14(b *strings.Builder, symbol string, steps []StepResult, latest
 	}
 	b.WriteString("\n")
 
-	entryRange, stopLoss, target := formatTradeLevels(quote, rim)
+	ascore := getStepValue(steps, 8, latest, "AScore")
+	entryRange, stopLoss, target := formatTradeLevels(quote, rim, technical, ml, ascore)
 
 	b.WriteString("## 15.2 投资建议\n\n")
 	b.WriteString("| 项目 | 建议 |\n")
@@ -1272,40 +1280,72 @@ func writeModule14(b *strings.Builder, symbol string, steps []StepResult, latest
 	b.WriteString("\n---\n\n")
 }
 
-// formatTradeLevels 根据实时行情和 RIM 估值计算入场区间、止损位、目标位
-func formatTradeLevels(quote *QuoteData, rim *RIMData) (entry, stop, target string) {
+// formatTradeLevels 根据实时行情、RIM 估值、技术面与 ML 预测动态计算交易水位
+func formatTradeLevels(quote *QuoteData, rim *RIMData, technical *TechnicalData, ml *MLPredictionData, ascore float64) (entry, stop, target string) {
 	if quote == nil || quote.CurrentPrice <= 0 {
 		return "待接入实时行情后计算", "待接入实时行情后计算", "待接入RIM估值与行情后计算"
 	}
 	price := quote.CurrentPrice
 	hasRIM := rim != nil && rim.HasData && rim.Result != nil && rim.Result.Baseline.Value > 0
 
+	// 动态系数调整
+	stopTighten := 1.0   // 止损收紧系数（越小越紧）
+	targetFactor := 1.0  // 目标位折扣
+	entryDiscount := 1.0 // 入场区间下限折扣（越小越保守）
+
+	if ascore >= 70 {
+		stopTighten = 0.92
+		entryDiscount = 0.95
+	} else if ascore >= 60 {
+		stopTighten = 0.95
+		entryDiscount = 0.97
+	}
+	if technical != nil && technical.Score < 40 {
+		targetFactor = math.Max(0, targetFactor-0.05)
+		entryDiscount = math.Max(0, entryDiscount-0.03)
+	}
+	if ml != nil && ml.Summary != nil && ml.Summary.HasData {
+		if ml.Summary.RangeLow < 0 {
+			// ML 预测包含下跌
+			targetFactor = math.Max(0, targetFactor-0.05)
+			entryDiscount = math.Max(0, entryDiscount-0.03)
+		}
+	}
+
 	if hasRIM {
 		baseline := rim.Result.Baseline.Value
 		pessimistic := rim.Result.Pessimistic.Value
 		optimistic := rim.Result.Optimistic.Value
 
-		// 目标位：乐观情景价值
-		target = fmt.Sprintf("%.2f元 (乐观情景)", optimistic)
+		// 目标位：乐观情景价值 × 动态系数
+		targetVal := optimistic * targetFactor
+		target = fmt.Sprintf("%.2f元 (乐观情景", targetVal)
+		if targetFactor < 1.0 {
+			target += fmt.Sprintf("×%.0f%%", targetFactor*100)
+		}
+		target += ")"
 
-		// 止损位：悲观情景的85% 与 当前价的88% 取较高者（更严格）
-		stopPrice := math.Max(pessimistic*0.85, price*0.88)
+		// 止损位：悲观情景的85% 与 当前价的88%×收紧系数 取较高者
+		stopPrice := math.Max(pessimistic*0.85, price*0.88*stopTighten)
 		stop = fmt.Sprintf("%.2f元 (-%.1f%%)", stopPrice, (price-stopPrice)/price*100)
 
 		// 入场区间
+		low := price * 0.97 * entryDiscount
+		high := price * 1.02
 		switch {
 		case price <= baseline:
-			entry = fmt.Sprintf("%.2f ~ %.2f元 (现价附近可建仓)", price*0.97, price*1.02)
+			entry = fmt.Sprintf("%.2f ~ %.2f元 (现价附近可建仓)", low, high)
 		case price <= optimistic:
-			entry = fmt.Sprintf("%.2f ~ %.2f元 (等待回调至基准价值)", baseline*0.95, baseline)
+			entry = fmt.Sprintf("%.2f ~ %.2f元 (等待回调至基准价值)", baseline*0.95*entryDiscount, baseline)
 		default:
-			entry = fmt.Sprintf("%.2f ~ %.2f元 (高估/观望)", baseline*0.90, baseline*0.95)
+			entry = fmt.Sprintf("%.2f ~ %.2f元 (高估/观望)", baseline*0.90*entryDiscount, baseline*0.95)
 		}
 	} else {
 		// 无 RIM 时的简易估算
 		target = "待接入RIM估值后计算"
-		stop = fmt.Sprintf("%.2f元 (-10.0%%)", price*0.90)
-		entry = fmt.Sprintf("%.2f ~ %.2f元 (现价±2%%试探)", price*0.98, price*1.02)
+		stopPrice := price * 0.90 * stopTighten
+		stop = fmt.Sprintf("%.2f元 (-%.1f%%)", stopPrice, (price-stopPrice)/price*100)
+		entry = fmt.Sprintf("%.2f ~ %.2f元 (现价±2%%试探)", price*0.98*entryDiscount, price*1.02)
 	}
 	return
 }

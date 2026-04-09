@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import './App.css'
 import { STOCKS } from './stocks'
 import { KlineChart } from './KlineChart'
+import { MACDChart, RSIChart, BollingerChart } from './indicatorCharts'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import rehypeSlug from 'rehype-slug'
@@ -1021,7 +1022,24 @@ function App() {
         </span>
       )
     },
-  }), [report])
+    div({ className, children, ...props }: any) {
+      const code = selectedStock?.code || ''
+      if (className === 'chart-macd' && code) {
+        return <MACDChart code={code} width={520} height={220} />
+      }
+      if (className === 'chart-rsi' && code) {
+        return <RSIChart code={code} width={520} height={220} />
+      }
+      if (className === 'chart-bollinger' && code) {
+        return <BollingerChart code={code} width={520} height={220} />
+      }
+      return (
+        <div className={className} {...props}>
+          {children}
+        </div>
+      )
+    },
+  }), [report, selectedStock])
 
   return (
     <div className={`app ${theme}`}>
