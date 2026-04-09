@@ -32,7 +32,7 @@ func GenerateMarkdown(symbol string, years []string, steps []StepResult, scores 
 	writeMajorRisks(&b, symbol, steps, latest, prev, latestScore)
 
 	// ==================== 模块1: 执行摘要 ====================
-	writeModule1(&b, symbol, steps, latest, prev, latestScore, quote, technical, activity)
+	writeModule1(&b, symbol, steps, latest, prev, latestScore, quote, technical, activity, ml)
 
 	// ==================== 模块2: 换手率深度分析 ====================
 	writeModule2(&b, quote)
@@ -74,7 +74,7 @@ func GenerateMarkdown(symbol string, years []string, steps []StepResult, scores 
 	writeModule13(&b, sentiment)
 
 	// ==================== 模块15: 综合投资建议 ====================
-	writeModule14(&b, symbol, steps, latest, latestScore)
+	writeModule14(&b, symbol, steps, latest, latestScore, quote, rim)
 
 	// ==================== 模块16: 结论与附录 ====================
 	writeModule15(&b, symbol, steps, years, latest, latestScore)
@@ -218,7 +218,7 @@ func writeEightIndicatorsHighlight(b *strings.Builder, steps []StepResult, lates
 }
 
 // ========== 模块1: 执行摘要 ==========
-func writeModule1(b *strings.Builder, symbol string, steps []StepResult, latest, prev string, score *YearScore, quote *QuoteData, technical *TechnicalData, activity *ActivityData) {
+func writeModule1(b *strings.Builder, symbol string, steps []StepResult, latest, prev string, score *YearScore, quote *QuoteData, technical *TechnicalData, activity *ActivityData, ml *MLPredictionData) {
 	b.WriteString("# 模块1: 执行摘要\n\n")
 
 	writeEightIndicatorsHighlight(b, steps, latest)
@@ -252,7 +252,20 @@ func writeModule1(b *strings.Builder, symbol string, steps []StepResult, latest,
 	}
 	ascore := getStepValue(steps, 8, latest, "AScore")
 	b.WriteString(fmt.Sprintf("| **A-Score风险** | %s | %.0f/100 | %s |\n", asEmoji(ascore), ascore, ascoreComment(ascore)))
-	b.WriteString(fmt.Sprintf("| **ML预测** | - | -/30 | 待接入机器学习模型 |\n"))
+	if ml != nil && ml.Summary != nil && ml.Summary.HasData {
+		sum := ml.Summary
+		var predText string
+		if sum.RangeHigh > 0 && sum.RangeLow >= 0 {
+			predText = fmt.Sprintf("%s +%.0f%%~+%.0f%%", mlDirectionCN(sum.Direction), sum.RangeLow, sum.RangeHigh)
+		} else if sum.RangeHigh <= 0 && sum.RangeLow < 0 {
+			predText = fmt.Sprintf("%s %.0f%%~%.0f%%", mlDirectionCN(sum.Direction), math.Abs(sum.RangeHigh), math.Abs(sum.RangeLow))
+		} else {
+			predText = fmt.Sprintf("%s %.0f%%~+%.0f%%", mlDirectionCN(sum.Direction), sum.RangeLow, sum.RangeHigh)
+		}
+		b.WriteString(fmt.Sprintf("| **ML预测** | - | -/30 | %s |\n", predText))
+	} else {
+		b.WriteString(fmt.Sprintf("| **ML预测** | - | -/30 | 待接入机器学习模型 |\n"))
+	}
 	b.WriteString(fmt.Sprintf("| **逆向检查** | %s | %.0f/100 | %s |\n", scoreToStars(reverseScore(steps, latest, score)), reverseScore(steps, latest, score), reverseComment(steps, latest, score)))
 	b.WriteString(fmt.Sprintf("| **巴芒清单** | %s | %.1f/10 | %s |\n", scoreToStars(buffettScore(steps, latest, score)*10), buffettScore(steps, latest, score), buffettComment(steps, latest, score)))
 	if score != nil {
@@ -1190,7 +1203,7 @@ func writeModule13(b *strings.Builder, sentiment *SentimentData) {
 }
 
 // ========== 模块15: 综合投资建议 ==========
-func writeModule14(b *strings.Builder, symbol string, steps []StepResult, latest string, score *YearScore) {
+func writeModule14(b *strings.Builder, symbol string, steps []StepResult, latest string, score *YearScore, quote *QuoteData, rim *RIMData) {
 	b.WriteString("# 模块15: 综合投资建议\n\n")
 
 	weighted := 0.0
@@ -1198,7 +1211,7 @@ func writeModule14(b *strings.Builder, symbol string, steps []StepResult, latest
 		weighted = score.RawScore*0.30 + profitScore(steps, latest)*0.25 + cashScore(steps, latest)*0.20 + growthScore(steps, latest)*0.15 + debtScore(steps, latest)*0.10
 	}
 
-	b.WriteString("## 14.1 综合评分汇总\n\n")
+	b.WriteString("## 15.1 综合评分汇总\n\n")
 	b.WriteString("| 模块 | 权重 | 得分 | 加权分 |\n")
 	b.WriteString("|------|------|------|--------|\n")
 	if score != nil {
@@ -1213,19 +1226,21 @@ func writeModule14(b *strings.Builder, symbol string, steps []StepResult, latest
 	}
 	b.WriteString("\n")
 
-	b.WriteString("## 14.2 投资建议\n\n")
+	entryRange, stopLoss, target := formatTradeLevels(quote, rim)
+
+	b.WriteString("## 15.2 投资建议\n\n")
 	b.WriteString("| 项目 | 建议 |\n")
 	b.WriteString("|------|------|\n")
 	b.WriteString(fmt.Sprintf("| **综合评级** | %s |\n", investmentGrade(weighted)))
 	b.WriteString(fmt.Sprintf("| **综合评分** | %.0f/100 %s |\n", weighted, scoreToStars(weighted)))
 	b.WriteString(fmt.Sprintf("| **操作建议** | %s |\n", strategyAdvice(weighted)))
 	b.WriteString(fmt.Sprintf("| **建议仓位** | %s |\n", positionAdvice(weighted)))
-	b.WriteString("| **入场区间** | 待接入实时股价后计算 |\n")
-	b.WriteString("| **止损位** | 待接入实时股价后计算 |\n")
-	b.WriteString("| **目标位** | 待接入RIM估值与行情后计算 |\n")
+	b.WriteString(fmt.Sprintf("| **入场区间** | %s |\n", entryRange))
+	b.WriteString(fmt.Sprintf("| **止损位** | %s |\n", stopLoss))
+	b.WriteString(fmt.Sprintf("| **目标位** | %s |\n", target))
 	b.WriteString("\n")
 
-	b.WriteString("## 14.3 操作策略\n\n")
+	b.WriteString("## 15.3 操作策略\n\n")
 	if weighted >= 80 {
 		b.WriteString("**策略A：积极配置（推荐）**\n")
 		b.WriteString("- 基本面健康，可逢低分批建仓\n")
@@ -1255,6 +1270,44 @@ func writeModule14(b *strings.Builder, symbol string, steps []StepResult, latest
 		b.WriteString("- 建议减仓或设置严格止损\n")
 	}
 	b.WriteString("\n---\n\n")
+}
+
+// formatTradeLevels 根据实时行情和 RIM 估值计算入场区间、止损位、目标位
+func formatTradeLevels(quote *QuoteData, rim *RIMData) (entry, stop, target string) {
+	if quote == nil || quote.CurrentPrice <= 0 {
+		return "待接入实时行情后计算", "待接入实时行情后计算", "待接入RIM估值与行情后计算"
+	}
+	price := quote.CurrentPrice
+	hasRIM := rim != nil && rim.HasData && rim.Result != nil && rim.Result.Baseline.Value > 0
+
+	if hasRIM {
+		baseline := rim.Result.Baseline.Value
+		pessimistic := rim.Result.Pessimistic.Value
+		optimistic := rim.Result.Optimistic.Value
+
+		// 目标位：乐观情景价值
+		target = fmt.Sprintf("%.2f元 (乐观情景)", optimistic)
+
+		// 止损位：悲观情景的85% 与 当前价的88% 取较高者（更严格）
+		stopPrice := math.Max(pessimistic*0.85, price*0.88)
+		stop = fmt.Sprintf("%.2f元 (-%.1f%%)", stopPrice, (price-stopPrice)/price*100)
+
+		// 入场区间
+		switch {
+		case price <= baseline:
+			entry = fmt.Sprintf("%.2f ~ %.2f元 (现价附近可建仓)", price*0.97, price*1.02)
+		case price <= optimistic:
+			entry = fmt.Sprintf("%.2f ~ %.2f元 (等待回调至基准价值)", baseline*0.95, baseline)
+		default:
+			entry = fmt.Sprintf("%.2f ~ %.2f元 (高估/观望)", baseline*0.90, baseline*0.95)
+		}
+	} else {
+		// 无 RIM 时的简易估算
+		target = "待接入RIM估值后计算"
+		stop = fmt.Sprintf("%.2f元 (-10.0%%)", price*0.90)
+		entry = fmt.Sprintf("%.2f ~ %.2f元 (现价±2%%试探)", price*0.98, price*1.02)
+	}
+	return
 }
 
 // ========== 模块16: 结论与附录 ==========
