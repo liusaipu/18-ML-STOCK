@@ -128,27 +128,56 @@ func step8RiskAnalysis(data *FinancialData) StepResult {
 			cashDev = -20.0
 		}
 
-		// 4. 应收账款异常度（0-100）
+		// 4. 应收账款异常度（0-100），基于 DSRI 与增速差连续化
 		arGrowth := safeDiv(curAR-prevAR, prevAR)
 		revGrowth := safeDiv(curRev-prevRev, prevRev)
 		arRisk := 0.0
-		if dsri > 1.2 && arGrowth > revGrowth {
-			arRisk = 100.0
-		} else if dsri > 1.0 {
-			arRisk = 50.0
+		if dsri > 1.0 {
+			arRisk = (dsri - 1.0) / 0.8 * 50.0
+			if arRisk > 100.0 {
+				arRisk = 100.0
+			}
+			if arGrowth > revGrowth {
+				bonus := (arGrowth - revGrowth) * 50.0
+				if bonus > 50.0 {
+					bonus = 50.0
+				}
+				arRisk += bonus
+				if arRisk > 100.0 {
+					arRisk = 100.0
+				}
+			}
 		}
 
-		// 5. 毛利率异常波动（0-100）
+		// 5. 毛利率异常波动（0-100），按绝对百分点跌幅连续化
 		gmRisk := 0.0
-		if gmi > 1.0 && curGM < prevGM {
-			gmRisk = 100.0
-		} else if gmi > 1.0 {
-			gmRisk = 50.0
+		if prevGM > 0 && curGM < prevGM {
+			gmDeclinePct := (prevGM - curGM) * 100.0 // 百分点跌幅
+			gmRisk = gmDeclinePct * 20.0
+			if gmRisk > 100.0 {
+				gmRisk = 100.0
+			}
 		}
 
 		// 6. 各子项风险分映射到 0-100
 		mRisk := mapMScoreToRisk(mscore)
 		zRisk := mapZScoreToRisk(zscore)
+
+		// 6.1 金融/类金融企业轻资产、低周转、低存货，传统 Z-Score 与 M-Score 偏严苛，适度弱化
+		isFinancialLike := false
+		if curAsset > 0 {
+			fixedRatio := curFixed / curAsset
+			assetTurnover := curRev / curAsset
+			inventory := data.GetValueOrZero(data.BalanceSheet, "存货", curYear)
+			inventoryRatio := inventory / curAsset
+			if fixedRatio < 0.05 && assetTurnover < 0.5 && inventoryRatio < 0.1 {
+				isFinancialLike = true
+			}
+		}
+		if isFinancialLike {
+			zRisk = zRisk * 0.7
+			mRisk = mRisk * 0.8
+		}
 
 		// 7. 非财务爬虫风险分（0-100），基础分 30，双向调整
 		crawlerRisk := 30.0
@@ -213,12 +242,15 @@ func step8RiskAnalysis(data *FinancialData) StepResult {
 			"SGAI":     sgai,
 			"TATA":     tata,
 			"LVGI":     lvgi,
-			"MScore":   mscore,
-			"ZScore":   zscore,
-			"CashDev":  cashDev,
-			"ARRisk":   arRisk,
-			"GMRisk":   gmRisk,
-			"AScore":   ascore,
+			"MScore":      mscore,
+			"ZScore":      zscore,
+			"MRisk":       mRisk,
+			"ZRisk":       zRisk,
+			"CashDev":     cashDev,
+			"ARRisk":      arRisk,
+			"GMRisk":      gmRisk,
+			"CrawlerRisk": crawlerRisk,
+			"AScore":      ascore,
 			"fraudRisk": ascore >= 60, // 黄灯阈值
 		}
 		result.Pass[curYear] = ascore < 60

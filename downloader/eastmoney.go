@@ -35,10 +35,18 @@ type FinancialReportData struct {
 func DownloadFinancialReports(market, code string) (*FinancialReportData, error) {
 	fullCode := market + code // e.g. SH603501
 
-	// 1. 确定 companyType
-	companyType, err := getCompanyType(fullCode)
+	// 1. 分别为三张表确定 companyType（保险/金融股各表可能不同）
+	bsCT, err := getCompanyTypeForEndpoint("zcfzbAjaxNew", fullCode)
 	if err != nil {
-		return nil, fmt.Errorf("无法确定companyType: %w", err)
+		return nil, fmt.Errorf("无法确定资产负债表companyType: %w", err)
+	}
+	isCT, err := getCompanyTypeForEndpoint("lrbAjaxNew", fullCode)
+	if err != nil {
+		return nil, fmt.Errorf("无法确定利润表companyType: %w", err)
+	}
+	cfCT, err := getCompanyTypeForEndpoint("xjllbAjaxNew", fullCode)
+	if err != nil {
+		return nil, fmt.Errorf("无法确定现金流量表companyType: %w", err)
 	}
 
 	// 2. 获取年报日期列表
@@ -68,7 +76,7 @@ func DownloadFinancialReports(market, code string) (*FinancialReportData, error)
 		wg.Add(1)
 		go func(d string) {
 			defer wg.Done()
-			data, err := fetchHSF10("zcfzbAjaxNew", companyType, d, fullCode)
+			data, err := fetchHSF10("zcfzbAjaxNew", bsCT, d, fullCode)
 			if err != nil {
 				mu.Lock()
 				if downloadErr == nil {
@@ -86,7 +94,7 @@ func DownloadFinancialReports(market, code string) (*FinancialReportData, error)
 		wg.Add(1)
 		go func(d string) {
 			defer wg.Done()
-			data, err := fetchHSF10("lrbAjaxNew", companyType, d, fullCode)
+			data, err := fetchHSF10("lrbAjaxNew", isCT, d, fullCode)
 			if err != nil {
 				mu.Lock()
 				if downloadErr == nil {
@@ -104,7 +112,7 @@ func DownloadFinancialReports(market, code string) (*FinancialReportData, error)
 		wg.Add(1)
 		go func(d string) {
 			defer wg.Done()
-			data, err := fetchHSF10("xjllbAjaxNew", companyType, d, fullCode)
+			data, err := fetchHSF10("xjllbAjaxNew", cfCT, d, fullCode)
 			if err != nil {
 				mu.Lock()
 				if downloadErr == nil {
@@ -127,10 +135,10 @@ func DownloadFinancialReports(market, code string) (*FinancialReportData, error)
 	return result, nil
 }
 
-// getCompanyType 尝试多个 companyType 直到返回有效数据
-func getCompanyType(fullCode string) (int, error) {
+// getCompanyTypeForEndpoint 尝试多个 companyType 直到指定 endpoint 返回有效数据
+func getCompanyTypeForEndpoint(endpoint, fullCode string) (int, error) {
 	for _, ct := range []int{4, 1, 2, 3, 5, 6, 7, 8} {
-		data, err := fetchHSF10("lrbAjaxNew", ct, "2024-12-31", fullCode)
+		data, err := fetchHSF10(endpoint, ct, "2024-12-31", fullCode)
 		if err != nil {
 			continue
 		}

@@ -25,9 +25,12 @@ func writeAScoreProfile(b *strings.Builder, steps []StepResult, years []string, 
 
 	ms := anyToFloat64(yd["MScore"])
 	zs := anyToFloat64(yd["ZScore"])
+	mRisk := anyToFloat64(yd["MRisk"])
+	zRisk := anyToFloat64(yd["ZRisk"])
 	cd := anyToFloat64(yd["CashDev"])
 	ar := anyToFloat64(yd["ARRisk"])
 	gm := anyToFloat64(yd["GMRisk"])
+	crawler := anyToFloat64(yd["CrawlerRisk"])
 	as := anyToFloat64(yd["AScore"])
 
 	// 1. 总览横幅
@@ -37,14 +40,12 @@ func writeAScoreProfile(b *strings.Builder, steps []StepResult, years []string, 
 	b.WriteString("## A-Score 六维风险分解\n\n")
 	b.WriteString("| 维度 | 原始指标 | 风险分 | 权重 | 评估 |\n")
 	b.WriteString("|------|----------|--------|------|------|\n")
-	mRisk := mapMScoreToRisk(ms)
-	zRisk := mapZScoreToRisk(zs)
 	b.WriteString(fmt.Sprintf("| **M-Score（造假风险）** | %.3f | %.1f | 15%% | %s |\n", ms, mRisk, riskLevel(mRisk)))
 	b.WriteString(fmt.Sprintf("| **Z-Score（破产风险）** | %.2f | %.1f | 20%% | %s |\n", zs, zRisk, riskLevel(zRisk)))
 	b.WriteString(fmt.Sprintf("| **现金流偏离度** | %.1f%% | %.1f | 20%% | %s |\n", cd, normalizeCashDev(cd), riskLevel(normalizeCashDev(cd))))
 	b.WriteString(fmt.Sprintf("| **应收账款异常** | %.1f%% | %.1f | 15%% | %s |\n", ar, ar, riskLevel(ar)))
 	b.WriteString(fmt.Sprintf("| **毛利率异常波动** | %.1f%% | %.1f | 10%% | %s |\n", gm, gm, riskLevel(gm)))
-	b.WriteString(fmt.Sprintf("| **非财务信号** | — | %.1f | 20%% | %s |\n", as-mRisk*0.15-zRisk*0.20-cd*0.20-ar*0.15-gm*0.10, riskLevel(as-mRisk*0.15-zRisk*0.20-cd*0.20-ar*0.15-gm*0.10)))
+	b.WriteString(fmt.Sprintf("| **非财务信号** | — | %.1f | 20%% | %s |\n", crawler, riskLevel(crawler)))
 	b.WriteString(fmt.Sprintf("| **A-Score（综合）** | — | **%.1f** | 100%% | **%s** |\n", as, riskLevel(as)))
 	b.WriteString("\n")
 
