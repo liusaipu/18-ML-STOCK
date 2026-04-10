@@ -155,9 +155,12 @@ func (a *App) GetWatchlistActivity() ([]WatchlistActivitySummary, error) {
 			}
 		}
 		if market == "" {
-			if strings.HasPrefix(pureCode, "6") {
+			switch {
+			case strings.HasPrefix(pureCode, "6"):
 				market = "SH"
-			} else {
+			case strings.HasSuffix(item.Code, ".HK") || strings.HasPrefix(pureCode, "00") || strings.HasPrefix(pureCode, "01") || strings.HasPrefix(pureCode, "02"):
+				market = "HK"
+			default:
 				market = "SZ"
 			}
 		}
@@ -1443,6 +1446,21 @@ func (a *App) SaveDefaultPolicyLibrary() error {
 		return fmt.Errorf("存储未初始化")
 	}
 	return analyzer.SaveDefaultPolicyLibrary(a.storage.DataDir())
+}
+
+// UpdatePolicyLibrary 调用 Python 脚本动态更新政策库 JSON，成功后自动热重载
+func (a *App) UpdatePolicyLibrary() (*downloader.PolicyUpdateResult, error) {
+	if a.storage == nil {
+		return nil, fmt.Errorf("存储未初始化")
+	}
+	result, err := downloader.UpdatePolicyLibrary(a.storage.DataDir())
+	if err != nil {
+		return result, err
+	}
+	if reloadErr := analyzer.ReloadPolicyLibrary(a.storage.DataDir()); reloadErr != nil {
+		return result, fmt.Errorf("更新成功但热重载失败: %w", reloadErr)
+	}
+	return result, nil
 }
 
 func createZipFromDir(dst string, srcDir string) error {

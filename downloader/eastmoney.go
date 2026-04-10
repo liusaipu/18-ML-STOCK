@@ -33,6 +33,9 @@ type FinancialReportData struct {
 
 // DownloadFinancialReports 从东方财富下载指定股票的所有年报财务数据
 func DownloadFinancialReports(market, code string) (*FinancialReportData, error) {
+	if strings.ToUpper(market) == "HK" {
+		return nil, fmt.Errorf("港股财报暂不支持网络下载，请手动导入 CSV")
+	}
 	fullCode := market + code // e.g. SH603501
 
 	// 1. 分别为三张表确定 companyType（保险/金融股各表可能不同）
@@ -301,10 +304,7 @@ func FetchStockProfile(market, code string) (*StockProfile, error) {
 	profile := &StockProfile{}
 
 	// 数据源1：HSF10 公司概况（行业、董事长、实控人、上市日期）
-	csCode := "SH" + code
-	if strings.ToUpper(market) != "SH" {
-		csCode = "SZ" + code
-	}
+	csCode := toCsCode(market, code)
 	csURL := fmt.Sprintf("https://emweb.securities.eastmoney.com/PC_HSF10/CompanySurvey/CompanySurveyAjax?code=%s", csCode)
 	if csBody, csErr := httpGetWithReferer(csURL, "https://emweb.securities.eastmoney.com/"); csErr == nil {
 		var csResp struct {
@@ -538,9 +538,14 @@ func inferPoliticalAffiliationFromBaike(name string) string {
 // FetchStockQuote 从东方财富获取股票实时行情，若失败则 fallback 到腾讯财经接口
 func FetchStockQuote(market, code string) (*StockQuote, error) {
 	var secid string
-	if strings.ToUpper(market) == "SH" {
+	switch strings.ToUpper(market) {
+	case "SH":
 		secid = "1." + code
-	} else {
+	case "SZ":
+		secid = "0." + code
+	case "HK":
+		secid = "116." + code
+	default:
 		secid = "0." + code
 	}
 	url := fmt.Sprintf("http://push2.eastmoney.com/api/qt/stock/get?secid=%s&fields=f2,f3,f4,f5,f6,f7,f8,f10,f15,f16,f17,f18,f20,f21,f9,f23", secid)
@@ -661,6 +666,19 @@ func decodeGB18030(data []byte) ([]byte, error) {
 	return decoder.Bytes(data)
 }
 
+func toCsCode(market, code string) string {
+	switch strings.ToUpper(market) {
+	case "SH":
+		return "SH" + code
+	case "SZ":
+		return "SZ" + code
+	case "HK":
+		return "HK" + code
+	default:
+		return "SZ" + code
+	}
+}
+
 func parseStrFloat(s string) float64 {
 	f, _ := strconv.ParseFloat(s, 64)
 	return f
@@ -691,9 +709,14 @@ type KlineData struct {
 // FetchStockKlines 获取股票历史K线数据（日K），先尝试东方财富，再腾讯财经，再网易财经
 func FetchStockKlines(market, code string, limit int) ([]KlineData, error) {
 	var secid string
-	if strings.ToUpper(market) == "SH" {
+	switch strings.ToUpper(market) {
+	case "SH":
 		secid = "1." + code
-	} else {
+	case "SZ":
+		secid = "0." + code
+	case "HK":
+		secid = "116." + code
+	default:
 		secid = "0." + code
 	}
 
@@ -799,6 +822,9 @@ func fetchKlinesFromTencent(market, code string, limit int) ([]KlineData, error)
 }
 
 func fetchKlinesFromNetEase(market, code string, limit int) ([]KlineData, error) {
+	if strings.ToUpper(market) == "HK" {
+		return nil, fmt.Errorf("网易财经暂不支持港股K线")
+	}
 	var neteaseCode string
 	if strings.ToUpper(market) == "SH" {
 		neteaseCode = "0" + code
