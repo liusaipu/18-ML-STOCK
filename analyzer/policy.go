@@ -1,6 +1,14 @@
 package analyzer
 
-import "strings"
+import (
+	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync"
+	"time"
+)
 
 // PolicyItem 单个政策方向及其匹配强度
 type PolicyItem struct {
@@ -10,15 +18,36 @@ type PolicyItem struct {
 
 // PolicyMatchData 十五五政策匹配度评估结果
 type PolicyMatchData struct {
-	Industry   string      `json:"industry"`
-	MatchLevel string      `json:"matchLevel"` // 强匹配 / 中性 / 弱匹配
-	Score      int         `json:"score"`      // 0-100
-	Policies   []PolicyItem `json:"policies"`  // 匹配到的政策方向
-	Summary    string      `json:"summary"`    // 简要解读
+	Industry   string       `json:"industry"`
+	MatchLevel string       `json:"matchLevel"` // 强匹配 / 中性 / 弱匹配
+	Score      int          `json:"score"`      // 0-100
+	Policies   []PolicyItem `json:"policies"`   // 匹配到的政策方向
+	Summary    string       `json:"summary"`    // 简要解读
 }
 
-// industryPolicyMap 行业 -> 十五五重点政策方向（按优先级排序）
-var industryPolicyMap = map[string][]string{
+// PolicyLibrary 外部可热更新的政策库结构
+type PolicyLibrary struct {
+	Version   string              `json:"version"`
+	UpdatedAt string              `json:"updated_at"`
+	Industries map[string][]string `json:"industries"`
+	Concepts   map[string][]string `json:"concepts"`
+}
+
+// policyLibMeta 记录当前加载的政策库元信息
+type policyLibMeta struct {
+	source    string
+	updatedAt time.Time
+}
+
+var (
+	policyLib     PolicyLibrary
+	policyLibMu   sync.RWMutex
+	policyMeta    policyLibMeta
+	policyMetaMu  sync.RWMutex
+)
+
+// defaultIndustryPolicyMap 内置默认行业政策映射（作为 fallback）
+var defaultIndustryPolicyMap = map[string][]string{
 	"半导体":        {"国产替代", "AI算力", "数字经济", "先进制造"},
 	"电子元件":      {"国产替代", "消费电子", "AI硬件", "智能制造"},
 	"计算机设备":    {"信创", "AI算力", "数字经济", "边缘计算"},
@@ -92,8 +121,8 @@ var industryPolicyMap = map[string][]string{
 	"综合行业":      {"国企改革", "多元化经营", "创投"},
 }
 
-// conceptPolicyMap 概念关键词 -> 政策方向补充
-var conceptPolicyMap = map[string][]string{
+// defaultConceptPolicyMap 内置默认概念政策映射（作为 fallback）
+var defaultConceptPolicyMap = map[string][]string{
 	"人工智能": {"人工智能", "数字经济"},
 	"AI":       {"人工智能", "数字经济"},
 	"芯片":     {"国产替代", "AI算力"},
@@ -126,8 +155,109 @@ var conceptPolicyMap = map[string][]string{
 	"以旧换新": {"扩内需", "以旧换新"},
 }
 
+// initPolicyLib 用内置默认值初始化内存中的政策库
+func initPolicyLib() {
+	policyLibMu.Lock()
+	policyLib = PolicyLibrary{
+		Version:    "builtin",
+		UpdatedAt:  time.Now().Format(time.RFC3339),
+		Industries: make(map[string][]string, len(defaultIndustryPolicyMap)),
+		Concepts:   make(map[string][]string, len(defaultConceptPolicyMap)),
+	}
+	for k, v := range defaultIndustryPolicyMap {
+		policyLib.Industries[k] = v
+	}
+	for k, v := range defaultConceptPolicyMap {
+		policyLib.Concepts[k] = v
+	}
+	policyLibMu.Unlock()
+
+	policyMetaMu.Lock()
+	policyMeta = policyLibMeta{source: "builtin", updatedAt: time.Now()}
+	policyMetaMu.Unlock()
+}
+
+func init() {
+	initPolicyLib()
+}
+
+// InitPolicyLibrary 应用启动时调用，尝试从 dataDir 加载外部 policy_library.json
+func InitPolicyLibrary(dataDir string) error {
+	return ReloadPolicyLibrary(dataDir)
+}
+
+// ReloadPolicyLibrary 热更新政策库：如果外部 JSON 存在则加载，否则回退到内置默认值
+func ReloadPolicyLibrary(dataDir string) error {
+	path := filepath.Join(dataDir, "policy_library.json")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			initPolicyLib()
+			return nil
+		}
+		return fmt.Errorf("读取政策库文件失败: %w", err)
+	}
+
+	var lib PolicyLibrary
+	if err := json.Unmarshal(data, &lib); err != nil {
+		return fmt.Errorf("解析政策库 JSON 失败: %w", err)
+	}
+	if lib.Industries == nil {
+		lib.Industries = make(map[string][]string)
+	}
+	if lib.Concepts == nil {
+		lib.Concepts = make(map[string][]string)
+	}
+
+	policyLibMu.Lock()
+	policyLib = lib
+	policyLibMu.Unlock()
+
+	updatedAt := time.Now()
+	if t, err := time.Parse(time.RFC3339, lib.UpdatedAt); err == nil {
+		updatedAt = t
+	}
+	policyMetaMu.Lock()
+	policyMeta = policyLibMeta{source: "external", updatedAt: updatedAt}
+	policyMetaMu.Unlock()
+	return nil
+}
+
+// SaveDefaultPolicyLibrary 将当前内置默认政策库写入 dataDir/policy_library.json，方便用户后续编辑
+func SaveDefaultPolicyLibrary(dataDir string) error {
+	path := filepath.Join(dataDir, "policy_library.json")
+	lib := PolicyLibrary{
+		Version:    "1.0",
+		UpdatedAt:  time.Now().Format(time.RFC3339),
+		Industries: make(map[string][]string, len(defaultIndustryPolicyMap)),
+		Concepts:   make(map[string][]string, len(defaultConceptPolicyMap)),
+	}
+	for k, v := range defaultIndustryPolicyMap {
+		lib.Industries[k] = v
+	}
+	for k, v := range defaultConceptPolicyMap {
+		lib.Concepts[k] = v
+	}
+	data, err := json.MarshalIndent(lib, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, data, 0644)
+}
+
+// GetPolicyLibraryMeta 返回当前政策库来源与更新时间
+func GetPolicyLibraryMeta() (source string, updatedAt time.Time) {
+	policyMetaMu.RLock()
+	defer policyMetaMu.RUnlock()
+	return policyMeta.source, policyMeta.updatedAt
+}
+
 // BuildPolicyMatch 根据行业和概念生成十五五政策匹配评估
 func BuildPolicyMatch(industry string, concepts []string) *PolicyMatchData {
+	policyLibMu.RLock()
+	lib := policyLib
+	policyLibMu.RUnlock()
+
 	pm := &PolicyMatchData{
 		Industry: industry,
 		Score:    0,
@@ -145,7 +275,7 @@ func BuildPolicyMatch(industry string, concepts []string) *PolicyMatchData {
 	}
 
 	// 1. 行业映射（权重最高）
-	if list, ok := industryPolicyMap[industry]; ok {
+	if list, ok := lib.Industries[industry]; ok {
 		for i, p := range list {
 			if _, exists := seen[p]; !exists {
 				seen[p] = calcIndustryLevel(i)
@@ -156,7 +286,7 @@ func BuildPolicyMatch(industry string, concepts []string) *PolicyMatchData {
 
 	// 2. 概念补充映射
 	for _, c := range concepts {
-		for keyword, list := range conceptPolicyMap {
+		for keyword, list := range lib.Concepts {
 			if strings.Contains(c, keyword) {
 				for _, p := range list {
 					if lvl, exists := seen[p]; exists {
@@ -181,10 +311,10 @@ func BuildPolicyMatch(industry string, concepts []string) *PolicyMatchData {
 
 	// 3. 计算评分与评级
 	if len(pm.Policies) >= 4 {
-		pm.Score = 85 + min(15, len(pm.Policies)*2)
+		pm.Score = 85 + minInt(15, len(pm.Policies)*2)
 		pm.MatchLevel = "强匹配"
 	} else if len(pm.Policies) >= 2 {
-		pm.Score = 55 + min(29, len(pm.Policies)*10)
+		pm.Score = 55 + minInt(29, len(pm.Policies)*10)
 		pm.MatchLevel = "中性"
 	} else if len(pm.Policies) == 1 {
 		pm.Score = 50
@@ -211,9 +341,3 @@ func buildPolicySummary(pm *PolicyMatchData) string {
 	}
 }
 
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}

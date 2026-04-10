@@ -50,6 +50,10 @@ export function GetComparables(arg1) {
   return window['go']['main']['App']['GetComparables'](arg1);
 }
 
+export function GetPolicyLibraryMeta() {
+  return window['go']['main']['App']['GetPolicyLibraryMeta']();
+}
+
 export function GetReport(arg1, arg2) {
   return window['go']['main']['App']['GetReport'](arg1, arg2);
 }
@@ -98,6 +102,10 @@ export function RefreshStockProfile(arg1) {
   return window['go']['main']['App']['RefreshStockProfile'](arg1);
 }
 
+export function ReloadPolicyLibrary() {
+  return window['go']['main']['App']['ReloadPolicyLibrary']();
+}
+
 export function RemoveComparable(arg1, arg2) {
   return window['go']['main']['App']['RemoveComparable'](arg1, arg2);
 }
@@ -108,6 +116,10 @@ export function RemoveFromWatchlist(arg1) {
 
 export function ReorderWatchlist(arg1) {
   return window['go']['main']['App']['ReorderWatchlist'](arg1);
+}
+
+export function SaveDefaultPolicyLibrary() {
+  return window['go']['main']['App']['SaveDefaultPolicyLibrary']();
 }
 
 export function SearchStocks(arg1) {

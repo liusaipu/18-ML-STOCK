@@ -840,7 +840,7 @@ func writeModule8(b *strings.Builder, quote *QuoteData, technical *TechnicalData
 	b.WriteString("\n---\n\n")
 }
 
-// ========== 模块10: ML机器学习预测（占位+基于财务的简易推断） ==========
+// ========== 模块10: ML机器学习预测（ONNX 双引擎：Engine-A 情绪+价格 / Engine-B 财务 BiLSTM） ==========
 func mlDirectionCN(label string) string {
 	switch label {
 	case "up":

@@ -84,6 +84,11 @@ func (a *App) startup(ctx context.Context) {
 		defaultBaselines := analyzer.BuildIndustryBaselines(nil)
 		_ = a.storage.SaveIndustryBaselines(defaultBaselines)
 	}
+
+	// 初始化政策库（优先加载外部 JSON，否则使用内置默认值）
+	if err := analyzer.InitPolicyLibrary(a.storage.DataDir()); err != nil {
+		fmt.Printf("初始化政策库失败: %v\n", err)
+	}
 }
 
 // loadStockDB 从嵌入的资源或数据目录加载股票列表
@@ -1413,6 +1418,31 @@ func createZipFromFiles(dst string, srcDir string, files []string) error {
 		srcFile.Close()
 	}
 	return nil
+}
+
+// ReloadPolicyLibrary 热更新十五五政策库（重新加载外部 policy_library.json）
+func (a *App) ReloadPolicyLibrary() error {
+	if a.storage == nil {
+		return fmt.Errorf("存储未初始化")
+	}
+	return analyzer.ReloadPolicyLibrary(a.storage.DataDir())
+}
+
+// GetPolicyLibraryMeta 获取当前政策库来源与更新时间
+func (a *App) GetPolicyLibraryMeta() map[string]string {
+	source, updatedAt := analyzer.GetPolicyLibraryMeta()
+	return map[string]string{
+		"source":     source,
+		"updated_at": updatedAt.Format(time.RFC3339),
+	}
+}
+
+// SaveDefaultPolicyLibrary 将内置默认政策库导出到本地 JSON，供用户编辑后热更新
+func (a *App) SaveDefaultPolicyLibrary() error {
+	if a.storage == nil {
+		return fmt.Errorf("存储未初始化")
+	}
+	return analyzer.SaveDefaultPolicyLibrary(a.storage.DataDir())
 }
 
 func createZipFromDir(dst string, srcDir string) error {

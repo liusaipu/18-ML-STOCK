@@ -28,6 +28,8 @@ export function ExportHistoricalFinancialData(arg1:string,arg2:string):Promise<v
 
 export function GetComparables(arg1:string):Promise<Array<string>>;
 
+export function GetPolicyLibraryMeta():Promise<Record<string, string>>;
+
 export function GetReport(arg1:string,arg2:string):Promise<string>;
 
 export function GetReportHistory(arg1:string):Promise<Array<string>>;
@@ -52,10 +54,14 @@ export function RefreshIndustryBaselines():Promise<Record<string, analyzer.Indus
 
 export function RefreshStockProfile(arg1:string):Promise<main.StockProfile>;
 
+export function ReloadPolicyLibrary():Promise<void>;
+
 export function RemoveComparable(arg1:string,arg2:string):Promise<void>;
 
 export function RemoveFromWatchlist(arg1:string):Promise<void>;
 
 export function ReorderWatchlist(arg1:Array<string>):Promise<void>;
+
+export function SaveDefaultPolicyLibrary():Promise<void>;
 
 export function SearchStocks(arg1:string):Promise<Array<main.StockInfo>>;
