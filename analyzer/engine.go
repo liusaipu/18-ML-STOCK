@@ -2,6 +2,7 @@ package analyzer
 
 import (
 	"fmt"
+	"strings"
 )
 
 // RunAnalysis 执行完整的18步分析，返回报告
@@ -103,7 +104,13 @@ func RunAnalysisWithAll(baseDir, symbol string, comp *ComparableAnalysis, quote 
 		ml.Summary = BuildMLSummary(ml, technical, activity, sentiment, ascore)
 	}
 
-	md := GenerateMarkdown(symbol, data.Years, steps, scores, comp, quote, sentiment, policy, technical, activity, ml, rim)
+	// 行业均值对比
+	var industry *IndustryComparison
+	if policy != nil && policy.Industry != "" {
+		industry = CompareWithIndustry(policy.Industry, steps, data.Years[0])
+	}
+
+	md := GenerateMarkdown(symbol, data.Years, steps, scores, comp, industry, quote, sentiment, policy, technical, activity, ml, rim)
 
 	report := &AnalysisReport{
 		Symbol:          symbol,
@@ -117,4 +124,41 @@ func RunAnalysisWithAll(baseDir, symbol string, comp *ComparableAnalysis, quote 
 		RIM:             rim,
 	}
 	return report, nil
+}
+
+// RegenerateModule4Only 仅重新生成模块4（行业横向对比分析）
+// 用于可比公司数据更新后，只更新报告中的模块4部分，不重新获取网络数据
+func RegenerateModule4Only(baseDir, symbol string, comp *ComparableAnalysis, industry *IndustryComparison) (string, error) {
+	data, err := LoadFinancialData(baseDir, symbol)
+	if err != nil {
+		return "", fmt.Errorf("load financial data: %w", err)
+	}
+	if len(data.Years) == 0 {
+		return "", fmt.Errorf("no financial data available for %s", symbol)
+	}
+
+	steps := []StepResult{
+		step1Audit(data),
+		step2AssetScale(data),
+		step3Solvency(data),
+		step4CompetitivePosition(data),
+		step5Receivables(data),
+		step6FixedAssets(data),
+		step7InvestmentAssets(data),
+		step8RiskAnalysis(data),
+		step9RevenueGrowth(data),
+		step10GrossMargin(data),
+		step11OperationEfficiency(data),
+		step12CostControl(data),
+		step13ExpenseRatio(data),
+		step14CoreProfit(data),
+		step15CashFlowQuality(data),
+		step16ROE(data),
+		step17CAPEX(data),
+		step18Dividend(data),
+	}
+
+	var b strings.Builder
+	writeModule4(&b, steps, data.Years[0], comp, industry)
+	return b.String(), nil
 }

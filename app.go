@@ -79,10 +79,9 @@ func (a *App) startup(ctx context.Context) {
 		fmt.Printf("加载股票代码库失败: %v\n", err)
 	}
 
-	// 初始化行业基准（如不存在则用默认值创建）
-	if _, err := a.storage.LoadIndustryBaselines(); os.IsNotExist(err) {
-		defaultBaselines := analyzer.BuildIndustryBaselines(nil)
-		_ = a.storage.SaveIndustryBaselines(defaultBaselines)
+	// 初始化行业均值数据库
+	if err := analyzer.InitIndustryDatabase(a.storage.DataDir()); err != nil {
+		fmt.Printf("初始化行业数据库失败: %v\n", err)
 	}
 
 	// 初始化政策库（优先加载外部 JSON，否则使用内置默认值）
@@ -585,6 +584,128 @@ func (a *App) DownloadComparableReports(symbol string) (*DownloadResult, error) 
 	}, nil
 }
 
+// UpdateModule4Only 仅更新报告中的模块4（行业横向对比分析），不重新执行完整分析
+// 只重新计算财务指标和可比公司数据，不重复下载网络数据（行情、舆情等）
+func (a *App) UpdateModule4Only(symbol string) (*analyzer.AnalysisReport, error) {
+	if a.storage == nil {
+		return nil, fmt.Errorf("存储未初始化")
+	}
+
+	// 1. 加载现有报告
+	reports, err := a.storage.ListReports(symbol)
+	if err != nil || len(reports) == 0 {
+		return nil, fmt.Errorf("未找到现有报告，请先执行完整分析")
+	}
+	// 获取最新报告（通常是 reports[0] 或 latest.md）
+	latestReportFile := reports[0]
+	for _, r := range reports {
+		if r == "latest.md" {
+			latestReportFile = r
+			break
+		}
+	}
+	reportContent, err := a.storage.LoadReport(symbol, latestReportFile)
+	if err != nil {
+		return nil, fmt.Errorf("加载现有报告失败: %w", err)
+	}
+
+	// 2. 加载财务数据
+	finData, err := analyzer.LoadFinancialData(a.storage.DataDir(), symbol)
+	if err != nil || finData == nil {
+		return nil, fmt.Errorf("加载财务数据失败: %w", err)
+	}
+
+	// 3. 获取可比公司分析数据（刚下载的数据）
+	comparables, _ := a.storage.GetComparables(symbol)
+	nameMap := make(map[string]string, len(a.stocks))
+	for _, s := range a.stocks {
+		nameMap[s.Code] = s.Name
+	}
+	compAnalysis, _ := analyzer.BuildComparableAnalysis(a.storage.DataDir(), comparables, nameMap)
+
+	// 4. 获取行业对比数据
+	var industry *analyzer.IndustryComparison
+	if profile, err := a.storage.LoadStockProfile(symbol); err == nil && profile != nil && profile.Industry != "" {
+		// IndustryComparison 会在 RegenerateModule4Only 内部重新计算
+		industry = analyzer.CompareWithIndustry(profile.Industry, nil, "")
+	}
+
+	// 5. 生成新的模块4内容（只计算模块4，不涉及网络请求）
+	newModule4, err := analyzer.RegenerateModule4Only(a.storage.DataDir(), symbol, compAnalysis, industry)
+	if err != nil {
+		return nil, fmt.Errorf("生成模块4失败: %w", err)
+	}
+
+	// 7. 替换报告中的模块4部分
+	updatedContent := replaceModule4InReport(reportContent, newModule4)
+
+	// 8. 保存更新后的报告
+	_, _ = a.storage.SaveReport(symbol, updatedContent, true)
+
+	// 9. 更新缓存哈希
+	compHash, _ := a.storage.ComputeComparablesHash(symbol)
+	_ = a.storage.SaveAnalysisCache(symbol, "", compHash)
+
+	// 10. 返回简化报告对象
+	return &analyzer.AnalysisReport{
+		Symbol:          symbol,
+		MarkdownContent: updatedContent,
+		Years:           finData.Years,
+	}, nil
+}
+
+func replaceModule4InReport(reportContent, newModule4 string) string {
+	// 查找模块4的开始位置
+	module4Start := strings.Index(reportContent, "# 模块4: 行业横向对比分析")
+	if module4Start == -1 {
+		// 如果没找到模块4标题，尝试其他模式
+		module4Start = strings.Index(reportContent, "# 模块4")
+	}
+	if module4Start == -1 {
+		// 还是找不到，直接追加到末尾
+		return reportContent + "\n\n" + newModule4
+	}
+
+	// 查找下一个模块的开始位置（模块5或后续内容）
+	module5Start := strings.Index(reportContent[module4Start:], "\n# 模块5:")
+	if module5Start == -1 {
+		// 尝试找任何以 "# 模块" 开头的内容
+		module5Start = strings.Index(reportContent[module4Start+1:], "\n# 模块")
+	}
+	if module5Start == -1 {
+		// 如果没找到下一个模块，替换从模块4开始到末尾
+		return reportContent[:module4Start] + newModule4
+	}
+
+	// 替换模块4内容
+	module5Start += module4Start // 调整到绝对位置
+	return reportContent[:module4Start] + newModule4 + reportContent[module5Start:]
+}
+
+// GetModule4Status 检查模块4是否可以更新（可比公司数据是否已下载）
+func (a *App) GetModule4Status(symbol string) (bool, error) {
+	if a.storage == nil {
+		return false, fmt.Errorf("存储未初始化")
+	}
+
+	comparables, err := a.storage.GetComparables(symbol)
+	if err != nil || len(comparables) == 0 {
+		return false, nil
+	}
+
+	// 检查是否已下载可比公司财报
+	nameMap := make(map[string]string, len(a.stocks))
+	for _, s := range a.stocks {
+		nameMap[s.Code] = s.Name
+	}
+	compAnalysis, err := analyzer.BuildComparableAnalysis(a.storage.DataDir(), comparables, nameMap)
+	if err != nil {
+		return false, err
+	}
+
+	return compAnalysis != nil && compAnalysis.HasData && len(compAnalysis.Metrics) > 0, nil
+}
+
 // GetStockKlines 获取股票历史K线数据（日K，默认120根）
 func (a *App) GetStockKlines(symbol string) ([]downloader.KlineData, error) {
 	if a.storage == nil {
@@ -900,8 +1021,16 @@ func (a *App) analyzeStockInternal(symbol string, overwriteLatest bool, customRI
 						fmt.Printf("[ML] Engine A failed for %s: %v\n", symbol, err)
 					}
 				}
+				// Engine D: 风险预警
+				if dFeatures := analyzer.BuildMLEngineDInput(finData); len(dFeatures) > 0 {
+					if dp, err := analyzer.RunMLEngineD(dFeatures); err == nil {
+						mlLocal.EngineD = dp
+					} else {
+						fmt.Printf("[ML] Engine D failed for %s: %v\n", symbol, err)
+					}
+				}
 			}
-			if mlLocal.Financial != nil || mlLocal.Sentiment != nil {
+			if mlLocal.Financial != nil || mlLocal.Sentiment != nil || mlLocal.EngineD != nil {
 				mlData = mlLocal
 			}
 		}()
@@ -1461,6 +1590,45 @@ func (a *App) UpdatePolicyLibrary() (*downloader.PolicyUpdateResult, error) {
 		return result, fmt.Errorf("更新成功但热重载失败: %w", reloadErr)
 	}
 	return result, nil
+}
+
+// InitIndustryDatabase 初始化行业均值数据库
+func (a *App) InitIndustryDatabase() error {
+	if a.storage == nil {
+		return fmt.Errorf("存储未初始化")
+	}
+	return analyzer.InitIndustryDatabase(a.storage.DataDir())
+}
+
+// UpdateIndustryDatabase 调用 Python 脚本更新行业均值数据库
+func (a *App) UpdateIndustryDatabase() (*downloader.IndustryUpdateResult, error) {
+	if a.storage == nil {
+		return nil, fmt.Errorf("存储未初始化")
+	}
+	result, err := downloader.UpdateIndustryDatabase(a.storage.DataDir())
+	if err != nil {
+		return result, err
+	}
+	// 重新加载数据库
+	if reloadErr := analyzer.ReloadIndustryDatabase(a.storage.DataDir()); reloadErr != nil {
+		return result, fmt.Errorf("更新成功但热重载失败: %w", reloadErr)
+	}
+	return result, nil
+}
+
+// GetIndustryDBMeta 获取行业数据库元信息
+func (a *App) GetIndustryDBMeta() map[string]interface{} {
+	version, updatedAt, count := analyzer.GetIndustryDBMeta()
+	return map[string]interface{}{
+		"version":    version,
+		"updatedAt":  updatedAt,
+		"count":      count,
+	}
+}
+
+// GetIndustryMetrics 获取指定行业的均值指标
+func (a *App) GetIndustryMetrics(industry string) (*analyzer.IndustryMetrics, bool) {
+	return analyzer.GetIndustryMetrics(industry)
 }
 
 func createZipFromDir(dst string, srcDir string) error {

@@ -350,6 +350,36 @@ export namespace analyzer {
 	}
 	
 	
+	export class IndustryMetrics {
+	    industry: string;
+	    count: number;
+	    roe: number;
+	    roe_median: number;
+	    grossMargin: number;
+	    revenueGrowth: number;
+	    debtRatio: number;
+	    cashRatio: number;
+	    mScore: number;
+	    updated_at: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new IndustryMetrics(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.industry = source["industry"];
+	        this.count = source["count"];
+	        this.roe = source["roe"];
+	        this.roe_median = source["roe_median"];
+	        this.grossMargin = source["grossMargin"];
+	        this.revenueGrowth = source["revenueGrowth"];
+	        this.debtRatio = source["debtRatio"];
+	        this.cashRatio = source["cashRatio"];
+	        this.mScore = source["mScore"];
+	        this.updated_at = source["updated_at"];
+	    }
+	}
 	
 	export class PassItem {
 	    year: string;
@@ -378,6 +408,30 @@ export namespace analyzer {
 
 export namespace downloader {
 	
+	export class IndustryUpdateResult {
+	    success: boolean;
+	    path: string;
+	    total_industries: number;
+	    updated_count: number;
+	    skipped_count: number;
+	    errors?: string[];
+	    error?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new IndustryUpdateResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.success = source["success"];
+	        this.path = source["path"];
+	        this.total_industries = source["total_industries"];
+	        this.updated_count = source["updated_count"];
+	        this.skipped_count = source["skipped_count"];
+	        this.errors = source["errors"];
+	        this.error = source["error"];
+	    }
+	}
 	export class KlineData {
 	    time: string;
 	    open: number;

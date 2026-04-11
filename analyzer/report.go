@@ -7,7 +7,7 @@ import (
 )
 
 // GenerateMarkdown 生成增强版 Markdown 格式的投资分析报告（14模块标准框架）
-func GenerateMarkdown(symbol string, years []string, steps []StepResult, scores map[string]*YearScore, comp *ComparableAnalysis, quote *QuoteData, sentiment *SentimentData, policy *PolicyMatchData, technical *TechnicalData, activity *ActivityData, ml *MLPredictionData, rim *RIMData) string {
+func GenerateMarkdown(symbol string, years []string, steps []StepResult, scores map[string]*YearScore, comp *ComparableAnalysis, industry *IndustryComparison, quote *QuoteData, sentiment *SentimentData, policy *PolicyMatchData, technical *TechnicalData, activity *ActivityData, ml *MLPredictionData, rim *RIMData) string {
 	if len(years) == 0 {
 		return "# 无数据\n\n未找到可用的财务数据。"
 	}
@@ -41,7 +41,7 @@ func GenerateMarkdown(symbol string, years []string, steps []StepResult, scores 
 	writeModule3(&b, steps, years, latest, prev)
 
 	// ==================== 模块4: 行业横向对比分析 ====================
-	writeModule4(&b, steps, latest, comp)
+	writeModule4(&b, steps, latest, comp, industry)
 
 	// ==================== 模块5: 十五五政策匹配度评估 ====================
 	writeModule5(&b, policy)
@@ -432,8 +432,39 @@ func writeModule3(b *strings.Builder, steps []StepResult, years []string, latest
 }
 
 // ========== 模块4: 行业横向对比分析 ==========
-func writeModule4(b *strings.Builder, steps []StepResult, latest string, comp *ComparableAnalysis) {
+func writeModule4(b *strings.Builder, steps []StepResult, latest string, comp *ComparableAnalysis, industry *IndustryComparison) {
 	b.WriteString("# 模块4: 行业横向对比分析\n\n")
+
+	// 行业均值对比（新增）
+	if industry != nil && industry.HasData {
+		b.WriteString("## 4.0 行业均值对比\n\n")
+		b.WriteString("| 指标 | 当前公司 | 行业均值 | 差异 | 说明 |\n")
+		b.WriteString("|------|----------|----------|------|------|\n")
+		
+		roe := getStepValue(steps, 16, latest, "roe")
+		gm := getStepValue(steps, 10, latest, "grossMargin")
+		growth := getStepValue(steps, 9, latest, "growthRate")
+		debt := getStepValue(steps, 3, latest, "debtRatio")
+		
+		roeEmoji := "➡️"
+		if industry.ROEPercentile >= 75 {
+			roeEmoji = "🟢"
+		} else if industry.ROEPercentile <= 25 {
+			roeEmoji = "🔴"
+		}
+		
+		b.WriteString(fmt.Sprintf("| **ROE** | %.2f%% | %s | %+.2f%% | %s 行业百分位: %.0f%% |\n",
+			roe, industry.Industry, industry.GMDiff, roeEmoji, industry.ROEPercentile))
+		b.WriteString(fmt.Sprintf("| **毛利率** | %.2f%% | 行业均值 | %+.2f%% | %s |\n",
+			gm, industry.GMDiff, getDiffEmoji(industry.GMDiff)))
+		b.WriteString(fmt.Sprintf("| **营收增长** | %.2f%% | 行业均值 | %+.2f%% | %s |\n",
+			growth, industry.GrowthDiff, getDiffEmoji(industry.GrowthDiff)))
+		b.WriteString(fmt.Sprintf("| **负债率** | %.2f%% | 行业均值 | %+.2f%% | %s |\n",
+			debt, industry.DebtDiff, getDiffEmoji(-industry.DebtDiff)))
+		b.WriteString("\n")
+		
+		b.WriteString(fmt.Sprintf("> **行业对比总结**: %s\n\n", industry.Summary))
+	}
 
 	if comp == nil || !comp.HasData || len(comp.Metrics) == 0 {
 		b.WriteString("> **说明**: 当前未配置可比公司，或可比公司数据尚未下载。请在股票详情页的\"可比公司\"面板中添加 3~5 家对标公司并下载其财报数据。\n\n")
@@ -508,6 +539,11 @@ func writeModule4(b *strings.Builder, steps []StepResult, latest string, comp *C
 	b.WriteString("---\n\n")
 }
 
+// WriteModule4Only 仅生成模块4内容（用于增量更新）
+func WriteModule4Only(b *strings.Builder, steps []StepResult, latest string, comp *ComparableAnalysis, industry *IndustryComparison) {
+	writeModule4(b, steps, latest, comp, industry)
+}
+
 // ========== 模块5: 十五五政策匹配度评估 ==========
 func writeModule5(b *strings.Builder, policy *PolicyMatchData) {
 	b.WriteString("# 模块5: 十五五政策匹配度评估\n\n")
@@ -548,6 +584,15 @@ func writeModule5(b *strings.Builder, policy *PolicyMatchData) {
 	b.WriteString(fmt.Sprintf("> %s\n\n", policy.Summary))
 
 	b.WriteString("---\n\n")
+}
+
+func getDiffEmoji(diff float64) string {
+	if diff >= 5 {
+		return "🟢 优于行业"
+	} else if diff <= -5 {
+		return "🔴 低于行业"
+	}
+	return "➡️ 与行业接近"
 }
 
 func policySignalSVG(level int) string {
@@ -857,11 +902,11 @@ func mlDirectionCN(label string) string {
 func writeModule9(b *strings.Builder, steps []StepResult, latest, prev string, ml *MLPredictionData) {
 	b.WriteString("# 模块10: ML机器学习预测\n\n")
 
-	hasML := ml != nil && (ml.Financial != nil || ml.Sentiment != nil)
+	hasML := ml != nil && (ml.Financial != nil || ml.Sentiment != nil || ml.EngineD != nil)
 	if !hasML {
 		b.WriteString("> **说明**: 当前版本暂无机器学习模型，以下基于财务趋势做简易方向推断。\n\n")
 	} else {
-		b.WriteString("> **说明**: 以下预测结果由 ONNX 双引擎模型生成。\n\n")
+		b.WriteString("> **说明**: 以下预测结果由 ONNX 多引擎模型生成。\n\n")
 	}
 
 	// 双引擎融合总结（2-4周预测）
@@ -876,31 +921,80 @@ func writeModule9(b *strings.Builder, steps []StepResult, latest, prev string, m
 		}
 	}
 
-	// 引擎B：财务LSTM
+	// 引擎B：财务LSTM - 始终显示10.1章节
+	b.WriteString("## 10.1 Engine-B 财务趋势预测（BiLSTM+Self-Attention）\n\n")
 	if ml != nil && ml.Financial != nil {
 		fp := ml.Financial
-		b.WriteString("## 10.1 Engine-B 财务趋势预测（BiLSTM+Self-Attention）\n\n")
 		b.WriteString(fmt.Sprintf("| 指标 | 预测方向 | 概率 | 说明 |\n"))
 		b.WriteString("|------|----------|------|------|\n")
 		b.WriteString(fmt.Sprintf("| ROE 趋势 | %s | %.1f%% | 基于最近 8 季度财务序列 |\n", mlDirectionCN(fp.ROEDirection), fp.ROEProb*100))
 		b.WriteString(fmt.Sprintf("| 营收趋势 | %s | %.1f%% | 营收增长方向预测 |\n", mlDirectionCN(fp.RevenueDirection), fp.RevenueProb*100))
 		b.WriteString(fmt.Sprintf("| M-Score 趋势 | %s | %.1f%% | 财报质量变化方向 |\n", mlDirectionCN(fp.MScoreDirection), fp.MScoreProb*100))
 		b.WriteString(fmt.Sprintf("| 财务健康分 | %.2f / 10 | — | 综合健康度评分 |\n\n", fp.HealthScore))
+	} else {
+		b.WriteString("> **数据缺失**: Engine-B 模型暂不可用。可能原因：\n")
+		b.WriteString("> - ONNX 模型文件未加载（需要 `engine_b_financial.onnx`）\n")
+		b.WriteString("> - 或历史财务数据不足（需要至少 8 个季度数据）\n\n")
 	}
 
-	// 引擎A：舆情+价格
+	// 引擎A：舆情+价格 - 始终显示10.2章节
+	b.WriteString("## 10.2 Engine-A 市场情绪与价格融合预测（Cross-Attention）\n\n")
 	if ml != nil && ml.Sentiment != nil {
 		sp := ml.Sentiment
-		b.WriteString("## 10.2 Engine-A 市场情绪与价格融合预测（Cross-Attention）\n\n")
 		b.WriteString(fmt.Sprintf("| 指标 | 预测结果 | 概率 | 说明 |\n"))
 		b.WriteString("|------|----------|------|------|\n")
 		b.WriteString(fmt.Sprintf("| 次日走势 | %s | %.1f%% | 上涨/持平/下跌 |\n", mlDirectionCN(sp.MovementLabel), sp.MovementProb*100))
 		b.WriteString(fmt.Sprintf("| 异动概率 | %.2f%% | — | 价格异常波动预警 |\n\n", sp.AnomalyProb*100))
+	} else {
+		b.WriteString("> **数据缺失**: Engine-A 模型暂不可用。可能原因：\n")
+		b.WriteString("> - ONNX 模型文件未加载（需要 `engine_a_sentiment.onnx`）\n")
+		b.WriteString("> - 或市场舆情数据获取失败\n\n")
+	}
+
+	// 引擎D：风险预警 - 始终显示10.3章节
+	b.WriteString("## 10.3 Engine-D 风险预警模型（GradientBoosting）\n\n")
+	if ml != nil && ml.EngineD != nil {
+		dp := ml.EngineD
+		
+		// 风险等级颜色标识
+		riskEmoji := "🟢"
+		if dp.RiskLevel == "中风险" {
+			riskEmoji = "🟡"
+		} else if dp.RiskLevel == "高风险" {
+			riskEmoji = "🔴"
+		}
+		
+		modelStatus := "✅ 模型"
+		if !dp.ModelLoaded {
+			modelStatus = "⚠️ 规则"
+		}
+		
+		b.WriteString(fmt.Sprintf("| 指标 | 结果 | 说明 |\n"))
+		b.WriteString("|------|------|------|\n")
+		b.WriteString(fmt.Sprintf("| 风险评级 | %s %s | 基于%s评估 |\n", riskEmoji, dp.RiskLevel, modelStatus))
+		b.WriteString(fmt.Sprintf("| 风险概率 | %.1f%% | 财务造假/退市风险概率 |\n", dp.RiskProb*100))
+		
+		if len(dp.TopFactors) > 0 {
+			factorsStr := strings.Join(dp.TopFactors, ", ")
+			b.WriteString(fmt.Sprintf("| 主要风险因子 | %s | 影响最大的特征 |\n", factorsStr))
+		}
+		b.WriteString("\n")
+		
+		// 风险提示
+		if dp.RiskLabel == 1 {
+			b.WriteString("> ⚠️ **风险提示**: Engine-D 模型识别到潜在风险信号，建议进一步审慎评估。\n\n")
+		} else {
+			b.WriteString("> ✅ **风险评估**: 当前无显著风险信号，财务状况相对健康。\n\n")
+		}
+	} else {
+		b.WriteString("> **数据缺失**: Engine-D 模型暂不可用。可能原因：\n")
+		b.WriteString("> - ONNX 模型文件未加载（需要 `engine_d_risk.onnx`）\n")
+		b.WriteString("> - 或基于规则的回退评估也未启用\n\n")
 	}
 
 	// 如果没有 ML，保留原来的简易推断
 	if !hasML {
-		b.WriteString("## 10.3 负向因子\n\n")
+		b.WriteString("## 10.4 负向因子（基于财务指标的简易推断）\n\n")
 		var neg, pos []string
 		if g := getStepValue(steps, 9, latest, "growthRate"); g < 10 {
 			neg = append(neg, fmt.Sprintf("- 营收增长率 %.2f%%，低于理想水平", g))
@@ -1325,27 +1419,46 @@ func formatTradeLevels(quote *QuoteData, rim *RIMData, technical *TechnicalData,
 		}
 		target += ")"
 
-		// 止损位：悲观情景的85% 与 当前价的88%×收紧系数 取较高者
-		stopPrice := math.Max(pessimistic*0.85, price*0.88*stopTighten)
-		stop = fmt.Sprintf("%.2f元 (-%.1f%%)", stopPrice, (price-stopPrice)/price*100)
-
-		// 入场区间
-		low := price * 0.97 * entryDiscount
-		high := price * 1.02
+		// 入场区间（先计算）
+		var low, high float64
 		switch {
 		case price <= baseline:
+			low = price * 0.97 * entryDiscount
+			high = price * 1.02
 			entry = fmt.Sprintf("%.2f ~ %.2f元 (现价附近可建仓)", low, high)
 		case price <= optimistic:
-			entry = fmt.Sprintf("%.2f ~ %.2f元 (等待回调至基准价值)", baseline*0.95*entryDiscount, baseline)
+			low = baseline * 0.95 * entryDiscount
+			high = baseline
+			entry = fmt.Sprintf("%.2f ~ %.2f元 (等待回调至基准价值)", low, high)
 		default:
-			entry = fmt.Sprintf("%.2f ~ %.2f元 (高估/观望)", baseline*0.90*entryDiscount, baseline*0.95)
+			low = baseline * 0.90 * entryDiscount
+			high = baseline * 0.95
+			entry = fmt.Sprintf("%.2f ~ %.2f元 (高估/观望)", low, high)
 		}
+
+		// 止损位：悲观情景的85%、当前价的88%×收紧系数、入场区间低位的95% 三者取较高者
+		// 但必须低于入场区间低位，给买入后留足波动空间
+		stopPrice := math.Max(pessimistic*0.85, price*0.88*stopTighten)
+		// 确保止损位低于入场区间低位（预留至少5%的缓冲）
+		maxStopPrice := low * 0.95
+		if stopPrice >= low {
+			stopPrice = maxStopPrice
+		}
+		stop = fmt.Sprintf("%.2f元 (-%.1f%%)", stopPrice, (price-stopPrice)/price*100)
 	} else {
 		// 无 RIM 时的简易估算
 		target = "待接入RIM估值后计算"
+		low := price * 0.98 * entryDiscount
+		high := price * 1.02
+		entry = fmt.Sprintf("%.2f ~ %.2f元 (现价±2%%试探)", low, high)
+		
 		stopPrice := price * 0.90 * stopTighten
+		// 确保止损位低于入场区间低位（预留至少5%的缓冲）
+		maxStopPrice := low * 0.95
+		if stopPrice >= low {
+			stopPrice = maxStopPrice
+		}
 		stop = fmt.Sprintf("%.2f元 (-%.1f%%)", stopPrice, (price-stopPrice)/price*100)
-		entry = fmt.Sprintf("%.2f ~ %.2f元 (现价±2%%试探)", price*0.98*entryDiscount, price*1.02)
 	}
 	return
 }

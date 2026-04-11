@@ -28,6 +28,12 @@ export function ExportHistoricalFinancialData(arg1:string,arg2:string):Promise<v
 
 export function GetComparables(arg1:string):Promise<Array<string>>;
 
+export function GetIndustryDBMeta():Promise<Record<string, any>>;
+
+export function GetIndustryMetrics(arg1:string):Promise<analyzer.IndustryMetrics|boolean>;
+
+export function GetModule4Status(arg1:string):Promise<boolean>;
+
 export function GetPolicyLibraryMeta():Promise<Record<string, string>>;
 
 export function GetReport(arg1:string,arg2:string):Promise<string>;
@@ -50,6 +56,8 @@ export function GetWatchlistActivity():Promise<Array<main.WatchlistActivitySumma
 
 export function ImportFinancialReports(arg1:string):Promise<main.ImportResult>;
 
+export function InitIndustryDatabase():Promise<void>;
+
 export function RefreshIndustryBaselines():Promise<Record<string, analyzer.IndustryBaseline>>;
 
 export function RefreshStockProfile(arg1:string):Promise<main.StockProfile>;
@@ -65,5 +73,9 @@ export function ReorderWatchlist(arg1:Array<string>):Promise<void>;
 export function SaveDefaultPolicyLibrary():Promise<void>;
 
 export function SearchStocks(arg1:string):Promise<Array<main.StockInfo>>;
+
+export function UpdateIndustryDatabase():Promise<downloader.IndustryUpdateResult>;
+
+export function UpdateModule4Only(arg1:string):Promise<analyzer.AnalysisReport>;
 
 export function UpdatePolicyLibrary():Promise<downloader.PolicyUpdateResult>;

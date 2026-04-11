@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Unified ONNX inference entry for Engine A & Engine B.
+Unified inference entry for Engine A, B & D.
 Go calls this script via stdin/stdout JSON.
 """
 import json
@@ -12,8 +12,14 @@ import numpy as np
 try:
     import onnxruntime as ort
 except ImportError:
-    print(json.dumps({"error": "onnxruntime not installed. Run: pip install onnxruntime"}), file=sys.stderr)
-    sys.exit(1)
+    ort = None
+
+# Engine D imports
+try:
+    from sklearn.ensemble import GradientBoostingClassifier
+    ENGINE_D_AVAILABLE = True
+except ImportError:
+    ENGINE_D_AVAILABLE = False
 
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -22,6 +28,18 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 _session_a = None
 _session_b = None
 _scaler_b = None
+_model_d = None
+
+
+def get_model_d():
+    """加载 Engine-D 风险预警模型"""
+    global _model_d
+    if _model_d is None and ENGINE_D_AVAILABLE:
+        model_path = os.path.join(SCRIPT_DIR, "engine_d_risk", "model", "engine_d_model.pkl")
+        if os.path.exists(model_path):
+            with open(model_path, "rb") as f:
+                _model_d = pickle.load(f)
+    return _model_d
 
 
 def get_session_a():
@@ -120,6 +138,104 @@ def infer_engine_b(payload):
     }
 
 
+def infer_engine_d(payload):
+    """
+    Engine D: 风险预警模型推理
+    payload: {
+        "features": [mscore, zscore, cash_deviation, ar_risk, ...]  # 26维特征
+    }
+    
+    Returns:
+    {
+        "risk_label": 0/1,  # 0=健康, 1=风险
+        "risk_prob": 0.85,  # 风险概率
+        "risk_level": "高风险",  # 低风险/中风险/高风险
+        "top_factors": ["ascore", "gm_risk", ...]  # 主要风险因子
+    }
+    """
+    model = get_model_d()
+    if model is None:
+        # 模型未加载，返回基于规则的简单评估
+        features = payload.get("features", [])
+        if len(features) < 6:
+            return {"error": "insufficient features for Engine-D"}
+        
+        # 简化的规则评估
+        ascore = features[5] if len(features) > 5 else 0  # A-Score
+        zscore = features[1] if len(features) > 1 else 3  # Z-Score
+        mscore = features[0] if len(features) > 0 else -3  # M-Score
+        
+        risk_score = 0
+        if ascore > 60:
+            risk_score += 40
+        elif ascore > 50:
+            risk_score += 20
+        if zscore < 1.81:
+            risk_score += 30
+        elif zscore < 2.99:
+            risk_score += 15
+        if mscore > -2.22:
+            risk_score += 30
+        
+        risk_prob = min(risk_score / 100.0, 0.99)
+        risk_label = 1 if risk_prob > 0.5 else 0
+        
+        if risk_prob > 0.7:
+            risk_level = "高风险"
+        elif risk_prob > 0.4:
+            risk_level = "中风险"
+        else:
+            risk_level = "低风险"
+        
+        return {
+            "risk_label": risk_label,
+            "risk_prob": round(risk_prob, 4),
+            "risk_level": risk_level,
+            "top_factors": ["ascore", "zscore", "mscore"] if risk_label == 1 else [],
+            "model_loaded": False,
+        }
+    
+    # 使用模型推理
+    features = np.array(payload.get("features", []), dtype=np.float32).reshape(1, -1)
+    if features.shape[1] != 25:
+        return {"error": f"expected 25 features, got {features.shape[1]}"}
+    
+    risk_proba = model.predict_proba(features)[0]
+    risk_label = model.predict(features)[0]
+    
+    risk_prob = float(risk_proba[1])  # 风险类的概率
+    
+    if risk_prob > 0.7:
+        risk_level = "高风险"
+    elif risk_prob > 0.4:
+        risk_level = "中风险"
+    else:
+        risk_level = "低风险"
+    
+    # 获取特征重要性作为风险因子
+    importances = model.feature_importances_
+    feature_names = [
+        'mscore', 'zscore', 'cash_deviation', 'ar_risk', 'gm_risk', 'ascore',
+        'roe', 'gross_margin', 'revenue_growth', 'debt_ratio', 'ncf_to_profit',
+        'goodwill_to_equity', 'inventory_turnover', 'receivable_turnover',
+        'pe_ttm', 'pb', 'market_cap', 'turnover_20d', 'volatility_60d', 'max_drawdown_1y',
+        'pledge_ratio', 'regulatory_inquiry_count_1y', 'major_shareholder_reduction_1y',
+        'auditor_switch_count_2y'
+    ]
+    
+    # 找出最重要的3个特征
+    top_indices = np.argsort(importances)[-3:][::-1]
+    top_factors = [feature_names[i] for i in top_indices]
+    
+    return {
+        "risk_label": int(risk_label),
+        "risk_prob": round(risk_prob, 4),
+        "risk_level": risk_level,
+        "top_factors": top_factors,
+        "model_loaded": True,
+    }
+
+
 def main():
     req = json.load(sys.stdin)
     engine = req.get("engine")
@@ -129,6 +245,8 @@ def main():
             result = infer_engine_a(payload)
         elif engine == "B":
             result = infer_engine_b(payload)
+        elif engine == "D":
+            result = infer_engine_d(payload)
         else:
             result = {"error": f"unknown engine {engine}"}
         print(json.dumps(result))

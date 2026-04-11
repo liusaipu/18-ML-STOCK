@@ -50,6 +50,18 @@ export function GetComparables(arg1) {
   return window['go']['main']['App']['GetComparables'](arg1);
 }
 
+export function GetIndustryDBMeta() {
+  return window['go']['main']['App']['GetIndustryDBMeta']();
+}
+
+export function GetIndustryMetrics(arg1) {
+  return window['go']['main']['App']['GetIndustryMetrics'](arg1);
+}
+
+export function GetModule4Status(arg1) {
+  return window['go']['main']['App']['GetModule4Status'](arg1);
+}
+
 export function GetPolicyLibraryMeta() {
   return window['go']['main']['App']['GetPolicyLibraryMeta']();
 }
@@ -94,6 +106,10 @@ export function ImportFinancialReports(arg1) {
   return window['go']['main']['App']['ImportFinancialReports'](arg1);
 }
 
+export function InitIndustryDatabase() {
+  return window['go']['main']['App']['InitIndustryDatabase']();
+}
+
 export function RefreshIndustryBaselines() {
   return window['go']['main']['App']['RefreshIndustryBaselines']();
 }
@@ -124,6 +140,14 @@ export function SaveDefaultPolicyLibrary() {
 
 export function SearchStocks(arg1) {
   return window['go']['main']['App']['SearchStocks'](arg1);
+}
+
+export function UpdateIndustryDatabase() {
+  return window['go']['main']['App']['UpdateIndustryDatabase']();
+}
+
+export function UpdateModule4Only(arg1) {
+  return window['go']['main']['App']['UpdateModule4Only'](arg1);
 }
 
 export function UpdatePolicyLibrary() {

@@ -106,6 +106,7 @@ type MLSummary struct {
 type MLPredictionData struct {
 	Sentiment *MLSentimentPrediction `json:"sentiment,omitempty"`
 	Financial *MLFinancialPrediction `json:"financial,omitempty"`
+	EngineD   *MLDRiskPrediction     `json:"engine_d,omitempty"`
 	Summary   *MLSummary             `json:"summary,omitempty"`
 }
 

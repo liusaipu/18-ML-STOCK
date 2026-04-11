@@ -29,6 +29,15 @@ type MLFinancialPrediction struct {
 	HealthScore      float64 `json:"health_score"`
 }
 
+// MLDRiskPrediction Engine-D 风险预警结果
+type MLDRiskPrediction struct {
+	RiskLabel    int      `json:"risk_label"`
+	RiskProb     float64  `json:"risk_prob"`
+	RiskLevel    string   `json:"risk_level"`
+	TopFactors   []string `json:"top_factors"`
+	ModelLoaded  bool     `json:"model_loaded"`
+}
+
 // findProjectRoot 从指定目录向上查找项目根目录（通过 ml_models/inference.py 标记）
 func findProjectRoot(start string) string {
 	dir := start
@@ -422,6 +431,37 @@ func RunMLEngineB(financialSeq [][]float64) (*MLFinancialPrediction, error) {
 	result.MScoreDirection, result.MScoreProb = parseDir("mscore")
 	if h, ok := resp["health_score"].(float64); ok {
 		result.HealthScore = h
+	}
+	return result, nil
+}
+
+// RunMLEngineD 运行引擎 D 风险预警推理
+func RunMLEngineD(features []float64) (*MLDRiskPrediction, error) {
+	resp, err := callMLInference("D", map[string]any{
+		"features": features,
+	})
+	if err != nil {
+		return nil, err
+	}
+	result := &MLDRiskPrediction{}
+	if label, ok := resp["risk_label"].(float64); ok {
+		result.RiskLabel = int(label)
+	}
+	if prob, ok := resp["risk_prob"].(float64); ok {
+		result.RiskProb = prob
+	}
+	if level, ok := resp["risk_level"].(string); ok {
+		result.RiskLevel = level
+	}
+	if factors, ok := resp["top_factors"].([]any); ok {
+		for _, f := range factors {
+			if s, ok := f.(string); ok {
+				result.TopFactors = append(result.TopFactors, s)
+			}
+		}
+	}
+	if loaded, ok := resp["model_loaded"].(bool); ok {
+		result.ModelLoaded = loaded
 	}
 	return result, nil
 }

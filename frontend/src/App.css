@@ -25,20 +25,24 @@ body.light {
 /* 主题切换按钮 */
 .theme-toggle {
   position: fixed;
-  top: 12px;
-  right: 16px;
+  top: 7px;
+  right: 12px;
   z-index: 200;
-  width: 34px;
-  height: 34px;
+  width: 30px;
+  height: 30px;
+  line-height: 1;
+  padding: 0;
   border: 1px solid #2a3a4a;
-  border-radius: 8px;
+  border-radius: 4px;
   background: #141b24;
-  font-size: 16px;
+  font-size: 14px;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   transition: all 0.15s;
+  box-sizing: border-box;
+  -webkit-appearance: none;
 }
 
 .theme-toggle:hover {
@@ -413,12 +417,12 @@ body.light .info-panel {
 
 .stock-header h1 {
   margin: 0;
-  font-size: 22px;
+  font-size: 18px;
   font-weight: 600;
   color: #f0f0f0;
   display: flex;
   align-items: baseline;
-  gap: 10px;
+  gap: 8px;
 }
 
 body.light .stock-header h1 {
@@ -759,8 +763,8 @@ body.light .report-panel {
   align-items: center;
   justify-content: space-between;
   gap: 4px;
-  padding: 12px 16px;
-  padding-right: 80px;
+  padding: 8px 12px;
+  padding-right: 50px;
   border-bottom: 1px solid #1f2933;
   background: #0f1419;
 }
@@ -1052,6 +1056,7 @@ body.light .history-select {
   align-items: center;
   gap: 8px;
   margin-left: auto;
+  height: 30px;
 }
 
 .trace-select {
@@ -1078,6 +1083,7 @@ body.light .trace-select {
   position: relative;
   display: flex;
   align-items: center;
+  height: 30px;
 }
 
 .report-search-wrap::before {
@@ -1093,14 +1099,16 @@ body.light .trace-select {
 }
 
 .report-search-input {
-  padding: 5px 26px 5px 8px;
+  padding: 0 26px 0 8px;
   border: 1px solid #2a3a4a;
   border-radius: 4px;
   background: #141b24;
   color: #e6e6e6;
   font-size: 12px;
   width: 120px;
+  height: 30px;
   outline: none;
+  box-sizing: border-box;
 }
 
 .report-search-input:focus {
@@ -1489,14 +1497,16 @@ body.light .trace-note {
 
 /* 报告下载按钮 */
 .btn-download {
-  padding: 6px 12px;
+  padding: 0 12px;
   border: 1px solid #2a3a4a;
   border-radius: 4px;
   background: #141b24;
   color: #e6e6e6;
   font-size: 12px;
+  height: 30px;
   cursor: pointer;
   transition: all 0.15s;
+  box-sizing: border-box;
 }
 
 .btn-download:hover {
@@ -1527,14 +1537,16 @@ body.light .btn-download:disabled {
 
 /* 删除报告按钮 */
 .btn-delete-report {
-  padding: 6px 12px;
+  padding: 0 12px;
   border: 1px solid #2a3a4a;
   border-radius: 4px;
   background: #141b24;
   color: #e6e6e6;
   font-size: 12px;
+  height: 30px;
   cursor: pointer;
   transition: all 0.15s;
+  box-sizing: border-box;
 }
 
 .btn-delete-report:hover {
@@ -2243,4 +2255,12 @@ body.light .rim-eps-item input {
   border-color: #d1d5db;
   background: #ffffff;
   color: #1f2937;
+}
+
+/* 强制按钮可点击 */
+.btn-delete-report,
+.btn-download {
+  position: relative;
+  z-index: 1000;
+  pointer-events: auto !important;
 }

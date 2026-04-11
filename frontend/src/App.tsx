@@ -56,6 +56,10 @@ import {
   GetStockConcepts,
   ExportCurrentFinancialData,
   ExportHistoricalFinancialData,
+  UpdatePolicyLibrary,
+  UpdateIndustryDatabase,
+  GetIndustryDBMeta,
+  UpdateModule4Only,
 } from '../wailsjs/go/main/App'
 import type { main, analyzer, downloader } from '../wailsjs/go/models'
 
@@ -162,7 +166,12 @@ function App() {
   const [compQuery, setCompQuery] = useState('')
   const [showCompDropdown, setShowCompDropdown] = useState(false)
   const [compDownloading, setCompDownloading] = useState(false)
+  const [compReportsDownloaded, setCompReportsDownloaded] = useState(false)
   const [concepts, setConcepts] = useState<downloader.StockConcepts | null>(null)
+  const [policyLibMeta, setPolicyLibMeta] = useState<{version: string, updatedAt: string} | null>(null)
+  const [policyUpdating, setPolicyUpdating] = useState(false)
+  const [industryDBMeta, setIndustryDBMeta] = useState<{version: string, updatedAt: string, count: number} | null>(null)
+  const [industryUpdating, setIndustryUpdating] = useState(false)
   const [quote, setQuote] = useState<StockQuote | null>(null)
   const [quoteError, setQuoteError] = useState<string>('')
   const [klines, setKlines] = useState<KlineData[]>([])
@@ -367,6 +376,10 @@ function App() {
       })
       setActivityMap(map)
     })
+    // 加载政策库元信息
+    loadPolicyLibMeta()
+    // 加载行业数据库元信息
+    loadIndustryDBMeta()
   }, [])
 
   // 自选股变化时刷新活跃度
@@ -513,6 +526,68 @@ function App() {
     }
   }, [])
 
+  // 加载政策库元信息（从 localStorage 或默认值）
+  const loadPolicyLibMeta = useCallback(() => {
+    try {
+      const saved = localStorage.getItem('policy_library_meta')
+      if (saved) {
+        setPolicyLibMeta(JSON.parse(saved))
+      } else {
+        setPolicyLibMeta({ version: 'builtin', updatedAt: '内置默认' })
+      }
+    } catch {
+      setPolicyLibMeta({ version: 'builtin', updatedAt: '内置默认' })
+    }
+  }, [])
+
+  // 更新政策库
+  const handleUpdatePolicyLibrary = useCallback(async () => {
+    setPolicyUpdating(true)
+    try {
+      const result = await UpdatePolicyLibrary()
+      if (result) {
+        const meta = { version: result.path ? 'external' : 'builtin', updatedAt: new Date().toLocaleString('zh-CN') }
+        setPolicyLibMeta(meta)
+        localStorage.setItem('policy_library_meta', JSON.stringify(meta))
+        alert(`政策库更新成功！\n新增行业关键词: ${result.added_industry_keywords}\n新增概念关键词: ${result.added_concept_keywords}\n行业总数: ${result.total_industries}\n概念总数: ${result.total_concepts}`)
+      }
+    } catch (err: any) {
+      alert('政策库更新失败: ' + String(err))
+    } finally {
+      setPolicyUpdating(false)
+    }
+  }, [])
+
+  // 加载行业数据库元信息
+  const loadIndustryDBMeta = useCallback(async () => {
+    try {
+      const meta = await GetIndustryDBMeta()
+      setIndustryDBMeta({
+        version: meta.version || '1.0',
+        updatedAt: meta.updatedAt || '未更新',
+        count: meta.count || 0
+      })
+    } catch {
+      setIndustryDBMeta({ version: '1.0', updatedAt: '未更新', count: 0 })
+    }
+  }, [])
+
+  // 更新行业数据库
+  const handleUpdateIndustryDB = useCallback(async () => {
+    setIndustryUpdating(true)
+    try {
+      const result = await UpdateIndustryDatabase()
+      if (result) {
+        await loadIndustryDBMeta()
+        alert(`行业数据库更新成功！\n更新行业数: ${result.updated_count}\n跳过行业数: ${result.skipped_count}\n行业总数: ${result.total_industries}`)
+      }
+    } catch (err: any) {
+      alert('行业数据库更新失败: ' + String(err))
+    } finally {
+      setIndustryUpdating(false)
+    }
+  }, [loadIndustryDBMeta])
+
   const loadComparables = useCallback(async (code: string) => {
     try {
       const list = await GetComparables(code)
@@ -566,6 +641,7 @@ function App() {
       setReport(null)
       setViewingHistory(null)
       setHistoryContent('')
+      setCompReportsDownloaded(false)
       await loadReportHistory(stock.code, true)
       await loadDataHistory(stock.code)
       await loadProfile(stock.code)
@@ -808,18 +884,25 @@ function App() {
   }
 
   const handleReportDownload = async () => {
-    if (!report || !selectedStock) return
-    const content = viewingHistory ? historyContent : report.markdownContent
+    if (!selectedStock || !displayContent) {
+      return
+    }
+    const content = viewingHistory ? historyContent : report?.markdownContent
+    if (!content) {
+      alert('没有可下载的报告内容')
+      return
+    }
     try {
       await DownloadReport(selectedStock.code, content)
     } catch (err: any) {
-      console.error('下载报告失败:', err)
-      alert(String(err))
+      alert('下载报告失败: ' + String(err))
     }
   }
 
   const handleDeleteReport = async () => {
-    if (!selectedStock || !displayContent) return
+    if (!selectedStock || !displayContent) {
+      return
+    }
     let filename = viewingHistory
     if (!filename) {
       const files = await GetReportHistory(selectedStock.code)
@@ -829,7 +912,9 @@ function App() {
       }
       filename = files[0]
     }
-    if (!confirm(`确定删除报告 ${filename} 吗？`)) return
+    if (!confirm(`确定删除报告 ${filename} 吗？`)) {
+      return
+    }
     try {
       await DeleteReport(selectedStock.code, filename)
       await loadReportHistory(selectedStock.code)
@@ -838,11 +923,9 @@ function App() {
         setHistoryContent('')
       }
       if (!viewingHistory) {
-        // 删除的是最新报告，清空当前展示
         setReport(null)
       }
     } catch (err: any) {
-      console.error('删除报告失败:', err)
       alert('删除报告失败: ' + String(err))
     }
   }
@@ -868,6 +951,7 @@ function App() {
       await AddComparable(selectedStock.code, stock.code)
       const list = await GetComparables(selectedStock.code)
       setComparables(list || [])
+      setCompReportsDownloaded(false) // 可比公司变化，需要重新下载
       setCompQuery('')
       setShowCompDropdown(false)
     } catch (err: any) {
@@ -881,6 +965,7 @@ function App() {
       await RemoveComparable(selectedStock.code, code)
       const list = await GetComparables(selectedStock.code)
       setComparables(list || [])
+      setCompReportsDownloaded(false) // 可比公司变化，需要重新下载
     } catch (err: any) {
       alert(String(err))
     }
@@ -893,6 +978,9 @@ function App() {
       const result = await DownloadComparableReports(selectedStock.code)
       if (result) {
         alert(result.message)
+        if (result.success) {
+          setCompReportsDownloaded(true)
+        }
       }
     } catch (err: any) {
       console.error('下载可比公司财报失败:', err)
@@ -904,19 +992,14 @@ function App() {
 
   const handleAnalyzeWithComparables = async () => {
     if (!selectedStock || comparables.length === 0) return
-    setCompDownloading(true)
     setAnalyzing(true)
     setAnalyzeProgress(5)
     const interval = setInterval(() => {
-      setAnalyzeProgress((p) => (p >= 90 ? 90 : p + 3))
-    }, 400)
+      setAnalyzeProgress((p) => (p >= 90 ? 90 : p + 5))
+    }, 300)
     try {
-      const downloadResult = await DownloadComparableReports(selectedStock.code)
-      if (downloadResult && !downloadResult.success) {
-        alert(downloadResult.message || '下载可比公司财报失败')
-        return
-      }
-      const result = await AnalyzeStock(selectedStock.code, true)
+      // 只更新模块4，不重新下载财报，不跑完整分析
+      const result = await UpdateModule4Only(selectedStock.code)
       setReport(result)
       setViewingHistory(null)
       setHistoryContent('')
@@ -929,13 +1012,12 @@ function App() {
         handleTocJump('模块4-行业横向对比分析')
       }, 150)
     } catch (err: any) {
-      console.error('分析失败:', err)
+      console.error('更新模块4失败:', err)
       alert(String(err))
     } finally {
       clearInterval(interval)
       setAnalyzeProgress(100)
       setTimeout(() => {
-        setCompDownloading(false)
         setAnalyzing(false)
         setAnalyzeProgress(0)
       }, 400)
@@ -1302,7 +1384,7 @@ function App() {
                   </span>
                 )}
               </button>
-              <button className="btn primary" onClick={handleAnalyze} disabled={analyzing || downloading || loading}>
+              <button className="btn primary" onClick={handleAnalyze} disabled={analyzing || downloading || loading || dataHistory.length === 0} title={dataHistory.length === 0 ? '请先下载或导入财报数据' : ''}>
                 {analyzing ? (
                   <>
                     <span className="btn-progress" style={{ width: `${analyzeProgress}%` }} />
@@ -1495,12 +1577,13 @@ function App() {
                   </button>
                   {(() => {
                     const compChanged = JSON.stringify([...appliedComparables].sort()) !== JSON.stringify([...comparables].sort())
+                    const canUpdate = compReportsDownloaded && comparables.length > 0
                     return (
                       <button
                         className={`btn-icon cp-merge${compChanged ? ' changed' : ''}`}
-                        title={compChanged ? '可比公司已变更，点击下载最新财报并更新到报告' : '下载最新可比公司财报并更新到报告'}
+                        title={canUpdate ? '更新模块4（行业横向对比分析）到报告' : '请先下载可比公司财报'}
                         onClick={handleAnalyzeWithComparables}
-                        disabled={analyzing || comparables.length === 0}
+                        disabled={analyzing || !canUpdate}
                       >
                         {analyzing ? (
                           '···'
@@ -1525,6 +1608,46 @@ function App() {
                       </button>
                     )
                   })()}
+                </div>
+              </div>
+            </Collapsible>
+
+            <Collapsible title="📚 产业政策库">
+              <div className="policy-lib-panel" style={{ marginTop: 0, marginBottom: 0, padding: '8px 0' }}>
+                <div className="policy-lib-info" style={{ marginBottom: 12, fontSize: 13, color: 'var(--text-secondary)' }}>
+                  <div>版本: <span style={{ color: 'var(--text-primary)' }}>{policyLibMeta?.version || 'builtin'}</span></div>
+                  <div style={{ marginTop: 4 }}>更新于: <span style={{ color: 'var(--text-primary)' }}>{policyLibMeta?.updatedAt || '内置默认'}</span></div>
+                </div>
+                <button
+                  className="btn-text"
+                  onClick={handleUpdatePolicyLibrary}
+                  disabled={policyUpdating}
+                  style={{ width: '100%', justifyContent: 'center' }}
+                >
+                  {policyUpdating ? '更新中...' : '🔄 更新政策库'}
+                </button>
+                <div style={{ marginTop: 8, fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                  从 CCTV 新闻和东方财富概念板块提取最新政策关键词
+                </div>
+              </div>
+            </Collapsible>
+
+            <Collapsible title="🏭 行业均值数据库">
+              <div className="industry-db-panel" style={{ marginTop: 0, marginBottom: 0, padding: '8px 0' }}>
+                <div className="industry-db-info" style={{ marginBottom: 12, fontSize: 13, color: 'var(--text-secondary)' }}>
+                  <div>行业数: <span style={{ color: 'var(--text-primary)' }}>{industryDBMeta?.count || 0}</span></div>
+                  <div style={{ marginTop: 4 }}>更新于: <span style={{ color: 'var(--text-primary)' }}>{industryDBMeta?.updatedAt || '未更新'}</span></div>
+                </div>
+                <button
+                  className="btn-text"
+                  onClick={handleUpdateIndustryDB}
+                  disabled={industryUpdating}
+                  style={{ width: '100%', justifyContent: 'center' }}
+                >
+                  {industryUpdating ? '更新中(约2-3分钟)...' : '🔄 更新行业数据库'}
+                </button>
+                <div style={{ marginTop: 8, fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                  从 A 股所有股票财务数据计算各行业均值（ROE、毛利率、负债率等）
                 </div>
               </div>
             </Collapsible>

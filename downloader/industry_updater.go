@@ -1,0 +1,50 @@
+package downloader
+
+import (
+	"encoding/json"
+	"fmt"
+	"os/exec"
+	"path/filepath"
+	"runtime"
+)
+
+// IndustryUpdateResult 行业数据库更新结果
+type IndustryUpdateResult struct {
+	Success         bool     `json:"success"`
+	Path            string   `json:"path"`
+	TotalIndustries int      `json:"total_industries"`
+	UpdatedCount    int      `json:"updated_count"`
+	SkippedCount    int      `json:"skipped_count"`
+	Errors          []string `json:"errors,omitempty"`
+	Error           string   `json:"error,omitempty"`
+}
+
+// updateIndustryScriptPath 返回 update_industry_database.py 绝对路径
+func updateIndustryScriptPath() string {
+	_, b, _, _ := runtime.Caller(0)
+	base := filepath.Dir(b)
+	root := findProjectRootByMarker(base, filepath.Join("scripts", "update_industry_database.py"))
+	if root != "" {
+		return filepath.Join(root, "scripts", "update_industry_database.py")
+	}
+	return filepath.Join(base, "..", "scripts", "update_industry_database.py")
+}
+
+// UpdateIndustryDatabase 调用 Python 脚本更新行业均值数据库
+func UpdateIndustryDatabase(dataDir string) (*IndustryUpdateResult, error) {
+	script := updateIndustryScriptPath()
+	python := resolvePythonExecutable()
+	cmd := exec.Command(python, script, dataDir)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return nil, fmt.Errorf("行业数据库更新脚本执行失败: %v, output: %s", err, string(output))
+	}
+	var result IndustryUpdateResult
+	if err := json.Unmarshal(output, &result); err != nil {
+		return nil, fmt.Errorf("解析行业数据库更新结果失败: %v, raw: %s", err, string(output))
+	}
+	if !result.Success {
+		return &result, fmt.Errorf("行业数据库更新未成功: %s", result.Error)
+	}
+	return &result, nil
+}

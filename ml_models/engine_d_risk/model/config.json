@@ -1,0 +1,116 @@
+{
+  "features": [
+    "mscore",
+    "zscore",
+    "cash_deviation",
+    "ar_risk",
+    "gm_risk",
+    "ascore",
+    "roe",
+    "gross_margin",
+    "revenue_growth",
+    "debt_ratio",
+    "ncf_to_profit",
+    "goodwill_to_equity",
+    "inventory_turnover",
+    "receivable_turnover",
+    "pe_ttm",
+    "pb",
+    "market_cap",
+    "turnover_20d",
+    "volatility_60d",
+    "max_drawdown_1y",
+    "pledge_ratio",
+    "regulatory_inquiry_count_1y",
+    "major_shareholder_reduction_1y",
+    "auditor_switch_count_2y",
+    "cfo_change_count_2y"
+  ],
+  "feature_importance": [
+    {
+      "ascore": 0.5603883651269437
+    },
+    {
+      "gm_risk": 0.14811227380639203
+    },
+    {
+      "ar_risk": 0.1441074040792079
+    },
+    {
+      "cash_deviation": 0.05637719376327253
+    },
+    {
+      "zscore": 0.04764976392137585
+    },
+    {
+      "debt_ratio": 0.01356284072879847
+    },
+    {
+      "goodwill_to_equity": 0.009956778501289799
+    },
+    {
+      "major_shareholder_reduction_1y": 0.007653007913516786
+    },
+    {
+      "ncf_to_profit": 0.0033448671859528027
+    },
+    {
+      "regulatory_inquiry_count_1y": 0.003145710107752904
+    },
+    {
+      "roe": 0.001998290441120072
+    },
+    {
+      "revenue_growth": 0.0011787492506796908
+    },
+    {
+      "inventory_turnover": 0.0008075571544850838
+    },
+    {
+      "volatility_60d": 0.0006982718055561327
+    },
+    {
+      "max_drawdown_1y": 0.00042759764277696435
+    },
+    {
+      "pledge_ratio": 0.00019551085881447882
+    },
+    {
+      "cfo_change_count_2y": 0.0001789643583743693
+    },
+    {
+      "pb": 0.00011686131067960261
+    },
+    {
+      "gross_margin": 2.3312585249573135e-05
+    },
+    {
+      "market_cap": 2.0971156290506486e-05
+    },
+    {
+      "pe_ttm": 1.7206115115955103e-05
+    },
+    {
+      "mscore": 1.6261742068398614e-05
+    },
+    {
+      "turnover_20d": 1.3478722233371311e-05
+    },
+    {
+      "receivable_turnover": 8.24847804216694e-06
+    },
+    {
+      "auditor_switch_count_2y": 5.13244010847504e-07
+    }
+  ],
+  "model_params": {
+    "n_estimators": 100,
+    "max_depth": 4,
+    "learning_rate": 0.1
+  },
+  "train_info": {
+    "train_time": "2026-04-11T14:09:05.787193",
+    "n_samples": 1388,
+    "n_features": 25
+  }
+}
