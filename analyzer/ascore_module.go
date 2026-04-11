@@ -36,8 +36,20 @@ func writeAScoreProfile(b *strings.Builder, steps []StepResult, years []string, 
 	// 1. 总览横幅
 	b.WriteString(fmt.Sprintf("> **%s** | **A-Score = %.1f** | %s\n\n", ascoreBadge(as), as, ascoreBrief(as)))
 
-	// 2. 六维雷达分解
-	b.WriteString("## A-Score 六维风险分解\n\n")
+	// 2. 核心子指标概览（原模块3.5内容）
+	b.WriteString("## 8.1 A-Score 核心子指标概览\n\n")
+	b.WriteString("| 子指标 | 数值 | 风险说明 |\n")
+	b.WriteString("|--------|------|----------|\n")
+	b.WriteString(fmt.Sprintf("| **M-Score** | %.3f | Beneish 财务造假风险指标 |\n", ms))
+	b.WriteString(fmt.Sprintf("| **Z-Score** | %.2f | Altman 破产风险评分 |\n", zs))
+	b.WriteString(fmt.Sprintf("| **现金流偏离度** | %.1f%% | 净利润与经营现金流背离程度 |\n", cd))
+	b.WriteString(fmt.Sprintf("| **应收账款异常度** | %.1f%% | 应收增速 vs 营收增速偏离 |\n", ar))
+	b.WriteString(fmt.Sprintf("| **毛利率异常波动** | %.1f%% | 毛利率连续恶化信号 |\n", gm))
+	b.WriteString(fmt.Sprintf("| **A-Score（综合）** | **%.1f** | **%s** |\n", as, ascoreComment(as)))
+	b.WriteString("\n")
+
+	// 3. 六维雷达分解
+	b.WriteString("## 8.2 A-Score 六维风险分解\n\n")
 	b.WriteString("| 维度 | 原始指标 | 风险分 | 权重 | 评估 |\n")
 	b.WriteString("|------|----------|--------|------|------|\n")
 	b.WriteString(fmt.Sprintf("| **M-Score（造假风险）** | %.3f | %.1f | 15%% | %s |\n", ms, mRisk, riskLevel(mRisk)))
@@ -49,9 +61,9 @@ func writeAScoreProfile(b *strings.Builder, steps []StepResult, years []string, 
 	b.WriteString(fmt.Sprintf("| **A-Score（综合）** | — | **%.1f** | 100%% | **%s** |\n", as, riskLevel(as)))
 	b.WriteString("\n")
 
-	// 3. 历史趋势
+	// 4. 历史趋势
 	if len(years) >= 2 {
-		b.WriteString("## A-Score 历史趋势（近5年）\n\n")
+		b.WriteString("## 8.3 A-Score 历史趋势（近5年）\n\n")
 		b.WriteString("| 年度 | A-Score | 趋势 | 状态 |\n")
 		b.WriteString("|------|---------|------|------|\n")
 		var prevAScore float64 = -1
@@ -78,7 +90,7 @@ func writeAScoreProfile(b *strings.Builder, steps []StepResult, years []string, 
 		b.WriteString("\n")
 	}
 
-	// 4. 同行业对比
+	// 5. 同行业对比
 	if comp != nil && comp.HasData && len(comp.Metrics) > 0 {
 		var compAScores []float64
 		for _, m := range comp.Metrics {
@@ -93,7 +105,7 @@ func writeAScoreProfile(b *strings.Builder, steps []StepResult, years []string, 
 				avg += v
 			}
 			avg /= float64(len(compAScores))
-			b.WriteString("## 同行业 A-Score 参考（基于 M-Score 估算）\n\n")
+			b.WriteString("## 8.4 同行业 A-Score 参考（基于 M-Score 估算）\n\n")
 			b.WriteString("| 指标 | 当前公司 | 可比均值 | 差异 |\n")
 			b.WriteString("|------|----------|----------|------|\n")
 			diff := as - avg
@@ -108,8 +120,8 @@ func writeAScoreProfile(b *strings.Builder, steps []StepResult, years []string, 
 		}
 	}
 
-	// 5. 调优建议
-	b.WriteString("## A-Score 调优建议\n\n")
+	// 6. 调优建议
+	b.WriteString("## 8.5 A-Score 调优建议\n\n")
 	var tips []string
 	if mRisk >= 60 {
 		tips = append(tips, "M-Score 偏高：重点关注应收账款增速、收入确认政策及费用资本化情况，建议核查审计意见。")

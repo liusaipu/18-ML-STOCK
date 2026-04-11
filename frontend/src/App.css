@@ -25,7 +25,7 @@ body.light {
 /* 主题切换按钮 */
 .theme-toggle {
   position: fixed;
-  top: 7px;
+  top: 8px;
   right: 12px;
   z-index: 200;
   width: 30px;
@@ -519,21 +519,72 @@ body.light .stock-info-time {
   text-decoration: underline;
 }
 
+/* 主操作按钮区域 */
 .actions {
   display: flex;
-  flex-direction: row;
-  gap: 10px;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 0 12px;
   margin-bottom: 8px;
 }
 
 .actions .btn {
   flex: 1;
+  max-width: 140px;
 }
 
-.actions-sub {
-  display: flex;
-  justify-content: flex-end;
-  margin-bottom: 12px;
+/* 按钮下方状态显示 - 单行 */
+.action-status-line {
+  min-height: 16px;
+  line-height: 16px;
+  margin-top: 2px;
+  margin-bottom: 4px;
+  font-size: 11px;
+  text-align: left;
+  padding-left: 16px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.action-status-line span {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.action-status-line .status-downloading {
+  color: #3b82f6;
+}
+
+.action-status-line .status-success {
+  color: #22c55e;
+}
+
+.action-status-line .status-error {
+  color: #ef4444;
+}
+
+.action-status-line .status-analyzing {
+  color: #8b5cf6;
+}
+
+body.light .action-status-line .status-downloading {
+  color: #2563eb;
+}
+
+body.light .action-status-line .status-success {
+  color: #16a34a;
+}
+
+body.light .action-status-line .status-error {
+  color: #dc2626;
+}
+
+body.light .action-status-line .status-analyzing {
+  color: #7c3aed;
 }
 
 .btn-text {

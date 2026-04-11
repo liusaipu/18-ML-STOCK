@@ -152,6 +152,7 @@ function App() {
   const [importResult, setImportResult] = useState<ImportResult | null>(null)
   const [downloadResult, setDownloadResult] = useState<DownloadResult | null>(null)
   const [downloading, setDownloading] = useState(false)
+  const [downloadStatus, setDownloadStatus] = useState<{type: 'success' | 'error' | null, message: string}>({type: null, message: ''})
   const [report, setReport] = useState<AnalysisReport | null>(null)
   const [snapshots, setSnapshots] = useState<Record<string, AnalysisReport>>({})
   const [analyzing, setAnalyzing] = useState(false)
@@ -710,24 +711,38 @@ function App() {
   const handleDownload = async () => {
     if (!selectedStock) return
     setDownloading(true)
+    setDownloadStatus({type: null, message: ''})
     try {
       const result = await DownloadReports(selectedStock.code)
       setDownloadResult(result)
       if (result.success) {
-        alert(result.message + '\n年份: ' + result.years.join(', '))
+        // 简化消息：年份多时显示范围
+        const years = result.years || []
+        let yearStr = ''
+        if (years.length > 0) {
+          if (years.length <= 3) {
+            yearStr = years.join(', ')
+          } else {
+            yearStr = `${years[0]}～${years[years.length - 1]}`
+          }
+        }
+        const msg = `✅ 下载成功${yearStr ? '，包含' + yearStr + '年' : ''}`
+        setDownloadStatus({type: 'success', message: msg})
         await loadDataHistory(selectedStock.code)
+        // 3秒后清除成功消息
+        setTimeout(() => setDownloadStatus({type: null, message: ''}), 3000)
       } else {
-        alert('下载失败')
+        setDownloadStatus({type: 'error', message: '❌ 下载失败'})
       }
     } catch (err: any) {
       console.error('下载失败:', err)
       const msg = err?.message || String(err)
       if (msg.includes('companyType') || msg.includes('未找到') || msg.includes('无数据') || msg.includes('无法确定')) {
-        alert('下载失败：该股票财报暂不可从网络获取，建议手动导入CSV')
+        setDownloadStatus({type: 'error', message: '❌ 该股票财报暂不可从网络获取，建议手动导入CSV'})
       } else if (msg.includes('timeout') || msg.includes('Timeout') || msg.includes('超时')) {
-        alert('下载失败：网络超时，请稍后重试')
+        setDownloadStatus({type: 'error', message: '❌ 网络超时，请稍后重试'})
       } else {
-        alert('下载失败：' + msg)
+        setDownloadStatus({type: 'error', message: '❌ ' + msg})
       }
     } finally {
       setDownloading(false)
@@ -759,7 +774,10 @@ function App() {
     setAnalyzing(true)
     setAnalyzeProgress(5)
     const interval = setInterval(() => {
-      setAnalyzeProgress((p) => (p >= 90 ? 90 : p + 3))
+      setAnalyzeProgress((p) => {
+        if (p >= 85) return 90 // 停在90%，等待网络数据
+        return p + 3
+      })
     }, 400)
     try {
       const result = await AnalyzeStock(selectedStock.code, overwriteLatest)
@@ -1369,44 +1387,52 @@ function App() {
               </div>
             </div>
 
-            <div className="actions">
-              <button className="btn primary" onClick={handleDownload} disabled={downloading || loading}>
-                {downloading ? (
-                  '下载中...'
-                ) : (
-                  <span className="btn-content">
-                    下载财报
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                      <polyline points="7 10 12 15 17 10" />
-                      <line x1="12" y1="15" x2="12" y2="3" />
-                    </svg>
-                  </span>
-                )}
-              </button>
-              <button className="btn primary" onClick={handleAnalyze} disabled={analyzing || downloading || loading || dataHistory.length === 0} title={dataHistory.length === 0 ? '请先下载或导入财报数据' : ''}>
-                {analyzing ? (
-                  <>
-                    <span className="btn-progress" style={{ width: `${analyzeProgress}%` }} />
-                    <span style={{ position: 'relative', zIndex: 1 }}>分析中 {analyzeProgress}%</span>
-                  </>
-                ) : (
-                  <span className="btn-content">
-                    18步分析
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                      <line x1="4" y1="20" x2="4" y2="14" />
-                      <line x1="8" y1="20" x2="8" y2="10" />
-                      <line x1="12" y1="20" x2="12" y2="16" />
-                      <path d="M16 12l4 4-4 4" />
-                    </svg>
-                  </span>
-                )}
-              </button>
-            </div>
-            <div className="actions-sub">
+            {/* 导入按钮放在最上方 */}
+            <div className="actions-sub" style={{ marginBottom: 8, justifyContent: 'flex-start' }}>
               <button className="btn-text" onClick={handleImport} disabled={loading}>
                 {loading ? '处理中...' : '导入本地csv/excel财报'}
               </button>
+            </div>
+
+            {/* 主操作按钮 - 保持原样 */}
+            <div className="actions">
+              <button className="btn primary" onClick={handleDownload} disabled={downloading || loading}>
+                <span className="btn-content">
+                  下载财报
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                    <polyline points="7 10 12 15 17 10" />
+                    <line x1="12" y1="15" x2="12" y2="3" />
+                  </svg>
+                </span>
+              </button>
+              <button className="btn primary" onClick={handleAnalyze} disabled={analyzing || downloading || loading || dataHistory.length === 0} title={dataHistory.length === 0 ? '请先下载或导入财报数据' : ''}>
+                <span className="btn-content">
+                  18步分析
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="4" y1="20" x2="4" y2="14" />
+                    <line x1="8" y1="20" x2="8" y2="10" />
+                    <line x1="12" y1="20" x2="12" y2="16" />
+                    <path d="M16 12l4 4-4 4" />
+                  </svg>
+                </span>
+              </button>
+            </div>
+
+            {/* 状态显示 - 按钮下方一行 */}
+            <div className="action-status-line">
+              {downloading && <span className="status-downloading">正在下载...</span>}
+              {downloadStatus.type === 'success' && !downloading && (
+                <span className="status-success" title={downloadStatus.message}>{downloadStatus.message}</span>
+              )}
+              {downloadStatus.type === 'error' && !downloading && (
+                <span className="status-error" title={downloadStatus.message}>{downloadStatus.message.length > 30 ? downloadStatus.message.slice(0, 30) + '...' : downloadStatus.message}</span>
+              )}
+              {analyzing && (
+                <span className="status-analyzing">
+                  分析中 {analyzeProgress}%{analyzeProgress >= 90 ? '(获取行情/舆情/ML...)' : ''}
+                </span>
+              )}
             </div>
 
             {importResult && importResult.success && (
