@@ -65,3 +65,5 @@ export function ReorderWatchlist(arg1:Array<string>):Promise<void>;
 export function SaveDefaultPolicyLibrary():Promise<void>;
 
 export function SearchStocks(arg1:string):Promise<Array<main.StockInfo>>;
+
+export function UpdatePolicyLibrary():Promise<downloader.PolicyUpdateResult>;

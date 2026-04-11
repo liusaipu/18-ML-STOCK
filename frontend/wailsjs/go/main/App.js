@@ -125,3 +125,7 @@ export function SaveDefaultPolicyLibrary() {
 export function SearchStocks(arg1) {
   return window['go']['main']['App']['SearchStocks'](arg1);
 }
+
+export function UpdatePolicyLibrary() {
+  return window['go']['main']['App']['UpdatePolicyLibrary']();
+}

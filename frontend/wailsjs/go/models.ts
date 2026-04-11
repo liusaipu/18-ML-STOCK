@@ -402,6 +402,30 @@ export namespace downloader {
 	        this.amount = source["amount"];
 	    }
 	}
+	export class PolicyUpdateResult {
+	    success: boolean;
+	    path: string;
+	    added_industry_keywords: number;
+	    added_concept_keywords: number;
+	    total_industries: number;
+	    total_concepts: number;
+	    errors: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new PolicyUpdateResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.success = source["success"];
+	        this.path = source["path"];
+	        this.added_industry_keywords = source["added_industry_keywords"];
+	        this.added_concept_keywords = source["added_concept_keywords"];
+	        this.total_industries = source["total_industries"];
+	        this.total_concepts = source["total_concepts"];
+	        this.errors = source["errors"];
+	    }
+	}
 	export class StockConcepts {
 	    concepts: string[];
 	    wind: string;

@@ -7,7 +7,10 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os/exec"
+	"path/filepath"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -398,6 +401,21 @@ func FetchStockProfile(market, code string) (*StockProfile, error) {
 		// 若后续有稳定总股本接口，可再替换
 	}
 
+	// 港股 fallback：若 HSF10 无数据，尝试 akshare
+	if strings.ToUpper(market) == "HK" && profile.Industry == "" && profile.ListingDate == "" && profile.Chairman == "" {
+		if hkProfile, err := fetchHKProfileFromPython(code); err == nil && hkProfile != nil {
+			if profile.Industry == "" {
+				profile.Industry = hkProfile.Industry
+			}
+			if profile.Chairman == "" {
+				profile.Chairman = hkProfile.Chairman
+			}
+			if profile.ListingDate == "" {
+				profile.ListingDate = hkProfile.ListingDate
+			}
+		}
+	}
+
 	// 只要有至少一项核心数据，即视为成功
 	if profile.Industry != "" || profile.ListingDate != "" || profile.MarketCap > 0 || profile.PE > 0 || profile.Chairman != "" {
 		return profile, nil
@@ -615,6 +633,8 @@ func fetchQuoteFromTencent(market, code string) (*StockQuote, error) {
 		return nil, fmt.Errorf("腾讯行情数据字段不足")
 	}
 
+	isHK := strings.ToUpper(market) == "HK"
+
 	quote := &StockQuote{}
 	quote.CurrentPrice = parseStrFloat(parts[3])
 	quote.PreviousClose = parseStrFloat(parts[4])
@@ -624,34 +644,52 @@ func fetchQuoteFromTencent(market, code string) (*StockQuote, error) {
 	quote.ChangePercent = parseStrFloat(parts[32])
 	quote.High = parseStrFloat(parts[33])
 	quote.Low = parseStrFloat(parts[34])
-	// 成交额在 parts[35] 中，格式：当前价/成交量/成交额（单位：元）
-	if len(parts) > 35 {
-		triplet := strings.Split(parts[35], "/")
-		if len(triplet) >= 3 {
-			quote.TurnoverAmount = parseStrFloat(triplet[2])
+	if isHK {
+		// 港股：parts[37] 直接是成交额
+		quote.TurnoverAmount = parseStrFloat(parts[37])
+	} else {
+		// A股：成交额在 parts[35] 中，格式：当前价/成交量/成交额（单位：元）
+		if len(parts) > 35 {
+			triplet := strings.Split(parts[35], "/")
+			if len(triplet) >= 3 {
+				quote.TurnoverAmount = parseStrFloat(triplet[2])
+			}
 		}
 	}
 	quote.TurnoverRate = parseStrFloat(parts[38])
 	quote.PE = parseStrFloat(parts[39])
 	quote.Amplitude = parseStrFloat(parts[43])
-	// 实测字段：parts[44]=流通市值(亿), parts[45]=总市值(亿), parts[46]=PB
+	// 流通市值 / 总市值
 	if len(parts) > 44 {
 		quote.CirculatingMarketCap = parseStrFloat(parts[44]) * 1e8
 	}
 	if len(parts) > 45 {
 		quote.MarketCap = parseStrFloat(parts[45]) * 1e8
 	}
-	if len(parts) > 46 {
-		quote.PB = parseStrFloat(parts[46])
+	// PB 字段：A股在 parts[46]，港股因为插入了英文名称，PB 在 parts[47]
+	if isHK {
+		if len(parts) > 47 {
+			quote.PB = parseStrFloat(parts[47])
+		}
+	} else {
+		if len(parts) > 46 {
+			quote.PB = parseStrFloat(parts[46])
+		}
 	}
-	if len(parts) > 49 {
+	if !isHK && len(parts) > 49 {
 		quote.VolumeRatio = parseStrFloat(parts[49])
 	}
-	if len(parts) > 30 && len(parts[30]) == 14 {
-		// 腾讯时间戳格式：YYYYMMDDHHMMSS
-		quote.QuoteTime = fmt.Sprintf("%s-%s-%s %s:%s:%s",
-			parts[30][0:4], parts[30][4:6], parts[30][6:8],
-			parts[30][8:10], parts[30][10:12], parts[30][12:14])
+	// 时间格式：A股为 YYYYMMDDHHMMSS(14位)，港股为 YYYY/MM/DD HH:MM:SS
+	if len(parts) > 30 && parts[30] != "" {
+		timeStr := parts[30]
+		if len(timeStr) == 14 {
+			quote.QuoteTime = fmt.Sprintf("%s-%s-%s %s:%s:%s",
+				timeStr[0:4], timeStr[4:6], timeStr[6:8],
+				timeStr[8:10], timeStr[10:12], timeStr[12:14])
+		} else if len(timeStr) == 19 && timeStr[4] == '/' && timeStr[7] == '/' {
+			// 港股格式 2026/04/10 16:09:25 -> 2026-04-10 16:09:25
+			quote.QuoteTime = strings.Replace(timeStr, "/", "-", 2)
+		}
 	}
 
 	if quote.CurrentPrice == 0 {
@@ -677,6 +715,40 @@ func toCsCode(market, code string) string {
 	default:
 		return "SZ" + code
 	}
+}
+
+// hkProfileResult Python 脚本返回的港股资料
+type hkProfileResult struct {
+	Industry    string `json:"industry"`
+	Chairman    string `json:"chairman"`
+	ListingDate string `json:"listing_date"`
+}
+
+// fetchHKProfileScriptPath 返回 fetch_hk_profile.py 绝对路径
+func fetchHKProfileScriptPath() string {
+	_, b, _, _ := runtime.Caller(0)
+	base := filepath.Dir(b)
+	root := findProjectRootByMarker(base, filepath.Join("scripts", "fetch_hk_profile.py"))
+	if root != "" {
+		return filepath.Join(root, "scripts", "fetch_hk_profile.py")
+	}
+	return filepath.Join(base, "..", "scripts", "fetch_hk_profile.py")
+}
+
+// fetchHKProfileFromPython 调用 Python 脚本获取港股基本资料
+func fetchHKProfileFromPython(code string) (*hkProfileResult, error) {
+	script := fetchHKProfileScriptPath()
+	python := resolvePythonExecutable()
+	cmd := exec.Command(python, script, code)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return nil, fmt.Errorf("fetch_hk_profile.py 执行失败: %v, output: %s", err, string(output))
+	}
+	var result hkProfileResult
+	if err := json.Unmarshal(output, &result); err != nil {
+		return nil, fmt.Errorf("解析港股资料失败: %v, raw: %s", err, string(output))
+	}
+	return &result, nil
 }
 
 func parseStrFloat(s string) float64 {
@@ -787,6 +859,7 @@ func fetchKlinesFromTencent(market, code string, limit int) ([]KlineData, error)
 		Code int `json:"code"`
 		Data map[string]struct {
 			QfqDay [][]any `json:"qfqday"`
+			Day    [][]any `json:"day"`
 		} `json:"data"`
 	}
 	if err := json.Unmarshal(body, &result); err != nil {
@@ -795,12 +868,20 @@ func fetchKlinesFromTencent(market, code string, limit int) ([]KlineData, error)
 
 	key := prefix + code
 	stockData, ok := result.Data[key]
-	if !ok || len(stockData.QfqDay) == 0 {
+	if !ok {
+		return nil, fmt.Errorf("腾讯K线数据为空")
+	}
+
+	days := stockData.QfqDay
+	if len(days) == 0 {
+		days = stockData.Day
+	}
+	if len(days) == 0 {
 		return nil, fmt.Errorf("腾讯K线数据为空")
 	}
 
 	var klines []KlineData
-	for _, item := range stockData.QfqDay {
+	for _, item := range days {
 		if len(item) < 6 {
 			continue
 		}
