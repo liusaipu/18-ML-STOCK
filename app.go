@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"path/filepath"
 	"sort"
@@ -18,6 +19,33 @@ import (
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
+
+// initLogFile 初始化日志文件，将日志同时输出到文件
+func initLogFile() {
+	// 获取可执行文件所在目录
+	exePath, err := os.Executable()
+	if err != nil {
+		return
+	}
+	exeDir := filepath.Dir(exePath)
+	
+	// 创建日志文件
+	logFile := filepath.Join(exeDir, "app.log")
+	f, err := os.OpenFile(logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+	if err != nil {
+		return
+	}
+	
+	// 设置日志输出到文件和控制台
+	log.SetOutput(io.MultiWriter(os.Stdout, f))
+	log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds)
+	
+	log.Printf("[Init] 日志系统初始化完成，日志文件: %s\n", logFile)
+}
+
+func init() {
+	initLogFile()
+}
 
 // App struct
 type App struct {
@@ -766,9 +794,9 @@ type CacheStatus struct {
 
 // CheckAnalysisCache 检查分析缓存状态
 func (a *App) CheckAnalysisCache(symbol string) (*CacheStatus, error) {
-	fmt.Printf("[CheckAnalysisCache] Checking cache for %s\n", symbol)
+	log.Printf("[CheckAnalysisCache] Checking cache for %s\n", symbol)
 	if a.storage == nil {
-		fmt.Printf("[CheckAnalysisCache] Error: storage not initialized\n")
+		log.Printf("[CheckAnalysisCache] Error: storage not initialized\n")
 		return nil, fmt.Errorf("存储未初始化")
 	}
 	currentDataHash, err := a.storage.ComputeDataHash(symbol)
@@ -799,7 +827,7 @@ func (a *App) CheckAnalysisCache(symbol string) (*CacheStatus, error) {
 		DataChanged:        dataChanged,
 		ComparablesChanged: comparablesChanged,
 	}
-	fmt.Printf("[CheckAnalysisCache] Result for %s: unchanged=%v\n", symbol, result.Unchanged)
+	log.Printf("[CheckAnalysisCache] Result for %s: unchanged=%v\n", symbol, result.Unchanged)
 	return result, nil
 }
 
@@ -824,12 +852,12 @@ func (a *App) AnalyzeStockWithRIM(symbol string, overwriteLatest bool, rimJSON s
 }
 
 func (a *App) analyzeStockInternal(symbol string, overwriteLatest bool, customRIM *analyzer.RIMData) (*analyzer.AnalysisReport, error) {
-	fmt.Printf("[AnalyzeStock] Starting analysis for %s, overwriteLatest=%v\n", symbol, overwriteLatest)
+	log.Printf("[AnalyzeStock] Starting analysis for %s, overwriteLatest=%v\n", symbol, overwriteLatest)
 	if a.storage == nil {
-		fmt.Printf("[AnalyzeStock] Error: storage not initialized\n")
+		log.Printf("[AnalyzeStock] Error: storage not initialized\n")
 		return nil, fmt.Errorf("存储未初始化")
 	}
-	fmt.Printf("[AnalyzeStock] Storage initialized, dataDir=%s\n", a.storage.DataDir())
+	log.Printf("[AnalyzeStock] Storage initialized, dataDir=%s\n", a.storage.DataDir())
 	comparables, _ := a.storage.GetComparables(symbol)
 	nameMap := make(map[string]string, len(a.stocks))
 	for _, s := range a.stocks {
@@ -998,7 +1026,7 @@ func (a *App) analyzeStockInternal(symbol string, overwriteLatest bool, customRI
 	var wg sync.WaitGroup
 
 	// 并发 1: ML Engine B + Engine A
-	fmt.Printf("[AnalyzeStock] Starting ML engines, finData=%v, klines=%d\n", finData != nil, len(klines))
+	log.Printf("[AnalyzeStock] Starting ML engines, finData=%v, klines=%d\n", finData != nil, len(klines))
 	if finData != nil {
 		wg.Add(1)
 		go func() {
@@ -1009,7 +1037,7 @@ func (a *App) analyzeStockInternal(symbol string, overwriteLatest bool, customRI
 				if fp, err := analyzer.RunMLEngineB(finSeq); err == nil {
 					mlLocal.Financial = fp
 				} else {
-					fmt.Printf("[ML] Engine B failed for %s: %v\n", symbol, err)
+					log.Printf("[ML] Engine B failed for %s: %v\n", symbol, err)
 				}
 			}
 			// Engine A（价格序列始终可用；sentiment 为 nil 时 text_seq 补 0）
@@ -1026,7 +1054,7 @@ func (a *App) analyzeStockInternal(symbol string, overwriteLatest bool, customRI
 					if sp, err := analyzer.RunMLEngineA(textSeq, priceSeq); err == nil {
 						mlLocal.Sentiment = sp
 					} else {
-						fmt.Printf("[ML] Engine A failed for %s: %v\n", symbol, err)
+						log.Printf("[ML] Engine A failed for %s: %v\n", symbol, err)
 					}
 				}
 				// Engine D: 风险预警
@@ -1034,7 +1062,7 @@ func (a *App) analyzeStockInternal(symbol string, overwriteLatest bool, customRI
 					if dp, err := analyzer.RunMLEngineD(dFeatures); err == nil {
 						mlLocal.EngineD = dp
 					} else {
-						fmt.Printf("[ML] Engine D failed for %s: %v\n", symbol, err)
+						log.Printf("[ML] Engine D failed for %s: %v\n", symbol, err)
 					}
 				}
 			}
@@ -1091,7 +1119,7 @@ func (a *App) analyzeStockInternal(symbol string, overwriteLatest bool, customRI
 	}()
 
 	wg.Wait()
-	fmt.Printf("[AnalyzeStock] ML and RIM data fetching completed, mlData=%v, extRIM=%v\n", mlData != nil, extRIM != nil)
+	log.Printf("[AnalyzeStock] ML and RIM data fetching completed, mlData=%v, extRIM=%v\n", mlData != nil, extRIM != nil)
 
 	// RIM 多期估值数据组装
 	var rimData *analyzer.RIMData
@@ -1249,7 +1277,7 @@ func (a *App) analyzeStockInternal(symbol string, overwriteLatest bool, customRI
 			_ = a.storage.SaveAnalysisCache(symbol, hash, compHash)
 		}
 	}
-	fmt.Printf("[AnalyzeStock] Analysis completed successfully for %s\n", symbol)
+	log.Printf("[AnalyzeStock] Analysis completed successfully for %s\n", symbol)
 	return report, nil
 }
 
