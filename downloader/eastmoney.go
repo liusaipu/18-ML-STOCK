@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"golang.org/x/text/encoding/simplifiedchinese"
@@ -821,6 +822,14 @@ func fetchHKProfileFromPython(code string) (*hkProfileResult, error) {
 	script := fetchHKProfileScriptPath()
 	python := resolvePythonExecutable()
 	cmd := exec.Command(python, script, code)
+	
+	// Windows: 隐藏 CMD 窗口
+	if runtime.GOOS == "windows" {
+		cmd.SysProcAttr = &syscall.SysProcAttr{
+			HideWindow: true,
+		}
+	}
+	
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return nil, fmt.Errorf("fetch_hk_profile.py 执行失败: %v, output: %s", err, string(output))

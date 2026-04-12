@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"syscall"
 )
 
 // RIMExternalData Python脚本返回的原始数据
@@ -115,6 +116,13 @@ func FetchRIMExternalData(symbol string) (*RIMExternalData, error) {
 	python := resolvePythonExecutable()
 	cmd := exec.Command(python, script)
 	cmd.Env = append(os.Environ(), "TQDM_DISABLE=1", "PYTHONUNBUFFERED=1")
+	
+	// Windows: 隐藏 CMD 窗口
+	if runtime.GOOS == "windows" {
+		cmd.SysProcAttr = &syscall.SysProcAttr{
+			HideWindow: true,
+		}
+	}
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		return nil, err

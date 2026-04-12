@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"syscall"
 )
 
 // IndustryUpdateResult 行业数据库更新结果
@@ -35,6 +36,14 @@ func UpdateIndustryDatabase(dataDir string) (*IndustryUpdateResult, error) {
 	script := updateIndustryScriptPath()
 	python := resolvePythonExecutable()
 	cmd := exec.Command(python, script, dataDir)
+	
+	// Windows: 隐藏 CMD 窗口
+	if runtime.GOOS == "windows" {
+		cmd.SysProcAttr = &syscall.SysProcAttr{
+			HideWindow: true,
+		}
+	}
+	
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return nil, fmt.Errorf("行业数据库更新脚本执行失败: %v, output: %s", err, string(output))
