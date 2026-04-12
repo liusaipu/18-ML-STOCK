@@ -97,6 +97,18 @@ wails build -platform darwin/universal
 wails build -platform windows/amd64
 ```
 
+### macOS 运行须知
+macOS 版本为 `.app` 应用程序包，直接拖入应用程序文件夹即可使用。
+
+**系统要求**：
+- macOS 11+ (Big Sur 或更高版本)
+- **Python 3.10+**（用于 ML 预测功能）
+
+Python 依赖安装：
+```bash
+pip3 install onnxruntime scikit-learn numpy
+```
+
 ### Windows 运行须知
 解压后请确保 `ml_models` 文件夹与 `stock-analyzer.exe` 在同一目录下，否则 ML 预测功能将无法使用。
 
