@@ -771,13 +771,24 @@ function App() {
   }
 
   const runAnalyze = async (overwriteLatest = false) => {
-    if (!selectedStock) return
+    alert('runAnalyze 被调用')
+    
+    if (!selectedStock) {
+      alert('runAnalyze: 没有选择股票')
+      return
+    }
     
     // 调试：检查 Wails 运行时是否可用
     console.log('[runAnalyze] Starting analysis for:', selectedStock.code)
     console.log('[runAnalyze] window.go:', typeof (window as any).go)
     console.log('[runAnalyze] window.go?.main?.App:', typeof (window as any).go?.main?.App)
     console.log('[runAnalyze] AnalyzeStock function:', typeof AnalyzeStock)
+    
+    // 检查 Wails 绑定是否可用
+    if (typeof (window as any).go === 'undefined') {
+      alert('错误: Wails运行时未初始化 (window.go is undefined)')
+      return
+    }
     
     setAnalyzing(true)
     setAnalyzeProgress(5)
@@ -812,10 +823,23 @@ function App() {
   }
 
   const handleAnalyze = async () => {
-    if (!selectedStock) return
+    // 调试用：确认函数被调用
+    alert('handleAnalyze 被调用')
+    console.log('[handleAnalyze] Called')
+    
+    if (!selectedStock) {
+      alert('没有选择股票')
+      return
+    }
+    
+    console.log('[handleAnalyze] selectedStock:', selectedStock.code)
     let overwriteLatest = false
+    
     try {
+      console.log('[handleAnalyze] Calling CheckAnalysisCache...')
       const cache = await CheckAnalysisCache(selectedStock.code)
+      console.log('[handleAnalyze] Cache result:', cache)
+      
       if (cache?.unchanged) {
         setLastAnalysisAt(cache.lastAnalysisAt || '')
         setForceAnalyzeOpen(true)
@@ -828,6 +852,8 @@ function App() {
       alert('检查缓存失败: ' + String(err))
       // 继续执行分析，不要阻塞用户
     }
+    
+    console.log('[handleAnalyze] Calling runAnalyze...')
     await runAnalyze(overwriteLatest)
   }
 
