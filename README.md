@@ -42,30 +42,62 @@
 
 ## 🛠️ 依赖要求
 
-### 必需
-- **Go** `>= 1.22`（推荐 1.26+）
-- **Node.js** `>= 18`（推荐 20+）
-- **npm** 或 **pnpm**
-- **Wails CLI** `>= v2.12.0`
+### 一、构建依赖（开发/打包需要）
 
-### macOS 额外依赖
-- **Xcode Command Line Tools**：用于 CGO 编译
+| 依赖 | 版本要求 | 用途 |
+|------|---------|------|
+| **Go** | >= 1.22（推荐 1.26+） | 后端逻辑 |
+| **Node.js** | >= 18（推荐 20+） | 前端构建 |
+| **npm** / **pnpm** | 最新版 | 前端依赖管理 |
+| **Wails CLI** | >= v2.12.0 | 跨平台桌面应用框架 |
+
+**安装 Wails CLI：**
+```bash
+go install github.com/wailsapp/wails/v2/cmd/wails@latest
+wails version  # 验证安装
+```
+
+#### macOS 额外依赖
+- **Xcode Command Line Tools**（CGO 编译必需）
   ```bash
   xcode-select --install
   ```
 
-### Windows 额外依赖
+#### Windows 额外依赖
 - **WebView2 Runtime**（Windows 10/11 通常已预装）
-- **gcc 编译器**：推荐通过 [MSYS2](https://www.msys2.org/) 安装 `mingw-w64-x86_64-gcc`
+- **gcc 编译器**：推荐 [MSYS2](https://www.msys2.org/) 安装 `mingw-w64-x86_64-gcc`
 
-### 安装 Wails CLI
+---
+
+### 二、运行时依赖（最终用户需要）
+
+#### 必需 ✅
+| 依赖 | 用途 | 安装命令 |
+|------|------|---------|
+| **Python** | 3.10+ | ML 模型推理必需 | [官网下载](https://www.python.org/downloads/) |
+| **onnxruntime** | ML Engine A/B | `pip install onnxruntime` |
+| **scikit-learn** | ML Engine D | `pip install scikit-learn` |
+| **numpy** | 数值计算 | `pip install numpy` |
+
+**一键安装必需依赖：**
 ```bash
-go install github.com/wailsapp/wails/v2/cmd/wails@latest
+pip install onnxruntime scikit-learn numpy
 ```
 
-验证安装：
+#### 可选 ⚡（增强功能）
+| 依赖 | 用途 | 影响模块 | 安装命令 |
+|------|------|---------|---------|
+| **akshare** | A股数据爬虫 | RIM估值、风险爬虫、概念数据 | `pip install akshare` |
+
+**akshare 功能说明：**
+- ✅ **RIM 估值**（模块7）：自动获取 Beta、无风险利率、市场风险溢价等参数
+- ✅ **非财务风险**（模块8）：股权质押率、监管问询函、大股东减持数据
+- ✅ **股票概念**（模块11）：概念板块、风口追踪
+- ❌ **不影响**：核心 18 步财务分析、ML 预测、可比公司分析
+
+**完整安装（推荐）：**
 ```bash
-wails version
+pip install onnxruntime scikit-learn numpy akshare
 ```
 
 ---
@@ -106,24 +138,72 @@ wails build -platform windows/amd64
 ```
 
 ### macOS 运行须知
-macOS 版本为 `.app` 应用程序包，直接拖入应用程序文件夹即可使用。
 
 **系统要求**：
 - macOS 11+ (Big Sur 或更高版本)
-- **Python 3.10+**（用于 ML 预测功能）
+- **Python 3.10+**（[官网下载](https://www.python.org/downloads/macos/)）
 
-Python 依赖安装：
+**安装步骤**：
+1. 下载 `.app` 应用程序包
+2. 拖入应用程序文件夹
+3. **安装 Python 依赖**（必需）：
+   ```bash
+   pip3 install onnxruntime scikit-learn numpy
+   ```
+4. **（可选）安装 akshare 获取完整功能**：
+   ```bash
+   pip3 install akshare
+   ```
+
+**依赖检查**：
+如果启动后 ML 预测显示"数据缺失"，请运行诊断脚本：
 ```bash
-pip3 install onnxruntime scikit-learn numpy
+python3 ml_models/check_env.py
 ```
+
+---
 
 ### Windows 运行须知
-解压后请确保 `ml_models` 文件夹与 `stock-analyzer.exe` 在同一目录下，否则 ML 预测功能将无法使用。
 
-需要安装 Python 3.10+ 及依赖：
-```bash
-pip install onnxruntime scikit-learn numpy
+**系统要求**：
+- Windows 10/11（64位）
+- **Python 3.10+**（[官网下载](https://www.python.org/downloads/windows/)）
+- **WebView2 Runtime**（通常已预装，如缺失会自动提示）
+
+**安装步骤**：
+1. 解压 `stock-analyzer-windows-amd64.zip`
+2. 确保 `ml_models` 文件夹与 `stock-analyzer.exe` 在同一目录
+3. **安装 Python 依赖**（必需）：
+   ```bash
+   pip install onnxruntime scikit-learn numpy
+   ```
+4. **（可选）安装 akshare 获取完整功能**：
+   ```bash
+   pip install akshare
+   ```
+
+**目录结构要求**：
 ```
+stock-analyzer/
+├── stock-analyzer.exe    # 主程序
+├── ml_models/            # ML模型文件夹（必需）
+│   ├── inference.py
+│   ├── engine_a_sentiment/
+│   ├── engine_b_financial/
+│   └── engine_d_risk/
+└── data/                 # 数据目录（自动生成）
+```
+
+**依赖检查**：
+如果启动后 ML 预测显示"数据缺失"，请运行诊断脚本：
+```bash
+python ml_models/check_env.py
+```
+
+**常见问题**：
+- **"推理失败: exit status 9009"** → Python 未安装或未添加到 PATH
+- **"模型文件未加载"** → 检查 `ml_models` 文件夹是否在程序同级目录
+- **"akshare not installed"** → 可选功能，不影响核心分析
 
 ### 5. 打包分发（脚本）
 ```bash
