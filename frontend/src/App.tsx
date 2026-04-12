@@ -493,9 +493,12 @@ function App() {
 
   const loadDataHistory = useCallback(async (code: string) => {
     try {
+      console.log('[loadDataHistory] Loading for:', code)
       const list = await GetStockDataHistory(code)
+      console.log('[loadDataHistory] Result:', list)
       setDataHistory(list || [])
-    } catch {
+    } catch (err: any) {
+      console.error('[loadDataHistory] Error:', err)
       setDataHistory([])
     }
   }, [])
@@ -729,7 +732,9 @@ function App() {
         }
         const msg = `✅ 下载成功${yearStr ? '，包含' + yearStr + '年' : ''}`
         setDownloadStatus({type: 'success', message: msg})
+        console.log('[handleDownload] Reloading data history for:', selectedStock.code)
         await loadDataHistory(selectedStock.code)
+        console.log('[handleDownload] Data history reloaded, count:', dataHistory.length)
         // 3秒后清除成功消息
         setTimeout(() => setDownloadStatus({type: null, message: ''}), 3000)
       } else {
@@ -771,22 +776,8 @@ function App() {
   }
 
   const runAnalyze = async (overwriteLatest = false) => {
-    alert('runAnalyze 被调用')
-    
     if (!selectedStock) {
-      alert('runAnalyze: 没有选择股票')
-      return
-    }
-    
-    // 调试：检查 Wails 运行时是否可用
-    console.log('[runAnalyze] Starting analysis for:', selectedStock.code)
-    console.log('[runAnalyze] window.go:', typeof (window as any).go)
-    console.log('[runAnalyze] window.go?.main?.App:', typeof (window as any).go?.main?.App)
-    console.log('[runAnalyze] AnalyzeStock function:', typeof AnalyzeStock)
-    
-    // 检查 Wails 绑定是否可用
-    if (typeof (window as any).go === 'undefined') {
-      alert('错误: Wails运行时未初始化 (window.go is undefined)')
+      alert('没有选择股票')
       return
     }
     
@@ -823,22 +814,21 @@ function App() {
   }
 
   const handleAnalyze = async () => {
-    // 调试用：确认函数被调用
-    alert('handleAnalyze 被调用')
-    console.log('[handleAnalyze] Called')
-    
     if (!selectedStock) {
-      alert('没有选择股票')
+      alert('请选择一只股票')
       return
     }
     
-    console.log('[handleAnalyze] selectedStock:', selectedStock.code)
+    // 检查是否有财务数据
+    if (dataHistory.length === 0) {
+      alert('请先下载或导入财报数据')
+      return
+    }
+    
     let overwriteLatest = false
     
     try {
-      console.log('[handleAnalyze] Calling CheckAnalysisCache...')
       const cache = await CheckAnalysisCache(selectedStock.code)
-      console.log('[handleAnalyze] Cache result:', cache)
       
       if (cache?.unchanged) {
         setLastAnalysisAt(cache.lastAnalysisAt || '')
@@ -849,11 +839,9 @@ function App() {
       overwriteLatest = !cache?.dataChanged && !!cache?.comparablesChanged
     } catch (err: any) {
       console.error('检查分析缓存失败:', err)
-      alert('检查缓存失败: ' + String(err))
       // 继续执行分析，不要阻塞用户
     }
     
-    console.log('[handleAnalyze] Calling runAnalyze...')
     await runAnalyze(overwriteLatest)
   }
 

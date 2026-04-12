@@ -476,9 +476,9 @@ func (a *App) ImportFinancialReports(symbol string) (*ImportResult, error) {
 	result.Message = fmt.Sprintf("成功导入 %d 张报表 (CSV/Excel 混合支持)", len(importedTypes))
 	fmt.Printf("[Import] success: bs=%v income=%v cash=%v\n", balanceYears, incomeYears, cashYears)
 
-	// 归档历史版本
+	// 归档历史版本（使用Windows安全的时间格式）
 	_ = a.storage.ArchiveStockData(symbol, HistoryMeta{
-		Timestamp:  time.Now().Format(time.RFC3339),
+		Timestamp:  time.Now().Format("20060102_150405"),
 		Source:     "csv_excel_import",
 		SourceName: "同花顺/本地CSV/Excel",
 		Years:      mergeYears(balanceYears, incomeYears, cashYears),
@@ -519,9 +519,9 @@ func (a *App) DownloadReports(symbol string) (*DownloadResult, error) {
 	// 多源校验
 	validation, _ := downloader.ValidateWithDatacenter(market, code, data)
 
-	// 归档历史版本
+	// 归档历史版本（使用Windows安全的时间格式）
 	_ = a.storage.ArchiveStockData(symbol, HistoryMeta{
-		Timestamp:  time.Now().Format(time.RFC3339),
+		Timestamp:  time.Now().Format("20060102_150405"),
 		Source:     "network_download",
 		SourceName: "东方财富",
 		Years:      data.Years,

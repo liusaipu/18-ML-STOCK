@@ -122,16 +122,47 @@ func resolveMLPythonExecutable() string {
 			return venvPythonWin
 		}
 	}
-	// Windows: 尝试多个可能的 Python 命令
+	
+	// Windows: 尝试多个可能的 Python 路径
 	if runtime.GOOS == "windows" {
-		// 按优先级尝试不同的 Python 命令
-		candidates := []string{"python3", "python", "py"}
+		// 常见 Python 安装路径
+		pythonPaths := []string{
+			`C:\Python314\python.exe`,
+			`C:\Python313\python.exe`,
+			`C:\Python312\python.exe`,
+			`C:\Python311\python.exe`,
+			`C:\Python310\python.exe`,
+			`C:\Python39\python.exe`,
+			`C:\Program Files\Python314\python.exe`,
+			`C:\Program Files\Python313\python.exe`,
+			`C:\Program Files\Python312\python.exe`,
+			`C:\Program Files\Python311\python.exe`,
+			`C:\Program Files\Python310\python.exe`,
+			`C:\Program Files\Python39\python.exe`,
+		}
+		
+		for _, p := range pythonPaths {
+			if _, err := os.Stat(p); err == nil {
+				return p
+			}
+		}
+		
+		// 尝试使用 where 命令查找
+		if out, err := exec.Command("where", "python").Output(); err == nil {
+			paths := strings.Split(strings.TrimSpace(string(out)), "\n")
+			if len(paths) > 0 && paths[0] != "" {
+				return strings.TrimSpace(paths[0])
+			}
+		}
+		
+		// 最后 fallback 到命令名
+		candidates := []string{"python", "python3", "py"}
 		for _, py := range candidates {
 			if _, err := exec.LookPath(py); err == nil {
 				return py
 			}
 		}
-		return "python" // 最后 fallback
+		return "python"
 	}
 	return "python3"
 }
@@ -139,8 +170,30 @@ func resolveMLPythonExecutable() string {
 // callMLInference 调用 Python 推理脚本
 func callMLInference(engine string, payload map[string]any) (map[string]any, error) {
 	script := mlInferenceScriptPath()
+	python := resolveMLPythonExecutable()
+	
+	fmt.Printf("[ML] Engine %s: python=%s, script=%s\n", engine, python, script)
+	
 	if _, err := os.Stat(script); os.IsNotExist(err) {
 		return nil, fmt.Errorf("推理脚本不存在: %s", script)
+	}
+	
+	// 检查 Python 是否可执行
+	if runtime.GOOS == "windows" {
+		// Windows 上检查 python 命令是否在 PATH 中
+		if _, err := exec.LookPath(python); err != nil {
+			// 尝试使用绝对路径查找
+			if absPath, err := exec.LookPath("python.exe"); err == nil {
+				fmt.Printf("[ML] Found python.exe at: %s\n", absPath)
+				python = absPath
+			} else if absPath, err := exec.LookPath("python3.exe"); err == nil {
+				fmt.Printf("[ML] Found python3.exe at: %s\n", absPath)
+				python = absPath
+			} else if absPath, err := exec.LookPath("py.exe"); err == nil {
+				fmt.Printf("[ML] Found py.exe at: %s\n", absPath)
+				python = absPath
+			}
+		}
 	}
 
 	req := map[string]any{
@@ -152,7 +205,7 @@ func callMLInference(engine string, payload map[string]any) (map[string]any, err
 		return nil, err
 	}
 
-	python := resolveMLPythonExecutable()
+	fmt.Printf("[ML] Executing: %s %s\n", python, script)
 	cmd := exec.Command(python, script)
 	cmd.Env = append(os.Environ(), "TQDM_DISABLE=1", "PYTHONUNBUFFERED=1")
 	stdin, err := cmd.StdinPipe()

@@ -522,21 +522,22 @@ body.light .stock-info-time {
 /* 主操作按钮区域 */
 .actions {
   display: flex;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 0 12px;
+  justify-content: center;
+  gap: 12px;
+  padding: 0 8px;
   margin-bottom: 8px;
 }
 
 .actions .btn {
-  flex: 1;
-  max-width: 140px;
+  flex: 0 1 auto;
+  min-width: 100px;
+  padding: 10px 12px;
 }
 
-/* 按钮下方状态显示 - 单行 */
+/* 按钮下方状态显示 - 单行，固定高度避免布局跳动 */
 .action-status-line {
-  min-height: 16px;
-  line-height: 16px;
+  height: 20px;
+  line-height: 20px;
   margin-top: 2px;
   margin-bottom: 4px;
   font-size: 11px;
@@ -736,6 +737,7 @@ body.light .import-years {
   font-size: 13px;
   cursor: pointer;
   transition: all 0.15s;
+  white-space: nowrap;
 }
 
 .btn:hover {
@@ -780,6 +782,7 @@ body.light .btn-progress {
   align-items: center;
   justify-content: center;
   gap: 6px;
+  white-space: nowrap;
 }
 
 .btn.primary:hover {
