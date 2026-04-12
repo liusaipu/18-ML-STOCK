@@ -97,6 +97,14 @@ wails build -platform darwin/universal
 wails build -platform windows/amd64
 ```
 
+### Windows 运行须知
+解压后请确保 `ml_models` 文件夹与 `stock-analyzer.exe` 在同一目录下，否则 ML 预测功能将无法使用。
+
+需要安装 Python 3.10+ 及依赖：
+```bash
+pip install onnxruntime scikit-learn numpy
+```
+
 ### 5. 打包分发（脚本）
 ```bash
 # 同时构建 macOS + Windows 并生成 zip
