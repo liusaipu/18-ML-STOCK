@@ -772,6 +772,13 @@ function App() {
 
   const runAnalyze = async (overwriteLatest = false) => {
     if (!selectedStock) return
+    
+    // 调试：检查 Wails 运行时是否可用
+    console.log('[runAnalyze] Starting analysis for:', selectedStock.code)
+    console.log('[runAnalyze] window.go:', typeof (window as any).go)
+    console.log('[runAnalyze] window.go?.main?.App:', typeof (window as any).go?.main?.App)
+    console.log('[runAnalyze] AnalyzeStock function:', typeof AnalyzeStock)
+    
     setAnalyzing(true)
     setAnalyzeProgress(5)
     const interval = setInterval(() => {
@@ -792,7 +799,8 @@ function App() {
       await loadReportHistory(selectedStock.code)
     } catch (err: any) {
       console.error('分析失败:', err)
-      alert(String(err))
+      const errorMsg = err?.message || String(err) || '未知错误'
+      alert('分析失败: ' + errorMsg)
     } finally {
       clearInterval(interval)
       setAnalyzeProgress(100)
@@ -817,6 +825,8 @@ function App() {
       overwriteLatest = !cache?.dataChanged && !!cache?.comparablesChanged
     } catch (err: any) {
       console.error('检查分析缓存失败:', err)
+      alert('检查缓存失败: ' + String(err))
+      // 继续执行分析，不要阻塞用户
     }
     await runAnalyze(overwriteLatest)
   }

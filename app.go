@@ -766,7 +766,9 @@ type CacheStatus struct {
 
 // CheckAnalysisCache 检查分析缓存状态
 func (a *App) CheckAnalysisCache(symbol string) (*CacheStatus, error) {
+	fmt.Printf("[CheckAnalysisCache] Checking cache for %s\n", symbol)
 	if a.storage == nil {
+		fmt.Printf("[CheckAnalysisCache] Error: storage not initialized\n")
 		return nil, fmt.Errorf("存储未初始化")
 	}
 	currentDataHash, err := a.storage.ComputeDataHash(symbol)
@@ -791,12 +793,14 @@ func (a *App) CheckAnalysisCache(symbol string) (*CacheStatus, error) {
 		lastAnalysisAt = cache.LastAnalysisAt
 	}
 
-	return &CacheStatus{
+	result := &CacheStatus{
 		Unchanged:          !dataChanged && !comparablesChanged,
 		LastAnalysisAt:     lastAnalysisAt,
 		DataChanged:        dataChanged,
 		ComparablesChanged: comparablesChanged,
-	}, nil
+	}
+	fmt.Printf("[CheckAnalysisCache] Result for %s: unchanged=%v\n", symbol, result.Unchanged)
+	return result, nil
 }
 
 // AnalyzeStock 对指定股票执行18步财务分析
@@ -820,9 +824,12 @@ func (a *App) AnalyzeStockWithRIM(symbol string, overwriteLatest bool, rimJSON s
 }
 
 func (a *App) analyzeStockInternal(symbol string, overwriteLatest bool, customRIM *analyzer.RIMData) (*analyzer.AnalysisReport, error) {
+	fmt.Printf("[AnalyzeStock] Starting analysis for %s, overwriteLatest=%v\n", symbol, overwriteLatest)
 	if a.storage == nil {
+		fmt.Printf("[AnalyzeStock] Error: storage not initialized\n")
 		return nil, fmt.Errorf("存储未初始化")
 	}
+	fmt.Printf("[AnalyzeStock] Storage initialized, dataDir=%s\n", a.storage.DataDir())
 	comparables, _ := a.storage.GetComparables(symbol)
 	nameMap := make(map[string]string, len(a.stocks))
 	for _, s := range a.stocks {
@@ -991,6 +998,7 @@ func (a *App) analyzeStockInternal(symbol string, overwriteLatest bool, customRI
 	var wg sync.WaitGroup
 
 	// 并发 1: ML Engine B + Engine A
+	fmt.Printf("[AnalyzeStock] Starting ML engines, finData=%v, klines=%d\n", finData != nil, len(klines))
 	if finData != nil {
 		wg.Add(1)
 		go func() {
@@ -1083,6 +1091,7 @@ func (a *App) analyzeStockInternal(symbol string, overwriteLatest bool, customRI
 	}()
 
 	wg.Wait()
+	fmt.Printf("[AnalyzeStock] ML and RIM data fetching completed, mlData=%v, extRIM=%v\n", mlData != nil, extRIM != nil)
 
 	// RIM 多期估值数据组装
 	var rimData *analyzer.RIMData
@@ -1240,6 +1249,7 @@ func (a *App) analyzeStockInternal(symbol string, overwriteLatest bool, customRI
 			_ = a.storage.SaveAnalysisCache(symbol, hash, compHash)
 		}
 	}
+	fmt.Printf("[AnalyzeStock] Analysis completed successfully for %s\n", symbol)
 	return report, nil
 }
 
