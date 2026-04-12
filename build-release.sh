@@ -22,9 +22,16 @@ build_mac() {
 
 build_windows() {
   echo "Building Windows amd64 binary..."
-  CGO_ENABLED=0 /Users/lobster/go/bin/wails build -platform windows/amd64
+  # Windows 构建需要 CGO 来支持 WebView2，但交叉编译时可能有限制
+  # 使用默认设置，让 Wails 自动处理
+  /Users/lobster/go/bin/wails build -platform windows/amd64 -clean
+  
+  # 复制 ml_models 到构建目录（Windows 需要这些文件）
+  echo "Copying ml_models to build directory..."
+  cp -r "$(pwd)/ml_models" "$BIN_DIR/"
+  
   cd "$BIN_DIR"
-  zip -j "stock-analyzer_windows_${TIMESTAMP}.zip" stock-analyzer.exe
+  zip -r "stock-analyzer_windows_${TIMESTAMP}.zip" stock-analyzer.exe ml_models/
   cd - > /dev/null
   echo "Windows package: ${BIN_DIR}/stock-analyzer_windows_${TIMESTAMP}.zip"
 }

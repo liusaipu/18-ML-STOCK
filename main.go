@@ -15,6 +15,9 @@ var assets embed.FS
 //go:embed data/stocks.json
 var stockDB embed.FS
 
+//go:embed ml_models/inference.py ml_models/engine_a_sentiment/*.onnx ml_models/engine_b_financial/*.onnx ml_models/engine_b_financial/*.pkl ml_models/engine_d_risk/model/*.pkl
+var mlModels embed.FS
+
 // readStockJSON 读取股票代码库，开发模式优先读本地文件，打包后 fallback 到 embed
 func readStockJSON() ([]byte, error) {
 	if b, err := os.ReadFile("data/stocks.json"); err == nil {

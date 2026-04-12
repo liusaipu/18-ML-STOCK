@@ -383,6 +383,10 @@ func FetchStockProfile(market, code string) (*StockProfile, error) {
 					profile.PoliticalAffiliation = inferPoliticalAffiliationFromBaike(targetName)
 				}
 			}
+			// 若籍属仍为空，尝试从百度百科查找
+			if profile.ChairmanNationality == "" && targetName != "" {
+				profile.ChairmanNationality = inferNationalityFromBaike(targetName)
+			}
 		}
 	}
 
@@ -550,6 +554,83 @@ func inferPoliticalAffiliationFromBaike(name string) string {
 			return "blue"
 		}
 	}
+	return ""
+}
+
+// inferNationalityFromBaike 尝试从百度百科页面推断人物国籍/籍属
+func inferNationalityFromBaike(name string) string {
+	if name == "" {
+		return ""
+	}
+	baikeURL := fmt.Sprintf("https://baike.baidu.com/item/%s", url.QueryEscape(name))
+	body, err := httpGetWithReferer(baikeURL, "https://baike.baidu.com/")
+	if err != nil {
+		return ""
+	}
+	text := string(body)
+	// 去掉 HTML 标签，只保留文本便于正则匹配
+	reTag := regexp.MustCompile(`<[^>]+>`)
+	text = reTag.ReplaceAllString(text, " ")
+	text = strings.ReplaceAll(text, "\n", " ")
+	text = strings.ReplaceAll(text, "\t", " ")
+
+	// 【第一步】优先从明确的"国籍"字段提取（最准确）
+	// 匹配 国籍 中国 / 国籍：中国 / 国籍,中国 等格式
+	re := regexp.MustCompile(`国籍[\s,，:：]*([\p{Han}]{1,10})(?:\s|$|，|,)`)
+	if m := re.FindStringSubmatch(text); len(m) > 1 {
+		n := strings.TrimSpace(m[1])
+		if n != "" && n != "未知" && n != "不详" && n != "暂无" {
+			return n
+		}
+	}
+
+	// 【第二步】检查港澳台（要求明确的"台湾籍/香港籍"或"台湾居民"等）
+	if strings.Contains(text, "中国香港") || strings.Contains(text, "香港居民") || strings.Contains(text, "香港籍") {
+		return "中国香港"
+	}
+	if strings.Contains(text, "中国澳门") || strings.Contains(text, "澳门居民") || strings.Contains(text, "澳门籍") {
+		return "中国澳门"
+	}
+	// 台湾：必须是"台湾籍"、"台湾居民"或"中国台湾"，不能只是"台湾"（避免"东芝家电"等误匹配）
+	if strings.Contains(text, "中国台湾") || strings.Contains(text, "台湾居民") || strings.Contains(text, "台湾籍") {
+		return "中国台湾"
+	}
+	// "出生于台湾"或"籍贯台湾"才算
+	if strings.Contains(text, "出生于台湾") || strings.Contains(text, "籍贯台湾") {
+		return "中国台湾"
+	}
+
+	// 【第三步】常见外籍
+	if strings.Contains(text, "美国国籍") || strings.Contains(text, "美籍") || strings.Contains(text, "美国籍") {
+		return "美国"
+	}
+	if strings.Contains(text, "加拿大国籍") || strings.Contains(text, "加拿大籍") {
+		return "加拿大"
+	}
+	if strings.Contains(text, "新加坡国籍") || strings.Contains(text, "新加坡籍") {
+		return "新加坡"
+	}
+	if strings.Contains(text, "英国国籍") || strings.Contains(text, "英国籍") {
+		return "英国"
+	}
+	if strings.Contains(text, "日本国籍") || strings.Contains(text, "日本籍") {
+		return "日本"
+	}
+	if strings.Contains(text, "澳大利亚国籍") || strings.Contains(text, "澳大利亚籍") {
+		return "澳大利亚"
+	}
+	if strings.Contains(text, "德国国籍") || strings.Contains(text, "德国籍") {
+		return "德国"
+	}
+	if strings.Contains(text, "法国国籍") || strings.Contains(text, "法国籍") {
+		return "法国"
+	}
+
+	// 【第四步】中国籍（兜底）
+	if strings.Contains(text, "中国国籍") || strings.Contains(text, "中国籍") || strings.Contains(text, "中国公民") {
+		return "中国"
+	}
+
 	return ""
 }
 

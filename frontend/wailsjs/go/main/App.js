@@ -22,6 +22,10 @@ export function CheckAnalysisCache(arg1) {
   return window['go']['main']['App']['CheckAnalysisCache'](arg1);
 }
 
+export function ConfirmDialog(arg1, arg2) {
+  return window['go']['main']['App']['ConfirmDialog'](arg1, arg2);
+}
+
 export function DeleteReport(arg1, arg2) {
   return window['go']['main']['App']['DeleteReport'](arg1, arg2);
 }

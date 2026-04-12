@@ -42,6 +42,7 @@ import {
   CheckAnalysisCache,
   DownloadReport,
   DeleteReport,
+  ConfirmDialog,
   GetReportHistory,
   GetReport,
   GetStockDataHistory,
@@ -930,7 +931,8 @@ function App() {
       }
       filename = files[0]
     }
-    if (!confirm(`确定删除报告 ${filename} 吗？`)) {
+    const confirmed = await ConfirmDialog('确认删除', `确定删除报告 ${filename} 吗？`)
+    if (!confirmed) {
       return
     }
     try {

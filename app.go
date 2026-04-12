@@ -1664,3 +1664,19 @@ func createZipFromDir(dst string, srcDir string) error {
 		return err
 	})
 }
+
+// ConfirmDialog 显示确认对话框，返回用户是否点击了"确定"
+func (a *App) ConfirmDialog(title, message string) bool {
+	selection, err := runtime.MessageDialog(a.ctx, runtime.MessageDialogOptions{
+		Type:          runtime.QuestionDialog,
+		Title:         title,
+		Message:       message,
+		Buttons:       []string{"确定", "取消"},
+		DefaultButton: "确定",
+		CancelButton:  "取消",
+	})
+	if err != nil {
+		return false
+	}
+	return selection == "确定"
+}

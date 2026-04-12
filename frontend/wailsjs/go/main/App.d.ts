@@ -14,6 +14,8 @@ export function AnalyzeStockWithRIM(arg1:string,arg2:boolean,arg3:string):Promis
 
 export function CheckAnalysisCache(arg1:string):Promise<main.CacheStatus>;
 
+export function ConfirmDialog(arg1:string,arg2:string):Promise<boolean>;
+
 export function DeleteReport(arg1:string,arg2:string):Promise<void>;
 
 export function DownloadComparableReports(arg1:string):Promise<main.DownloadResult>;
