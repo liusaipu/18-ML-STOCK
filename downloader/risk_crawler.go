@@ -18,6 +18,19 @@ type RiskCrawlerData struct {
 }
 
 func resolveRiskCrawlerPython() string {
+	// Priority 1: Direct check in executable directory (for packaged Windows app)
+	if exe, err := os.Executable(); err == nil {
+		exeDir := filepath.Dir(exe)
+		venvPython := filepath.Join(exeDir, ".venv", "bin", "python3")
+		if _, err := os.Stat(venvPython); err == nil {
+			return venvPython
+		}
+		venvPythonWin := filepath.Join(exeDir, ".venv", "Scripts", "python.exe")
+		if _, err := os.Stat(venvPythonWin); err == nil {
+			return venvPythonWin
+		}
+	}
+	
 	_, b, _, _ := runtime.Caller(0)
 	base := filepath.Dir(b)
 	root := findProjectRootByMarker(base, filepath.Join("ml_models", "risk_crawler.py"))
@@ -41,6 +54,15 @@ func resolveRiskCrawlerPython() string {
 }
 
 func riskCrawlerScriptPath() string {
+	// Priority 1: Direct check in executable directory (for packaged Windows app)
+	if exe, err := os.Executable(); err == nil {
+		exeDir := filepath.Dir(exe)
+		p := filepath.Join(exeDir, "ml_models", "risk_crawler.py")
+		if _, err := os.Stat(p); err == nil {
+			return p
+		}
+	}
+	
 	_, b, _, _ := runtime.Caller(0)
 	base := filepath.Dir(b)
 	root := findProjectRootByMarker(base, filepath.Join("ml_models", "risk_crawler.py"))

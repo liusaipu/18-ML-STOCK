@@ -44,6 +44,15 @@ func findProjectRootByMarker(start string, marker string) string {
 
 // fetchRIMScriptPath 返回 fetch_rim_data.py 绝对路径
 func fetchRIMScriptPath() string {
+	// Priority 1: Direct check in executable directory (for packaged Windows app)
+	if exe, err := os.Executable(); err == nil {
+		exeDir := filepath.Dir(exe)
+		p := filepath.Join(exeDir, "scripts", "fetch_rim_data.py")
+		if _, err := os.Stat(p); err == nil {
+			return p
+		}
+	}
+	
 	_, b, _, _ := runtime.Caller(0)
 	base := filepath.Dir(b)
 	root := findProjectRootByMarker(base, filepath.Join("scripts", "fetch_rim_data.py"))
@@ -55,6 +64,19 @@ func fetchRIMScriptPath() string {
 
 // resolvePythonExecutable 优先使用项目 .venv 中的 Python
 func resolvePythonExecutable() string {
+	// Priority 1: Direct check in executable directory (for packaged Windows app)
+	if exe, err := os.Executable(); err == nil {
+		exeDir := filepath.Dir(exe)
+		venvPython := filepath.Join(exeDir, ".venv", "bin", "python3")
+		if _, err := os.Stat(venvPython); err == nil {
+			return venvPython
+		}
+		venvPythonWin := filepath.Join(exeDir, ".venv", "Scripts", "python.exe")
+		if _, err := os.Stat(venvPythonWin); err == nil {
+			return venvPythonWin
+		}
+	}
+	
 	_, b, _, _ := runtime.Caller(0)
 	base := filepath.Dir(b)
 	root := findProjectRootByMarker(base, filepath.Join("scripts", "fetch_rim_data.py"))

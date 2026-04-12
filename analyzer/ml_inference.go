@@ -88,6 +88,16 @@ func projectRootCandidates() []string {
 
 // mlInferenceScriptPath 返回推理脚本绝对路径
 func mlInferenceScriptPath() string {
+	// 直接检查可执行文件所在目录（Windows 打包版本用）
+	if exe, err := os.Executable(); err == nil {
+		exe, _ = filepath.EvalSymlinks(exe)
+		exeDir := filepath.Dir(exe)
+		p := filepath.Join(exeDir, "ml_models", "inference.py")
+		if _, err := os.Stat(p); err == nil {
+			return p
+		}
+	}
+
 	for _, root := range projectRootCandidates() {
 		p := filepath.Join(root, "ml_models", "inference.py")
 		if _, err := os.Stat(p); err == nil {
@@ -112,9 +122,16 @@ func resolveMLPythonExecutable() string {
 			return venvPythonWin
 		}
 	}
-	// Windows fallback
+	// Windows: 尝试多个可能的 Python 命令
 	if runtime.GOOS == "windows" {
-		return "python"
+		// 按优先级尝试不同的 Python 命令
+		candidates := []string{"python3", "python", "py"}
+		for _, py := range candidates {
+			if _, err := exec.LookPath(py); err == nil {
+				return py
+			}
+		}
+		return "python" // 最后 fallback
 	}
 	return "python3"
 }
