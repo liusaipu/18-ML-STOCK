@@ -74,12 +74,19 @@ function calcMACD(closes: number[]) {
 
 // 图表配置
 const chartHeight = 200
+const chartWidthPercent = 0.85 // 85%宽度，留出空间给右轴
 const chartColors = {
   up: '#ef4444',
   down: '#22c55e',
   grid: 'rgba(148, 163, 184, 0.1)',
   text: '#94a3b8',
   border: 'rgba(148, 163, 184, 0.2)',
+}
+
+// 统一的右轴宽度配置
+const rightPriceScaleOptions = {
+  borderColor: chartColors.border,
+  minimumWidth: 60, // 固定最小宽度
 }
 
 export function UnifiedChart({ code }: Props) {
@@ -108,7 +115,7 @@ export function UnifiedChart({ code }: Props) {
     if (!containerRef.current || data.length === 0) return
 
     const container = containerRef.current
-    const width = container.clientWidth * 0.8 // 80%宽度
+    const width = container.clientWidth * chartWidthPercent
 
     // 公共配置
     const commonOptions = {
@@ -122,11 +129,13 @@ export function UnifiedChart({ code }: Props) {
         horzLines: { color: chartColors.grid },
       },
       crosshair: { mode: CrosshairMode.Magnet },
-      rightPriceScale: { borderColor: chartColors.border },
+      rightPriceScale: rightPriceScaleOptions,
       timeScale: { 
         borderColor: chartColors.border, 
         timeVisible: false,
-        visible: false, // 隐藏时间轴，只显示在最底部
+        visible: false,
+        fixLeftEdge: true,
+        fixRightEdge: true,
       },
     }
 
@@ -137,17 +146,21 @@ export function UnifiedChart({ code }: Props) {
     })
     priceChartRef.current = priceChart
 
+    // 先添加成交量（在底层）
+    const volSeries = priceChart.addSeries(HistogramSeries, {
+      color: '#3b82f6',
+      priceFormat: { type: 'volume' },
+      priceScaleId: 'volume', // 使用独立的volume轴
+    })
+    // 成交量只在底部10%区域显示
+    volSeries.priceScale().applyOptions({ scaleMargins: { top: 0.90, bottom: 0 } })
+
+    // 再添加K线（在上层，主价格轴）
     const candleSeries = priceChart.addSeries(CandlestickSeries, {
       upColor: chartColors.up, downColor: chartColors.down,
       borderUpColor: chartColors.up, borderDownColor: chartColors.down,
       wickUpColor: chartColors.up, wickDownColor: chartColors.down,
     })
-
-    const volSeries = priceChart.addSeries(HistogramSeries, {
-      color: '#3b82f6',
-      priceFormat: { type: 'volume' },
-    })
-    volSeries.priceScale().applyOptions({ scaleMargins: { top: 0.85, bottom: 0 } })
 
     // 2. MACD图
     const macdChart = createChart(container, {
@@ -172,8 +185,13 @@ export function UnifiedChart({ code }: Props) {
     // 4. 布林带图
     const bollChart = createChart(container, {
       ...commonOptions,
-      height: chartHeight,
-      timeScale: { ...commonOptions.timeScale, visible: true }, // 只有底部显示时间轴
+      height: chartHeight + 30, // 增加高度给时间轴
+      timeScale: { 
+        ...commonOptions.timeScale, 
+        visible: true, // 只有底部显示时间轴
+        timeVisible: true, // 显示时间
+        tickMarkMaxCharacterLength: 8, // 限制日期长度
+      },
     })
     bollChartRef.current = bollChart
 
@@ -238,7 +256,7 @@ export function UnifiedChart({ code }: Props) {
 
     // 响应式
     const handleResize = () => {
-      const newWidth = container.clientWidth * 0.8
+      const newWidth = container.clientWidth * chartWidthPercent
       charts.forEach(c => c.applyOptions({ width: newWidth }))
     }
     window.addEventListener('resize', handleResize)
