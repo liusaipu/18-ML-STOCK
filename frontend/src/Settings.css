@@ -1,0 +1,366 @@
+/* 设置按钮 */
+.settings-toggle {
+  position: fixed;
+  top: 8px;
+  right: 12px;
+  z-index: 200;
+  width: 30px;
+  height: 30px;
+  line-height: 1;
+  padding: 0;
+  border: 1px solid #2a3a4a;
+  border-radius: 4px;
+  background: #141b24;
+  color: #e6e6e6;
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+}
+
+.settings-toggle:hover {
+  border-color: #3b82f6;
+  background: #1b2631;
+}
+
+body.light .settings-toggle {
+  background: #ffffff;
+  border-color: #d1d5db;
+  color: #374151;
+}
+
+body.light .settings-toggle:hover {
+  background: #f9fafb;
+  border-color: #9ca3af;
+}
+
+/* 下拉菜单 */
+.settings-dropdown {
+  position: fixed;
+  top: 44px;
+  right: 12px;
+  width: 280px;
+  background: #141b24;
+  border: 1px solid #2a3a4a;
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+  z-index: 201;
+  overflow: hidden;
+}
+
+body.light .settings-dropdown {
+  background: #ffffff;
+  border-color: #e5e7eb;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+}
+
+/* 标签页 */
+.settings-tabs {
+  display: flex;
+  border-bottom: 1px solid #1f2933;
+}
+
+body.light .settings-tabs {
+  border-bottom-color: #e5e7eb;
+}
+
+.settings-tabs button {
+  flex: 1;
+  padding: 10px 4px;
+  border: none;
+  background: transparent;
+  color: #64748b;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.settings-tabs button:hover {
+  color: #94a3b8;
+  background: #1a2330;
+}
+
+.settings-tabs button.active {
+  color: #3b82f6;
+  border-bottom: 2px solid #3b82f6;
+  margin-bottom: -1px;
+}
+
+body.light .settings-tabs button {
+  color: #6b7280;
+}
+
+body.light .settings-tabs button:hover {
+  color: #374151;
+  background: #f3f4f6;
+}
+
+body.light .settings-tabs button.active {
+  color: #2563eb;
+  border-bottom-color: #2563eb;
+}
+
+/* 设置区域 */
+.settings-section {
+  padding: 16px;
+}
+
+.settings-item {
+  margin-bottom: 16px;
+}
+
+.settings-item:last-child {
+  margin-bottom: 0;
+}
+
+.settings-item > label {
+  display: block;
+  font-size: 12px;
+  color: #94a3b8;
+  margin-bottom: 8px;
+}
+
+body.light .settings-item > label {
+  color: #6b7280;
+}
+
+/* 选项组 */
+.settings-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.settings-radio {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  color: #e6e6e6;
+}
+
+.settings-radio input[type="radio"] {
+  width: 16px;
+  height: 16px;
+  accent-color: #3b82f6;
+  cursor: pointer;
+}
+
+body.light .settings-radio {
+  color: #374151;
+}
+
+/* 复选框组 */
+.settings-checkboxes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.settings-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  color: #e6e6e6;
+}
+
+.settings-checkbox input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: #3b82f6;
+  cursor: pointer;
+}
+
+body.light .settings-checkbox {
+  color: #374151;
+}
+
+/* 下拉选择 */
+.settings-item select {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid #2a3a4a;
+  border-radius: 4px;
+  background: #0f1419;
+  color: #e6e6e6;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.settings-item select:focus {
+  outline: none;
+  border-color: #3b82f6;
+}
+
+body.light .settings-item select {
+  background: #f9fafb;
+  border-color: #d1d5db;
+  color: #374151;
+}
+
+/* 输入框组 */
+.settings-input-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.settings-input-group input[type="number"] {
+  width: 60px;
+  padding: 6px 8px;
+  border: 1px solid #2a3a4a;
+  border-radius: 4px;
+  background: #0f1419;
+  color: #e6e6e6;
+  font-size: 13px;
+  text-align: center;
+}
+
+.settings-input-group input[type="number"]:focus {
+  outline: none;
+  border-color: #3b82f6;
+}
+
+.settings-input-group span {
+  font-size: 13px;
+  color: #94a3b8;
+}
+
+body.light .settings-input-group input[type="number"] {
+  background: #f9fafb;
+  border-color: #d1d5db;
+  color: #374151;
+}
+
+body.light .settings-input-group span {
+  color: #6b7280;
+}
+
+/* 开关 */
+.settings-toggle-switch {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  height: 24px;
+}
+
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #2a3a4a;
+  transition: .3s;
+  border-radius: 24px;
+}
+
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 18px;
+  width: 18px;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  transition: .3s;
+  border-radius: 50%;
+}
+
+input:checked + .slider {
+  background-color: #3b82f6;
+}
+
+input:checked + .slider:before {
+  transform: translateX(20px);
+}
+
+body.light .slider {
+  background-color: #d1d5db;
+}
+
+body.light input:checked + .slider {
+  background-color: #2563eb;
+}
+
+/* 关于页面 */
+.about-section {
+  text-align: center;
+  padding: 24px 16px;
+}
+
+.about-logo {
+  font-size: 48px;
+  margin-bottom: 12px;
+}
+
+.about-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #f0f0f0;
+  margin-bottom: 4px;
+}
+
+body.light .about-title {
+  color: #111827;
+}
+
+.about-version {
+  font-size: 12px;
+  color: #64748b;
+  margin-bottom: 12px;
+}
+
+.about-desc {
+  font-size: 12px;
+  color: #94a3b8;
+  margin-bottom: 16px;
+  line-height: 1.5;
+}
+
+body.light .about-desc {
+  color: #6b7280;
+}
+
+.about-link {
+  display: inline-block;
+  padding: 8px 16px;
+  border: 1px solid #3b82f6;
+  border-radius: 4px;
+  background: transparent;
+  color: #3b82f6;
+  font-size: 13px;
+  text-decoration: none;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.about-link:hover {
+  background: rgba(59, 130, 246, 0.12);
+}
+
+body.light .about-link {
+  color: #2563eb;
+  border-color: #2563eb;
+}
+
+body.light .about-link:hover {
+  background: rgba(37, 99, 235, 0.1);
+}

@@ -1,0 +1,120 @@
+/* 模块复制按钮 */
+.module-copy-wrapper {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+}
+
+.module-copy-btn {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid #2a3a4a;
+  border-radius: 4px;
+  background: #141b24;
+  color: #64748b;
+  font-size: 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+  opacity: 0.6;
+}
+
+.module-copy-btn:hover {
+  opacity: 1;
+  border-color: #3b82f6;
+  color: #3b82f6;
+  background: #1b2631;
+}
+
+body.light .module-copy-btn {
+  background: #ffffff;
+  border-color: #d1d5db;
+  color: #6b7280;
+}
+
+body.light .module-copy-btn:hover {
+  border-color: #2563eb;
+  color: #2563eb;
+  background: #f3f4f6;
+}
+
+/* 下拉菜单 */
+.module-copy-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 4px;
+  min-width: 140px;
+  background: #141b24;
+  border: 1px solid #2a3a4a;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  z-index: 300;
+  overflow: hidden;
+}
+
+body.light .module-copy-menu {
+  background: #ffffff;
+  border-color: #e5e7eb;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.module-copy-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  background: transparent;
+  color: #e6e6e6;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.module-copy-menu-item:hover {
+  background: #1a2330;
+}
+
+body.light .module-copy-menu-item {
+  color: #374151;
+}
+
+body.light .module-copy-menu-item:hover {
+  background: #f3f4f6;
+}
+
+.module-copy-menu-item .icon {
+  font-size: 14px;
+}
+
+/* 成功提示 */
+.module-copy-toast {
+  position: fixed;
+  top: 50px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 10px 20px;
+  background: #10b981;
+  color: white;
+  font-size: 13px;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  z-index: 1000;
+  animation: fadeInOut 2s ease forwards;
+}
+
+@keyframes fadeInOut {
+  0% { opacity: 0; transform: translateX(-50%) translateY(-10px); }
+  15% { opacity: 1; transform: translateX(-50%) translateY(0); }
+  85% { opacity: 1; transform: translateX(-50%) translateY(0); }
+  100% { opacity: 0; transform: translateX(-50%) translateY(-10px); }
+}

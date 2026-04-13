@@ -2,6 +2,8 @@ import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import './App.css'
 import { STOCKS } from './stocks'
 import { UnifiedChart } from './UnifiedChart'
+import { Settings, loadSettings, AppSettings } from './Settings'
+import { ModuleCopyButton, setGlobalMarkdownContent } from './ModuleCopyButton'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import rehypeSlug from 'rehype-slug'
@@ -145,10 +147,7 @@ function App() {
   const [query, setQuery] = useState('')
   const [showDropdown, setShowDropdown] = useState(false)
   const [loading, setLoading] = useState(false)
-  const [theme, setTheme] = useState<'dark' | 'light'>(() => {
-    const saved = localStorage.getItem('theme')
-    return saved === 'light' ? 'light' : 'dark'
-  })
+  const [settings, setSettings] = useState<AppSettings>(() => loadSettings())
   const [importResult, setImportResult] = useState<ImportResult | null>(null)
   const [downloadResult, setDownloadResult] = useState<DownloadResult | null>(null)
   const [downloading, setDownloading] = useState(false)
@@ -432,13 +431,17 @@ function App() {
 
   // 主题持久化
   useEffect(() => {
-    localStorage.setItem('theme', theme)
-    if (theme === 'light') {
+    // 应用主题
+    const effectiveTheme = settings.theme === 'system' 
+      ? (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark')
+      : settings.theme
+    
+    if (effectiveTheme === 'light') {
       document.body.classList.add('light')
     } else {
       document.body.classList.remove('light')
     }
-  }, [theme])
+  }, [settings.theme])
 
   // 本地搜索过滤：按代码、名称或拼音首字母匹配，最多10条
   const suggestions = useMemo(() => {
@@ -1104,7 +1107,7 @@ function App() {
     return formatTraceValue(v)
   }
 
-  // 切换报告时清除搜索高亮和 trace
+  // 切换报告时清除搜索高亮和 trace，并更新全局 Markdown 内容
   useEffect(() => {
     clearSearchHighlights()
     reportLastQueryRef.current = ''
@@ -1114,6 +1117,8 @@ function App() {
     setTraceDrawerOpen(false)
     setCurrentTrace(null)
     setTraceList([])
+    // 设置全局 Markdown 内容供模块复制功能使用
+    setGlobalMarkdownContent(displayContent || '')
   }, [displayContent])
 
   const markdownComponents = useMemo(() => ({
@@ -1160,18 +1165,27 @@ function App() {
         </div>
       )
     },
+    // 为模块标题添加复制按钮（仅 h1 级别的模块标题）
+    h1({ children, id, ...props }: any) {
+      const titleText = children?.toString() || ''
+      // 匹配模块标题：模块X: 标题
+      const isModuleTitle = /^模块\d+/.test(titleText)
+      
+      return (
+        <h1 id={id} {...props} style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingRight: '32px' }}>
+          <span>{children}</span>
+          {isModuleTitle && (
+            <ModuleCopyButton moduleId={id || ''} moduleTitle={titleText} />
+          )}
+        </h1>
+      )
+    },
   }), [report, selectedStock])
 
   return (
-    <div className={`app ${theme}`}>
-      {/* 主题切换按钮 */}
-      <button
-        className="theme-toggle"
-        title={theme === 'dark' ? '切换浅色模式' : '切换深色模式'}
-        onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-      >
-        {theme === 'dark' ? '☀️' : '🌙'}
-      </button>
+    <div className="app">
+      {/* 设置按钮 */}
+      <Settings settings={settings} onSettingsChange={setSettings} />
 
       {/* 左栏：自选列表 */}
       <aside className="sidebar" style={{ width: sidebarWidth, minWidth: sidebarWidth }}>

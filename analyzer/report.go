@@ -486,6 +486,9 @@ func writeModule4(b *strings.Builder, steps []StepResult, latest string, comp *C
 	b.WriteString("## 4.2 可比公司明细\n\n")
 	b.WriteString("| 公司 | ROE | 毛利率 | 营收增长 | 负债率 | 现金含量 | M-Score |\n")
 	b.WriteString("|------|-----|--------|----------|--------|----------|---------|\n")
+	// 当前公司放第一行
+	b.WriteString(fmt.Sprintf("| **%s** | %.2f%% | %.2f%% | %.2f%% | %.2f%% | %.2f%% | %.3f |\n",
+		"当前公司", target.ROE, target.GrossMargin, target.RevenueGrowth, target.DebtRatio, target.CashRatio, target.MScore))
 	for _, m := range comp.Metrics {
 		displayName := m.Name
 		if displayName == "" {
