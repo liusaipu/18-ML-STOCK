@@ -89,6 +89,18 @@ const rightPriceScaleOptions = {
   minimumWidth: 60, // 固定最小宽度
 }
 
+// 时间轴配置
+const timeScaleOptions = {
+  borderColor: chartColors.border,
+  timeVisible: false,
+  visible: false,
+  fixLeftEdge: false, // 允许滚动到边缘外
+  fixRightEdge: false,
+  rightOffset: 12, // 右侧留白
+  barSpacing: 6, // 默认柱间距
+  minBarSpacing: 2, // 最小柱间距（允许缩放到更小）
+}
+
 export function UnifiedChart({ code }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [data, setData] = useState<KlineData[]>([])
@@ -123,6 +135,7 @@ export function UnifiedChart({ code }: Props) {
       layout: {
         background: { type: ColorType.Solid, color: 'transparent' },
         textColor: chartColors.text,
+        fontSize: 11,
       },
       grid: {
         vertLines: { color: chartColors.grid },
@@ -130,12 +143,21 @@ export function UnifiedChart({ code }: Props) {
       },
       crosshair: { mode: CrosshairMode.Magnet },
       rightPriceScale: rightPriceScaleOptions,
-      timeScale: { 
-        borderColor: chartColors.border, 
-        timeVisible: false,
-        visible: false,
-        fixLeftEdge: true,
-        fixRightEdge: true,
+      timeScale: timeScaleOptions,
+      // 启用滚动和缩放
+      handleScroll: {
+        mouseWheel: false, // 滚轮用于缩放
+        pressedMouseMove: true, // 按下鼠标拖动
+        horzTouchDrag: true,
+        vertTouchDrag: false,
+      },
+      handleScale: {
+        axisPressedMouseMove: {
+          time: true,
+          price: false,
+        },
+        mouseWheel: true, // 滚轮缩放
+        pinch: true,
       },
     }
 
@@ -185,12 +207,20 @@ export function UnifiedChart({ code }: Props) {
     // 4. 布林带图
     const bollChart = createChart(container, {
       ...commonOptions,
-      height: chartHeight + 30, // 增加高度给时间轴
+      height: chartHeight + 50, // 增加更多高度给时间轴
       timeScale: { 
-        ...commonOptions.timeScale, 
+        ...commonOptions.timeScale,
         visible: true, // 只有底部显示时间轴
-        timeVisible: true, // 显示时间
-        tickMarkMaxCharacterLength: 8, // 限制日期长度
+        timeVisible: false, // 只显示日期，不显示时间
+        tickMarkMaxCharacterLength: 10,
+        borderVisible: true,
+      },
+      // 底部图表需要更大的底部边距给时间轴标签
+      layout: {
+        background: { type: ColorType.Solid, color: 'transparent' },
+        textColor: chartColors.text,
+        fontSize: 11,
+        attributionLogo: false,
       },
     })
     bollChartRef.current = bollChart
@@ -251,8 +281,20 @@ export function UnifiedChart({ code }: Props) {
       })
     })
 
-    // 自适应
+    // 自适应并缩小50%以显示更多数据
     priceChart.timeScale().fitContent()
+    // 缩小图表，显示更多数据（增加逻辑范围）
+    setTimeout(() => {
+      const logicalRange = priceChart.timeScale().getVisibleLogicalRange()
+      if (logicalRange) {
+        // 扩大逻辑范围50%，显示更多数据
+        const newRange = {
+          from: logicalRange.from,
+          to: logicalRange.to + (logicalRange.to - logicalRange.from) * 0.5
+        }
+        charts.forEach(c => c.timeScale().setVisibleLogicalRange(newRange))
+      }
+    }, 100)
 
     // 响应式
     const handleResize = () => {
