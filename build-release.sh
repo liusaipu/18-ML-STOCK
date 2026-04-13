@@ -1,13 +1,22 @@
 #!/bin/bash
 set -e
 
-# Build release packages with timestamps
+# Build release packages with version tag
 # Usage: ./build-release.sh [mac|windows|all]
+# The version is read from wails.json
 
 PLATFORM="${1:-all}"
-TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 BIN_DIR="build/bin"
 mkdir -p "$BIN_DIR"
+
+# Read version from wails.json
+VERSION=$(grep -o '"productVersion": "[^"]*"' wails.json | cut -d'"' -f4)
+if [ -z "$VERSION" ]; then
+    echo "Error: Could not read version from wails.json"
+    exit 1
+fi
+
+echo "Building release packages for version: $VERSION"
 
 export PATH=$PATH:/usr/local/go/bin
 
@@ -15,9 +24,9 @@ build_mac() {
   echo "Building macOS universal binary..."
   /Users/lobster/go/bin/wails build -platform darwin/universal -clean
   cd "$BIN_DIR"
-  zip -r "stock-analyzer_${TIMESTAMP}.zip" stock-analyzer.app
+  zip -r "stock-analyzer_macos_universal_v${VERSION}.zip" stock-analyzer.app
   cd - > /dev/null
-  echo "macOS package: ${BIN_DIR}/stock-analyzer_${TIMESTAMP}.zip"
+  echo "macOS package: ${BIN_DIR}/stock-analyzer_macos_universal_v${VERSION}.zip"
 }
 
 build_windows() {
@@ -31,9 +40,9 @@ build_windows() {
   cp -r "$(pwd)/ml_models" "$BIN_DIR/"
   
   cd "$BIN_DIR"
-  zip -r "stock-analyzer_windows_${TIMESTAMP}.zip" stock-analyzer.exe ml_models/
+  zip -r "stock-analyzer_windows_amd64_v${VERSION}.zip" stock-analyzer.exe ml_models/
   cd - > /dev/null
-  echo "Windows package: ${BIN_DIR}/stock-analyzer_windows_${TIMESTAMP}.zip"
+  echo "Windows package: ${BIN_DIR}/stock-analyzer_windows_amd64_v${VERSION}.zip"
 }
 
 case "$PLATFORM" in
@@ -54,3 +63,6 @@ case "$PLATFORM" in
 esac
 
 echo "Done."
+echo ""
+echo "Release packages:"
+ls -lh ${BIN_DIR}/*.zip 2>/dev/null || true
