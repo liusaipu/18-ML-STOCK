@@ -1,5 +1,17 @@
 # Changelog
 
+## [v1.3.8] - 2026-04-13
+
+### 新增 (Features)
+- **K线图表重构**: 从 lightweight-charts 迁移到 Apache ECharts
+  - 4个图表完美对齐（K线+成交量、MACD、RSI、布林带）
+  - 添加 5日/30日/180日/250日(年线) 均线
+  - 默认显示最近6个月数据（约120个交易日）
+  - 成交量柱压缩，不遮挡K线
+  - 支持统一缩放和拖拽
+
+---
+
 ## [Unreleased]
 
 ### 新增 (Features)
