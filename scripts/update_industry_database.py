@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 行业均值数据库自动更新脚本
-从 A 股所有股票财务数据计算行业均值
+从本地已下载的股票财务数据计算行业均值
 
 用法: python3 update_industry_database.py <data_dir>
 """
@@ -12,12 +12,11 @@ import sys
 from datetime import datetime
 from typing import Dict, List
 import math
+import io
 
-try:
-    import akshare as ak
-except ImportError:
-    print(json.dumps({"success": False, "error": "akshare not installed"}))
-    sys.exit(1)
+# 修复 Windows 控制台编码问题
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
 
 
 def safe_div(a: float, b: float, default: float = 0.0) -> float:
@@ -31,8 +30,11 @@ def load_existing_db(data_dir: str) -> dict:
     """加载现有行业数据库"""
     path = os.path.join(data_dir, "industry_database.json")
     if os.path.exists(path):
-        with open(path, "r", encoding="utf-8") as f:
-            return json.load(f)
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception as e:
+            print(f"加载现有数据库失败: {e}", file=sys.stderr)
     return {"version": "1.0", "updated_at": "", "industries": {}}
 
 
@@ -43,53 +45,120 @@ def save_db(data_dir: str, db: dict):
         json.dump(db, f, ensure_ascii=False, indent=2)
 
 
-def get_industry_classification() -> Dict[str, str]:
+def scan_stocks_data(data_dir: str) -> Dict[str, List[dict]]:
     """
-    获取 A 股所有股票的行业分类
-    返回: {股票代码: 行业名称}
+    扫描本地股票数据，按行业分组
+    返回: {行业名: [股票指标列表]}
     """
-    try:
-        # 使用 akshare 获取行业分类
-        df = ak.stock_industry_category_cninfo()
-        if df is None or df.empty:
-            return {}
-        
-        result = {}
-        for _, row in df.iterrows():
-            code = str(row.get("股票代码", "")).strip()
-            industry = str(row.get("行业分类", "")).strip()
-            if code and industry:
-                result[code] = industry
-        return result
-    except Exception as e:
-        print(f"获取行业分类失败: {e}", file=sys.stderr)
+    data_path = os.path.join(data_dir, "data")
+    if not os.path.exists(data_path):
         return {}
+    
+    industry_groups: Dict[str, List[dict]] = {}
+    
+    # 遍历所有股票目录
+    for stock_dir in os.listdir(data_path):
+        stock_path = os.path.join(data_path, stock_dir)
+        if not os.path.isdir(stock_path):
+            continue
+        
+        try:
+            # 读取基本资料
+            profile_path = os.path.join(stock_path, "profile.json")
+            if not os.path.exists(profile_path):
+                continue
+            
+            with open(profile_path, "r", encoding="utf-8") as f:
+                profile = json.load(f)
+            
+            industry = profile.get("industry", "").strip()
+            if not industry:
+                continue
+            
+            # 读取最新财务数据
+            metrics = extract_financial_metrics(stock_path)
+            if metrics:
+                metrics["code"] = stock_dir
+                if industry not in industry_groups:
+                    industry_groups[industry] = []
+                industry_groups[industry].append(metrics)
+                
+        except Exception as e:
+            print(f"处理 {stock_dir} 失败: {e}", file=sys.stderr)
+            continue
+    
+    return industry_groups
 
 
-def get_stock_financial_metrics(code: str) -> dict:
+def get_latest_value(data: dict, keys: list) -> float:
+    """从 {科目: {日期: 值}} 格式中获取最新日期的值"""
+    for key in keys:
+        if key in data:
+            values = data[key]
+            if not values:
+                continue
+            # 获取最新日期
+            latest_date = sorted(values.keys(), reverse=True)[0]
+            val = values.get(latest_date, 0)
+            return float(val) if val else 0
+    return 0
+
+
+def extract_financial_metrics(stock_path: str) -> dict:
     """
-    获取单只股票的最新财务指标
-    返回: {roe, gross_margin, revenue_growth, debt_ratio, ...}
+    从股票财务数据中提取关键指标
+    数据格式: {科目: {日期: 值}}
     """
     try:
-        # 获取主要财务指标
-        df = ak.stock_financial_analysis_indicator(symbol=f"{code[:6]}")
-        if df is None or df.empty:
-            return None
+        # 读取资产负债表
+        with open(os.path.join(stock_path, "balance_sheet.json"), "r", encoding="utf-8") as f:
+            balance = json.load(f)
         
-        # 取最新一期数据
-        row = df.iloc[0]
+        # 读取利润表
+        with open(os.path.join(stock_path, "income_statement.json"), "r", encoding="utf-8") as f:
+            income = json.load(f)
         
-        # 提取关键指标
-        metrics = {
-            "roe": float(row.get("净资产收益率", 0) or 0),
-            "gross_margin": float(row.get("毛利率", 0) or 0),
-            "revenue_growth": float(row.get("营业收入同比增长率", 0) or 0),
-            "debt_ratio": float(row.get("资产负债率", 0) or 0),
+        # 读取现金流量表
+        with open(os.path.join(stock_path, "cash_flow.json"), "r", encoding="utf-8") as f:
+            cashflow = json.load(f)
+        
+        # 提取关键指标（取最新年份）
+        total_equity = get_latest_value(balance, ["归属于母公司股东权益合计", "所有者权益合计", "股东权益合计"])
+        net_profit = get_latest_value(income, ["归属于母公司股东的净利润", "净利润"])
+        revenue = get_latest_value(income, ["营业收入", "营业总收入"])
+        total_assets = get_latest_value(balance, ["资产总计", "资产合计", "总资产"])
+        total_liabilities = get_latest_value(balance, ["负债合计", "负债总计", "总负债"])
+        operating_cashflow = get_latest_value(cashflow, ["经营活动产生的现金流量净额", "经营活动现金流量净额"])
+        
+        # 计算指标
+        roe = safe_div(net_profit * 100, total_equity) if total_equity else 0
+        debt_ratio = safe_div(total_liabilities * 100, total_assets) if total_assets else 0
+        cash_ratio = safe_div(operating_cashflow * 100, net_profit) if net_profit else 0
+        
+        # 尝试计算毛利率（需要营业成本）
+        operating_cost = get_latest_value(income, ["营业成本"])
+        gross_margin = safe_div((revenue - operating_cost) * 100, revenue) if revenue else 0
+        
+        # 计算营收增长（需要前一年数据）
+        revenue_growth = 0
+        if "营业收入" in income or "营业总收入" in income:
+            revenue_key = "营业收入" if "营业收入" in income else "营业总收入"
+            years = sorted(income[revenue_key].keys(), reverse=True)
+            if len(years) >= 2:
+                latest_revenue = float(income[revenue_key].get(years[0], 0) or 0)
+                prev_revenue = float(income[revenue_key].get(years[1], 0) or 0)
+                if prev_revenue > 0:
+                    revenue_growth = (latest_revenue - prev_revenue) * 100 / prev_revenue
+        
+        return {
+            "roe": round(roe, 2),
+            "gross_margin": round(gross_margin, 2),
+            "revenue_growth": round(revenue_growth, 2),
+            "debt_ratio": round(debt_ratio, 2),
+            "cash_ratio": round(cash_ratio, 2),
         }
-        return metrics
     except Exception as e:
-        # 静默处理单个股票的错误
+        print(f"提取财务指标失败: {e}", file=sys.stderr)
         return None
 
 
@@ -105,6 +174,7 @@ def calculate_industry_metrics(stocks_data: List[dict]) -> dict:
     gms = [d["gross_margin"] for d in stocks_data if d.get("gross_margin")]
     growths = [d["revenue_growth"] for d in stocks_data if d.get("revenue_growth")]
     debts = [d["debt_ratio"] for d in stocks_data if d.get("debt_ratio")]
+    cashs = [d["cash_ratio"] for d in stocks_data if d.get("cash_ratio")]
     
     def median(vals: List[float]) -> float:
         if not vals:
@@ -122,13 +192,12 @@ def calculate_industry_metrics(stocks_data: List[dict]) -> dict:
     
     return {
         "count": len(stocks_data),
-        "roe": avg(roes) if roes else 0,
-        "roe_median": median(roes) if roes else 0,
-        "gross_margin": avg(gms) if gms else 0,
-        "revenue_growth": avg(growths) if growths else 0,
-        "debt_ratio": avg(debts) if debts else 0,
-        "cash_ratio": 0.0,  # 暂不计算
-        "m_score": 0.0,     # 暂不计算
+        "roe": round(avg(roes), 2) if roes else 0,
+        "roe_median": round(median(roes), 2) if roes else 0,
+        "gross_margin": round(avg(gms), 2) if gms else 0,
+        "revenue_growth": round(avg(growths), 2) if growths else 0,
+        "debt_ratio": round(avg(debts), 2) if debts else 0,
+        "cash_ratio": round(avg(cashs), 2) if cashs else 0,
     }
 
 
@@ -145,48 +214,29 @@ def main():
     # 1. 加载现有数据库
     db = load_existing_db(data_dir)
     
-    # 2. 获取行业分类
-    print("获取行业分类...", file=sys.stderr)
-    industry_map = get_industry_classification()
-    if not industry_map:
-        result = {"success": False, "error": "无法获取行业分类数据"}
+    # 2. 扫描本地股票数据
+    print("扫描本地股票数据...", file=sys.stderr)
+    industry_groups = scan_stocks_data(data_dir)
+    
+    if not industry_groups:
+        result = {"success": False, "error": "未找到任何股票数据，请先生成或下载股票财务数据"}
         print(json.dumps(result, ensure_ascii=False))
         sys.exit(1)
     
-    print(f"获取到 {len(industry_map)} 只股票的行业分类", file=sys.stderr)
+    print(f"找到 {len(industry_groups)} 个行业", file=sys.stderr)
     
-    # 3. 按行业分组
-    industry_groups: Dict[str, List[str]] = {}
-    for code, industry in industry_map.items():
-        if industry not in industry_groups:
-            industry_groups[industry] = []
-        industry_groups[industry].append(code)
-    
-    print(f"共 {len(industry_groups)} 个行业", file=sys.stderr)
-    
-    # 4. 采样计算（每个行业最多取50只股票，避免太慢）
+    # 3. 计算各行业均值
     updated_count = 0
     skipped_count = 0
-    errors = []
     
-    for industry, codes in industry_groups.items():
-        print(f"处理行业: {industry} ({len(codes)} 只股票)", file=sys.stderr)
+    for industry, stocks in industry_groups.items():
+        print(f"处理行业: {industry} ({len(stocks)} 只股票)", file=sys.stderr)
         
-        # 采样（每个行业最多50只）
-        sample_codes = codes[:50] if len(codes) > 50 else codes
-        
-        stocks_data = []
-        for code in sample_codes:
-            metrics = get_stock_financial_metrics(code)
-            if metrics:
-                stocks_data.append(metrics)
-        
-        if len(stocks_data) < 3:
+        if len(stocks) < 2:
             skipped_count += 1
             continue
         
-        # 计算行业均值
-        metrics = calculate_industry_metrics(stocks_data)
+        metrics = calculate_industry_metrics(stocks)
         if metrics:
             db["industries"][industry] = {
                 "industry": industry,
@@ -195,11 +245,11 @@ def main():
             }
             updated_count += 1
     
-    # 5. 更新元信息
+    # 4. 更新元信息
     db["version"] = "1.0"
     db["updated_at"] = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
     
-    # 6. 保存数据库
+    # 5. 保存数据库
     save_db(data_dir, db)
     
     result = {
@@ -208,7 +258,6 @@ def main():
         "total_industries": len(db["industries"]),
         "updated_count": updated_count,
         "skipped_count": skipped_count,
-        "errors": errors,
     }
     
     print(json.dumps(result, ensure_ascii=False))
