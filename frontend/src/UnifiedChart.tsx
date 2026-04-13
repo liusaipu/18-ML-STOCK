@@ -140,7 +140,11 @@ export function UnifiedChart({ code }: Props) {
         rightPriceScale: {
           borderColor: chartColors.border,
           visible: true,
-          minimumWidth: 65,
+          minimumWidth: 70,
+          scaleMargins: {
+            top: 0.1,
+            bottom: 0.1,
+          },
         },
         leftPriceScale: {
           visible: false,
@@ -150,12 +154,13 @@ export function UnifiedChart({ code }: Props) {
           visible: showTimeScale,
           timeVisible: false,
           secondsVisible: false,
-          tickMarkMaxCharacterLength: 10,
+          tickMarkMaxCharacterLength: 6,
           fixLeftEdge: false,
           fixRightEdge: false,
-          rightOffset: 8,
-          barSpacing: 8,
-          minBarSpacing: 3,
+          rightOffset: 4,
+          barSpacing: 6,
+          minBarSpacing: 2,
+          lockVisibleTimeRangeOnResize: true,
         },
         handleScroll: {
           mouseWheel: false,
@@ -211,8 +216,8 @@ export function UnifiedChart({ code }: Props) {
 
     const rsiSeries = rsiChart.addSeries(LineSeries, { color: '#8b5cf6', lineWidth: 2 })
 
-    // 4. 布林带图 (200px + 60px时间轴)
-    const bollChart = createSubChart(260, true)
+    // 4. 布林带图 (200px + 80px时间轴)
+    const bollChart = createSubChart(280, true)
     chartsRef.current.push(bollChart)
 
     const bbUpper = bollChart.addSeries(LineSeries, { color: '#ef4444', lineWidth: 1 })
