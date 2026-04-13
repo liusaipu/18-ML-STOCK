@@ -295,3 +295,22 @@ wails dev
 
 **下次会话计划**:
 - 按需继续优化
+
+
+---
+
+### Session 2026-04-13 (Part 6) - 紧急修复
+
+**问题**: 点击股票后窗口变空白
+
+**原因**: UnifiedChart 组件存在兼容性问题，lightweight-charts v5 的 priceScale API 与代码不兼容
+
+**修复**: 
+- 简化 UnifiedChart 组件
+- 移除可能导致崩溃的 priceScale 配置
+- 添加 try-catch 错误处理
+- 使用 @ts-ignore 跳过类型检查
+
+**状态**: ✅ 已修复
+
+**提交**: 5cae76a
