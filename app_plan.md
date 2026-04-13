@@ -253,26 +253,120 @@
 
 ---
 
-## 九、技术架构建议
+## 九、技术架构与代码复用方案
 
-### 服务端
-- **Go 后端** 封装成 RESTful API（复用现有 18 步引擎）
-- **分析任务异步化**：复杂计算提交到队列，完成后推送给手机
-- **数据缓存策略**：
-  - Redis：热点股票实时行情
-  - PostgreSQL：用户数据、历史评分、体检记录
+### 9.1 为什么不能直接共用现有代码？
 
-### 客户端
-- **iOS 原生开发**（SwiftUI + Combine）
-  - 动画流畅，手势响应精准
-  - 完美适配灵动岛、小组件
-- **Flutter** 备选（如果同时要 Android）
-  - 但 iPhone 体验会略逊于原生
+手机 App **不能**直接塞进现有仓库运行，核心原因是技术栈完全不兼容：
 
-### 数据同步
-- 每天早上 6:00 服务端批量计算所有用户自选股的体检报告
-- 用户打开 App 时，优先展示缓存，后台静默刷新
-- 弱网环境下，保证首页卡片 2 秒内可见
+| 现有代码 | 手机 App 的问题 |
+|---------|---------------|
+| **Wails v2 框架** | 只支持桌面端（Windows/macOS/Linux），**不支持 iOS/Android** |
+| **React + Vite 前端** | 虽然可以复用部分 UI 思路，但手势交互、组件库、导航模式完全不同 |
+| **本地文件系统操作** | 桌面版直接读写 `~/.config/stock-analyzer/`，手机 App 需要沙盒存储 + 云端同步 |
+| **窗口布局** | 三栏布局、固定宽度、鼠标 hover 效果在手机上全部失效 |
+
+**结论**：现有仓库 90% 的前端代码和 30% 的后端代码（Wails 绑定、本地文件操作）在手机端用不上。
+
+### 9.2 推荐方案：方案 1 —— 把核心引擎抽成 Go Module
+
+采用 **「一核多端」** 架构，复用 Go 核心分析能力，手机和桌面各自独立开发前端：
+
+```
+┌─────────────────────────────────────────┐
+│         stock-analyzer-engine           │  ← 可复用的核心（Go module）
+│    (18步分析 / A-Score / 报告生成)       │
+└─────────────────────────────────────────┘
+                    │
+    ┌───────────────┼───────────────┐
+    ▼               ▼               ▼
+┌─────────┐    ┌─────────┐    ┌─────────┐
+│ 桌面端   │    │ iOS App │    │ Web/API │
+│(Wails)  │    │(SwiftUI)│    │(Server) │
+└─────────┘    └─────────┘    └─────────┘
+```
+
+#### 方案 1 的具体实现
+
+1. **新建仓库** `stock-analyzer-engine`
+   - 把 `analyzer/`、`downloader/` 目录提取出来
+   - 去掉 Wails 绑定和桌面文件路径硬编码
+   - 改为纯 Go module，通过 `go.mod` 引入
+
+2. **现有桌面版仓库** 保持不变
+   - 引入 `engine` module 作为依赖
+   - 继续维护 Wails + React 前端
+
+3. **新建手机 App 仓库** `stock-analyzer-mobile`
+   - **iOS 端**：SwiftUI 开发
+   - **服务端**：轻量 Go HTTP 服务，封装 `engine` module 的 API
+   - 或者把 engine 用 Go Mobile / cgo 编译成 iOS framework（视性能需求而定）
+
+### 9.3 哪些代码可以复用？
+
+#### ✅ 强烈建议复用
+| 模块 | 复用方式 |
+|------|---------|
+| `analyzer/`（18步分析引擎） | 提取为 Go module |
+| `downloader/`（财报下载） | 提取为 Go module |
+| A-Score / ML 模型推理 | 服务端统一部署 |
+| 报告模板和 Markdown 生成逻辑 | 服务端生成后返回给手机 |
+
+#### ❌ 需要重写
+| 模块 | 原因 |
+|------|------|
+| 所有 React 前端组件 | 手机交互范式完全不同 |
+| Wails 绑定方法 | 手机用 RESTful API / gRPC 通信 |
+| 本地文件存储逻辑 | 手机用 UserDefaults / CoreData / 云端数据库 |
+| 窗口布局 / CSS | 手机用 SwiftUI / Auto Layout |
+
+### 9.4 为什么不建议把移动端代码塞进现有仓库？
+
+1. **构建工具冲突**：Wails 和 Xcode / Swift Package Manager 很难共存
+2. **发布节奏不同**：桌面版可能季度更新，App 可能周更
+3. **团队分工不同**：桌面前端工程师和手机原生开发工程师工作方式差异大
+4. **仓库体积膨胀**：iOS 工程有大量 `.xcodeproj`、资源文件、Pods，会污染现有仓库
+
+### 9.5 实际推荐的开发路径
+
+#### Phase 1：抽取核心引擎（2-3 周）
+把现有 Go 代码中「与 Wails 无关」的部分剥离成独立 Go module：
+- `analyzer/engine.go`
+- `analyzer/steps.go`
+- `analyzer/report.go`
+- `downloader/eastmoney.go`
+- `ml_models/` 推理脚本
+
+目标接口示例：
+```go
+module github.com/liusaipu/stock-analyzer-engine
+
+// 暴露核心接口
+func Analyze(symbol string, opts AnalyzeOptions) (*AnalysisReport, error)
+func CalculateAScore(data *FinancialData) float64
+func GenerateReport(report *AnalysisReport) string
+```
+
+#### Phase 2：搭建服务端 API（1-2 周）
+新建轻量服务 `api-server/`，核心接口：
+```
+POST /api/v1/analyze         // 执行分析
+GET  /api/v1/health/{symbol} // 查询健康分
+GET  /api/v1/report/{symbol} // 获取报告
+POST /api/v1/watchlist/sync  // 自选股同步
+```
+
+#### Phase 3：开发 iOS App（6-8 周）
+独立仓库 `stock-analyzer-mobile`，纯 SwiftUI：
+- 调用 API 获取数据
+- 本地只做展示和缓存
+- 每天早上 6:00 服务端批量计算体检报告，用户打开 App 时优先展示缓存、后台静默刷新
+
+### 9.6 服务端与客户端技术选型
+
+- **服务端**：Go + Gin/Fiber，Redis 缓存热点行情，PostgreSQL 存储用户数据
+- **客户端**：SwiftUI + Combine，动画流畅，手势响应精准，完美适配灵动岛、小组件
+- **数据同步**：弱网环境下保证首页卡片 2 秒内可见
 
 ---
 
