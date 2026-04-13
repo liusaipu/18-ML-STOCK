@@ -47,10 +47,17 @@ var (
 
 // FetchStockSentiment 获取指定股票的舆情情绪数据
 func FetchStockSentiment(market, code string) (*SentimentData, error) {
-	// 1. 优先东财研报
-	data, err := fetchSentimentFromEastMoneyReports(code)
-	if err == nil && data != nil && data.HasData {
-		return data, nil
+	// 1. 优先东财研报（带重试）
+	var data *SentimentData
+	var err error
+	for i := 0; i < 2; i++ {
+		data, err = fetchSentimentFromEastMoneyReports(code)
+		if err == nil && data != nil && data.HasData {
+			return data, nil
+		}
+		if i < 1 { // 第一次失败时短暂等待再试
+			time.Sleep(500 * time.Millisecond)
+		}
 	}
 
 	// 2. fallback 新浪财经新闻
@@ -59,13 +66,27 @@ func FetchStockSentiment(market, code string) (*SentimentData, error) {
 		return data, nil
 	}
 
-	return nil, fmt.Errorf("舆情数据获取失败")
+	// 3. 所有数据源失败，返回空数据结构（带提示）
+	return &SentimentData{
+		Score:         0,
+		HeatIndex:     0,
+		PositiveWords: []string{},
+		NegativeWords: []string{},
+		Summaries: []SentimentSummary{{
+			Title:     "暂无舆情数据",
+			Source:    "系统提示",
+			Date:      time.Now().Format("2006-01-02"),
+			Sentiment: 0,
+		}},
+		HasData: false,
+	}, nil
 }
 
 // ========== 东财研报接口 ==========
 func fetchSentimentFromEastMoneyReports(code string) (*SentimentData, error) {
-	begin := time.Now().AddDate(-1, 0, 0).Format("2006-01-02")
-	end := time.Now().AddDate(1, 0, 0).Format("2006-01-02")
+	// 查询最近6个月的研报
+	begin := time.Now().AddDate(0, -6, 0).Format("2006-01-02")
+	end := time.Now().Format("2006-01-02")
 	url := fmt.Sprintf("https://reportapi.eastmoney.com/report/list?industryCode=*&pageNo=1&pageSize=20&code=%s&beginTime=%s&endTime=%s&qType=0", code, begin, end)
 
 	client := &http.Client{Timeout: 15 * time.Second}
