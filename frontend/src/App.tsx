@@ -91,7 +91,8 @@ function extractHighlightsAndRisks(report: AnalysisReport) {
   const gm = getStepValue(steps, 10, latest, 'grossMargin')
   const growth = getStepValue(steps, 9, latest, 'growthRate')
   const pg = getStepValue(steps, 16, latest, 'profitGrowth')
-  const ms = getStepValue(steps, 8, latest, 'MScore')
+  // A-Score 为 0-100 分，越高风险越大，<60 为安全
+  const ascore = getStepValue(steps, 8, latest, 'AScore')
   const dr = getStepValue(steps, 3, latest, 'debtRatio')
   const cr = getStepValue(steps, 15, latest, 'cashRatio')
 
@@ -107,9 +108,11 @@ function extractHighlightsAndRisks(report: AnalysisReport) {
   if (dr <= 40) highlights.push('低负债率，财务结构稳健')
   else if (dr > 60) risks.push('负债率超过 60%，偿债压力偏大')
 
-  if (ms <= -2.22) highlights.push('M-Score 安全，财报可信度高')
-  else if (ms > -1.78) risks.push('M-Score 异常，财报操纵风险较高')
-  else risks.push('M-Score 偏高，需警惕财报操纵嫌疑')
+  // A-Score 综合风险评分（A股适配）
+  if (ascore < 40) highlights.push('A-Score 低风险，财务质量良好')
+  else if (ascore < 60) highlights.push('A-Score 中等风险，需关注')
+  else if (ascore < 80) risks.push('A-Score 偏高，存在财务操纵或偿债风险')
+  else risks.push('A-Score 高风险，建议谨慎')
 
   if (growth >= 10) highlights.push('营收稳健增长')
   else if (growth < 0) risks.push('营收负增长，成长性承压')
