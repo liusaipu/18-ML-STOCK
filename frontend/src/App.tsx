@@ -1188,7 +1188,16 @@ function App() {
   return (
     <div className="app">
       {/* 设置按钮 */}
-      <Settings settings={settings} onSettingsChange={setSettings} />
+      <Settings 
+        settings={settings} 
+        onSettingsChange={setSettings}
+        policyLibMeta={policyLibMeta}
+        industryDBMeta={industryDBMeta}
+        policyUpdating={policyUpdating}
+        industryUpdating={industryUpdating}
+        onUpdatePolicyLibrary={handleUpdatePolicyLibrary}
+        onUpdateIndustryDB={handleUpdateIndustryDB}
+      />
 
       {/* 左栏：自选列表 */}
       <aside className="sidebar" style={{ width: sidebarWidth, minWidth: sidebarWidth }}>
@@ -1672,46 +1681,6 @@ function App() {
                       </button>
                     )
                   })()}
-                </div>
-              </div>
-            </Collapsible>
-
-            <Collapsible title="📚 产业政策库">
-              <div className="policy-lib-panel" style={{ marginTop: 0, marginBottom: 0, padding: '8px 0' }}>
-                <div className="policy-lib-info" style={{ marginBottom: 12, fontSize: 13, color: 'var(--text-secondary)' }}>
-                  <div>版本: <span style={{ color: 'var(--text-primary)' }}>{policyLibMeta?.version || 'builtin'}</span></div>
-                  <div style={{ marginTop: 4 }}>更新于: <span style={{ color: 'var(--text-primary)' }}>{policyLibMeta?.updatedAt || '内置默认'}</span></div>
-                </div>
-                <button
-                  className="btn-text"
-                  onClick={handleUpdatePolicyLibrary}
-                  disabled={policyUpdating}
-                  style={{ width: '100%', justifyContent: 'center' }}
-                >
-                  {policyUpdating ? '更新中...' : '🔄 更新政策库'}
-                </button>
-                <div style={{ marginTop: 8, fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-                  从 CCTV 新闻和东方财富概念板块提取最新政策关键词
-                </div>
-              </div>
-            </Collapsible>
-
-            <Collapsible title="🏭 行业均值数据库">
-              <div className="industry-db-panel" style={{ marginTop: 0, marginBottom: 0, padding: '8px 0' }}>
-                <div className="industry-db-info" style={{ marginBottom: 12, fontSize: 13, color: 'var(--text-secondary)' }}>
-                  <div>行业数: <span style={{ color: 'var(--text-primary)' }}>{industryDBMeta?.count || 0}</span></div>
-                  <div style={{ marginTop: 4 }}>更新于: <span style={{ color: 'var(--text-primary)' }}>{industryDBMeta?.updatedAt || '未更新'}</span></div>
-                </div>
-                <button
-                  className="btn-text"
-                  onClick={handleUpdateIndustryDB}
-                  disabled={industryUpdating}
-                  style={{ width: '100%', justifyContent: 'center' }}
-                >
-                  {industryUpdating ? '更新中(约2-3分钟)...' : '🔄 更新行业数据库'}
-                </button>
-                <div style={{ marginTop: 8, fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-                  从 A 股所有股票财务数据计算各行业均值（ROE、毛利率、负债率等）
                 </div>
               </div>
             </Collapsible>

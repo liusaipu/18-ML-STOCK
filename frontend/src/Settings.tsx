@@ -47,12 +47,40 @@ export function saveSettings(settings: AppSettings) {
   }
 }
 
+// 数据管理相关类型
+interface PolicyLibMeta {
+  version: string
+  updatedAt: string
+}
+
+interface IndustryDBMeta {
+  version: string
+  updatedAt: string
+  count: number
+}
+
 interface SettingsProps {
   settings: AppSettings
   onSettingsChange: (settings: AppSettings) => void
+  // 数据管理相关
+  policyLibMeta?: PolicyLibMeta | null
+  industryDBMeta?: IndustryDBMeta | null
+  policyUpdating?: boolean
+  industryUpdating?: boolean
+  onUpdatePolicyLibrary?: () => void
+  onUpdateIndustryDB?: () => void
 }
 
-export function Settings({ settings, onSettingsChange }: SettingsProps) {
+export function Settings({ 
+  settings, 
+  onSettingsChange,
+  policyLibMeta,
+  industryDBMeta,
+  policyUpdating = false,
+  industryUpdating = false,
+  onUpdatePolicyLibrary,
+  onUpdateIndustryDB
+}: SettingsProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [activeTab, setActiveTab] = useState<'appearance' | 'chart' | 'data' | 'about'>('appearance')
   const dropdownRef = useRef<HTMLDivElement>(null)
@@ -79,7 +107,7 @@ export function Settings({ settings, onSettingsChange }: SettingsProps) {
     saveSettings(newSettings)
   }
 
-  const version = '1.3.8'
+  const version = '1.3.9'
 
   return (
     <>
@@ -140,6 +168,7 @@ export function Settings({ settings, onSettingsChange }: SettingsProps) {
 
           {activeTab === 'data' && (
             <div className="settings-section">
+              {/* 基础数据设置 */}
               <div className="settings-item">
                 <label>财报下载年限</label>
                 <div className="settings-input-group">
@@ -158,6 +187,51 @@ export function Settings({ settings, onSettingsChange }: SettingsProps) {
                 <div className="settings-toggle-switch">
                   <label className="switch"><input type="checkbox" checked={settings.analysisNotification} onChange={(e) => updateSetting('analysisNotification', e.target.checked)} /><span className="slider"></span></label>
                 </div>
+              </div>
+
+              {/* 数据管理分割线 */}
+              <div className="settings-divider" />
+
+              {/* 产业政策库 */}
+              <div className="settings-data-section">
+                <div className="settings-data-title">📚 产业政策库</div>
+                <div className="settings-data-info">
+                  <div>版本: <span>{policyLibMeta?.version || 'builtin'}</span></div>
+                  <div>更新于: <span>{policyLibMeta?.updatedAt || '内置默认'}</span></div>
+                </div>
+                <div className="settings-data-desc">
+                  为报告模块5（政策匹配度评估）提供政策关键词数据
+                </div>
+                {onUpdatePolicyLibrary && (
+                  <button 
+                    className="settings-data-btn" 
+                    onClick={onUpdatePolicyLibrary}
+                    disabled={policyUpdating}
+                  >
+                    {policyUpdating ? '更新中...' : '🔄 更新政策库'}
+                  </button>
+                )}
+              </div>
+
+              {/* 行业均值数据库 */}
+              <div className="settings-data-section">
+                <div className="settings-data-title">🏭 行业均值数据库</div>
+                <div className="settings-data-info">
+                  <div>行业数: <span>{industryDBMeta?.count || 0}</span></div>
+                  <div>更新于: <span>{industryDBMeta?.updatedAt || '未更新'}</span></div>
+                </div>
+                <div className="settings-data-desc">
+                  为报告模块4（行业横向对比）提供行业基准数据
+                </div>
+                {onUpdateIndustryDB && (
+                  <button 
+                    className="settings-data-btn" 
+                    onClick={onUpdateIndustryDB}
+                    disabled={industryUpdating}
+                  >
+                    {industryUpdating ? '更新中(约2-3分钟)...' : '🔄 更新行业数据库'}
+                  </button>
+                )}
               </div>
             </div>
           )}
