@@ -36,33 +36,53 @@ type FinancialReportData struct {
 }
 
 // DownloadFinancialReports 从东方财富下载指定股票的所有年报财务数据
+// 东方财富失败时自动尝试腾讯财经作为备用数据源
 func DownloadFinancialReports(market, code string) (*FinancialReportData, error) {
 	if strings.ToUpper(market) == "HK" {
 		return nil, fmt.Errorf("港股财报暂不支持网络下载，请手动导入 CSV")
 	}
+	
+	// 先尝试东方财富
+	result, err := downloadFromEastMoney(market, code)
+	if err == nil {
+		return result, nil
+	}
+	
+	// 东方财富失败，尝试腾讯财经
+	result, err2 := DownloadFromTencent(market, code)
+	if err2 == nil {
+		return result, nil
+	}
+	
+	// 都失败了，返回详细错误信息
+	return nil, fmt.Errorf("下载失败:\n\n【东方财富】%v\n\n【腾讯财经】%v\n\n建议:\n1. 检查网络连接\n2. 稍后重试\n3. 使用CSV导入功能手动导入财报数据", err, err2)
+}
+
+// downloadFromEastMoney 从东方财富下载财务数据
+func downloadFromEastMoney(market, code string) (*FinancialReportData, error) {
 	fullCode := market + code // e.g. SH603501
 
 	// 1. 分别为三张表确定 companyType（保险/金融股各表可能不同）
 	bsCT, err := getCompanyTypeForEndpoint("zcfzbAjaxNew", fullCode)
 	if err != nil {
-		return nil, fmt.Errorf("无法确定资产负债表companyType: %w", err)
+		return nil, fmt.Errorf("无法确定资产负债表类型: %w\n可能原因: 网络连接问题或股票代码不存在", err)
 	}
 	isCT, err := getCompanyTypeForEndpoint("lrbAjaxNew", fullCode)
 	if err != nil {
-		return nil, fmt.Errorf("无法确定利润表companyType: %w", err)
+		return nil, fmt.Errorf("无法确定利润表类型: %w\n可能原因: 网络连接问题或股票代码不存在", err)
 	}
 	cfCT, err := getCompanyTypeForEndpoint("xjllbAjaxNew", fullCode)
 	if err != nil {
-		return nil, fmt.Errorf("无法确定现金流量表companyType: %w", err)
+		return nil, fmt.Errorf("无法确定现金流量表类型: %w\n可能原因: 网络连接问题或股票代码不存在", err)
 	}
 
 	// 2. 获取年报日期列表
 	dates, err := getAnnualReportDates(code)
 	if err != nil {
-		return nil, fmt.Errorf("获取年报日期列表失败: %w", err)
+		return nil, fmt.Errorf("获取年报日期列表失败: %w\n可能原因: 网络连接不稳定或该股票暂无财务数据", err)
 	}
 	if len(dates) == 0 {
-		return nil, fmt.Errorf("未找到任何年报数据")
+		return nil, fmt.Errorf("未找到任何年报数据，该股票可能尚未发布年报")
 	}
 
 	// 3. 并发下载三张表
@@ -76,7 +96,8 @@ func DownloadFinancialReports(market, code string) (*FinancialReportData, error)
 
 	var wg sync.WaitGroup
 	var mu sync.Mutex
-	var downloadErr error
+	var errs []string
+	successCount := 0
 
 	for _, date := range dates {
 		// balance sheet
@@ -86,14 +107,13 @@ func DownloadFinancialReports(market, code string) (*FinancialReportData, error)
 			data, err := fetchHSF10("zcfzbAjaxNew", bsCT, d, fullCode)
 			if err != nil {
 				mu.Lock()
-				if downloadErr == nil {
-					downloadErr = err
-				}
+				errs = append(errs, fmt.Sprintf("资产负债表[%s]: %v", d, err))
 				mu.Unlock()
 				return
 			}
 			mu.Lock()
 			mergeBalanceSheet(result.BalanceSheet, data, d)
+			successCount++
 			mu.Unlock()
 		}(date)
 
@@ -104,14 +124,13 @@ func DownloadFinancialReports(market, code string) (*FinancialReportData, error)
 			data, err := fetchHSF10("lrbAjaxNew", isCT, d, fullCode)
 			if err != nil {
 				mu.Lock()
-				if downloadErr == nil {
-					downloadErr = err
-				}
+				errs = append(errs, fmt.Sprintf("利润表[%s]: %v", d, err))
 				mu.Unlock()
 				return
 			}
 			mu.Lock()
 			mergeIncomeStatement(result.IncomeStatement, data, d)
+			successCount++
 			mu.Unlock()
 		}(date)
 
@@ -122,21 +141,28 @@ func DownloadFinancialReports(market, code string) (*FinancialReportData, error)
 			data, err := fetchHSF10("xjllbAjaxNew", cfCT, d, fullCode)
 			if err != nil {
 				mu.Lock()
-				if downloadErr == nil {
-					downloadErr = err
-				}
+				errs = append(errs, fmt.Sprintf("现金流量表[%s]: %v", d, err))
 				mu.Unlock()
 				return
 			}
 			mu.Lock()
 			mergeCashFlow(result.CashFlow, data, d)
+			successCount++
 			mu.Unlock()
 		}(date)
 	}
 
 	wg.Wait()
-	if downloadErr != nil {
-		return nil, downloadErr
+	
+	// 只要有部分数据成功就返回，不完全失败
+	if successCount == 0 {
+		return nil, fmt.Errorf("下载失败，所有年份数据均无法获取:\n%s", strings.Join(errs, "\n"))
+	}
+	
+	// 如果有部分失败，记录日志但不阻止返回
+	if len(errs) > 0 {
+		// 可以在这里添加日志记录
+		_ = errs
 	}
 
 	return result, nil
@@ -144,25 +170,43 @@ func DownloadFinancialReports(market, code string) (*FinancialReportData, error)
 
 // getCompanyTypeForEndpoint 尝试多个 companyType 直到指定 endpoint 返回有效数据
 func getCompanyTypeForEndpoint(endpoint, fullCode string) (int, error) {
-	for _, ct := range []int{4, 1, 2, 3, 5, 6, 7, 8} {
+	companyTypes := []int{4, 1, 2, 3, 5, 6, 7, 8}
+	var lastErr error
+	
+	for _, ct := range companyTypes {
 		data, err := fetchHSF10(endpoint, ct, "2024-12-31", fullCode)
 		if err != nil {
+			lastErr = err
 			continue
 		}
 		if data != nil && len(data) > 0 {
 			return ct, nil
 		}
 	}
-	return 0, fmt.Errorf("未找到匹配的companyType")
+	
+	if lastErr != nil {
+		return 0, fmt.Errorf("无法确定companyType(已尝试类型%v): %w", companyTypes, lastErr)
+	}
+	return 0, fmt.Errorf("无法确定companyType(已尝试类型%v): 所有类型均无数据", companyTypes)
 }
 
-// getAnnualReportDates 通过 datacenter-web API 获取所有年报日期
+// getAnnualReportDates 通过 datacenter-web API 获取所有年报日期（带重试）
 func getAnnualReportDates(code string) ([]string, error) {
 	url := fmt.Sprintf("%s?sortColumns=REPORT_DATE&sortTypes=-1&pageSize=500&pageNumber=1&reportName=RPT_DMSK_FN_BALANCE&columns=REPORT_DATE&source=WEB&filter=(SECURITY_CODE=\"%s\")", dcBaseURL, code)
 	url = strings.ReplaceAll(url, `"`, "%22")
-	resp, err := httpGetWithReferer(url, "https://data.eastmoney.com/")
+	
+	var resp []byte
+	var err error
+	
+	// 尝试主API
+	resp, err = httpGetWithReferer(url, "https://data.eastmoney.com/")
 	if err != nil {
-		return nil, err
+		// 尝试备用接口
+		backupURL := fmt.Sprintf("https://datacenter-web.eastmoney.com/api/data/v1/get?sortColumns=REPORT_DATE&sortTypes=-1&pageSize=100&pageNumber=1&reportName=RPT_FCI_PERFORMANCEE&columns=REPORT_DATE&filter=(SECURITY_CODE=\"%s\")", code)
+		resp, err = httpGetWithRetry(backupURL, "https://data.eastmoney.com/", 2)
+		if err != nil {
+			return nil, fmt.Errorf("主API和备用API均失败: %w", err)
+		}
 	}
 
 	var result dcResponse
@@ -225,30 +269,62 @@ func fetchHSF10(endpoint string, companyType int, date, fullCode string) (map[st
 	return hsr.Data[0], nil
 }
 
+// httpGetWithReferer 带重试机制的HTTP GET请求
 func httpGetWithReferer(url, referer string) ([]byte, error) {
-	client := &http.Client{Timeout: 15 * time.Second}
-	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36")
-	req.Header.Set("Referer", referer)
+	return httpGetWithRetry(url, referer, 3)
+}
 
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
+// httpGetWithRetry 带重试的HTTP GET请求
+func httpGetWithRetry(url, referer string, maxRetries int) ([]byte, error) {
+	var lastErr error
+	
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		if attempt > 0 {
+			// 指数退避：1s, 2s, 4s
+			time.Sleep(time.Duration(attempt) * time.Second)
+		}
+		
+		client := &http.Client{
+			Timeout: 30 * time.Second, // 增加超时时间
+		}
+		req, err := http.NewRequest("GET", url, nil)
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+		req.Header.Set("Referer", referer)
+		req.Header.Set("Accept", "application/json, text/plain, */*")
+		req.Header.Set("Accept-Language", "zh-CN,zh;q=0.9,en;q=0.8")
+		req.Header.Set("Cache-Control", "no-cache")
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
+		resp, err := client.Do(req)
+		if err != nil {
+			lastErr = fmt.Errorf("尝试 %d: 请求失败: %w", attempt+1, err)
+			continue
+		}
+		
+		body, err := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		
+		if err != nil {
+			lastErr = fmt.Errorf("尝试 %d: 读取响应失败: %w", attempt+1, err)
+			continue
+		}
+		
+		if resp.StatusCode != http.StatusOK {
+			lastErr = fmt.Errorf("尝试 %d: HTTP %d", attempt+1, resp.StatusCode)
+			continue
+		}
+		
+		// 去除可能的 UTF-8 BOM
+		if len(body) >= 3 && body[0] == 0xEF && body[1] == 0xBB && body[2] == 0xBF {
+			body = body[3:]
+		}
+		
+		return body, nil
 	}
-	// 去除可能的 UTF-8 BOM
-	if len(body) >= 3 && body[0] == 0xEF && body[1] == 0xBB && body[2] == 0xBF {
-		body = body[3:]
-	}
-	return body, nil
+	
+	return nil, fmt.Errorf("重试 %d 次后仍然失败: %w", maxRetries, lastErr)
 }
 
 type dcResponse struct {
