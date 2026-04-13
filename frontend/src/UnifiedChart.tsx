@@ -18,7 +18,7 @@ interface Props {
   code: string
 }
 
-// 技术指标计算函数
+// 技术指标计算
 function calcEMA(values: number[], period: number): number[] {
   const k = 2 / (period + 1)
   const ema: number[] = []
@@ -80,25 +80,22 @@ const chartColors = {
   border: 'rgba(148, 163, 184, 0.2)',
 }
 
-// 固定图表尺寸配置
-const CHART_WIDTH = 800 // 固定宽度
-const PRICE_AXIS_WIDTH = 80 // 右轴固定宽度
+// 固定画布尺寸（不包括右轴）
+const CHART_WIDTH = 720
+const AXIS_WIDTH = 80
+const TOTAL_WIDTH = CHART_WIDTH + AXIS_WIDTH
 
 export function UnifiedChart({ code }: Props) {
-  const containerRef = useRef<HTMLDivElement>(null)
   const [data, setData] = useState<KlineData[]>([])
   const [loading, setLoading] = useState(false)
   
-  // 图表容器引用
-  const priceContainerRef = useRef<HTMLDivElement>(null)
-  const macdContainerRef = useRef<HTMLDivElement>(null)
-  const rsiContainerRef = useRef<HTMLDivElement>(null)
-  const bollContainerRef = useRef<HTMLDivElement>(null)
+  const priceCanvasRef = useRef<HTMLDivElement>(null)
+  const macdCanvasRef = useRef<HTMLDivElement>(null)
+  const rsiCanvasRef = useRef<HTMLDivElement>(null)
+  const bollCanvasRef = useRef<HTMLDivElement>(null)
   
-  // 图表实例引用
   const chartsRef = useRef<IChartApi[]>([])
 
-  // 加载数据
   useEffect(() => {
     if (!code) return
     setLoading(true)
@@ -108,115 +105,106 @@ export function UnifiedChart({ code }: Props) {
       .finally(() => setLoading(false))
   }, [code])
 
-  // 创建图表
   useEffect(() => {
-    if (!priceContainerRef.current || data.length === 0) return
+    if (!priceCanvasRef.current || data.length === 0) return
 
     // 清理旧图表
     chartsRef.current.forEach(c => c.remove())
     chartsRef.current = []
 
-    // 统一的图表配置
-    const createChartOptions = (height: number, showTimeScale: boolean = false) => ({
-      width: CHART_WIDTH,
-      height,
-      layout: {
-        background: { type: ColorType.Solid, color: 'transparent' },
-        textColor: chartColors.text,
-        fontSize: 11,
-        attributionLogo: false,
-      },
-      grid: {
-        vertLines: { color: chartColors.grid },
-        horzLines: { color: chartColors.grid },
-      },
-      crosshair: { 
-        mode: CrosshairMode.Magnet,
-      },
-      rightPriceScale: {
-        borderColor: chartColors.border,
-        visible: true,
-        minimumWidth: PRICE_AXIS_WIDTH,
-        scaleMargins: { top: 0.05, bottom: 0.05 },
-      },
-      leftPriceScale: { visible: false },
-      timeScale: {
-        borderColor: chartColors.border,
-        visible: showTimeScale,
-        timeVisible: false,
-        tickMarkMaxCharacterLength: 8,
-        fixLeftEdge: false,
-        fixRightEdge: false,
-        rightOffset: 0,
-        barSpacing: 5,
-        minBarSpacing: 2,
-      },
-      handleScroll: {
-        mouseWheel: false,
-        pressedMouseMove: true,
-        horzTouchDrag: true,
-        vertTouchDrag: false,
-      },
-      handleScale: {
-        axisPressedMouseMove: { time: true, price: false },
-        mouseWheel: true,
-        pinch: true,
-      },
-    })
+    const createChartWithFixedAxis = (
+      container: HTMLDivElement, 
+      height: number, 
+      showTimeScale: boolean = false
+    ) => {
+      return createChart(container, {
+        width: TOTAL_WIDTH,
+        height,
+        layout: {
+          background: { type: ColorType.Solid, color: 'transparent' },
+          textColor: chartColors.text,
+          fontSize: 11,
+          attributionLogo: false,
+        },
+        grid: {
+          vertLines: { color: chartColors.grid },
+          horzLines: { color: chartColors.grid },
+        },
+        crosshair: { mode: CrosshairMode.Magnet },
+        // 关键：右轴使用 overlay 模式，固定在右侧
+        rightPriceScale: {
+          borderColor: chartColors.border,
+          visible: true,
+          minimumWidth: AXIS_WIDTH,
+          scaleMargins: { top: 0.02, bottom: 0.02 },
+        },
+        leftPriceScale: { visible: false },
+        timeScale: {
+          borderColor: chartColors.border,
+          visible: showTimeScale,
+          timeVisible: false,
+          tickMarkMaxCharacterLength: 6,
+          fixLeftEdge: false,
+          fixRightEdge: false,
+          rightOffset: 0,
+          barSpacing: 5,
+          minBarSpacing: 2,
+          lockVisibleTimeRangeOnResize: true,
+          // 增加时间轴底部边距
+          borderVisible: true,
+        },
+        handleScroll: {
+          mouseWheel: false,
+          pressedMouseMove: true,
+          horzTouchDrag: true,
+          vertTouchDrag: false,
+        },
+        handleScale: {
+          axisPressedMouseMove: { time: true, price: false },
+          mouseWheel: true,
+          pinch: true,
+        },
+      })
+    }
 
-    // 1. K线图 (180px)
-    const priceChart = createChart(priceContainerRef.current, createChartOptions(180))
+    // 1. K线图
+    const priceChart = createChartWithFixedAxis(priceCanvasRef.current, 180)
     chartsRef.current.push(priceChart)
-
     const candleSeries = priceChart.addSeries(CandlestickSeries, {
       upColor: chartColors.up, downColor: chartColors.down,
       borderUpColor: chartColors.up, borderDownColor: chartColors.down,
       wickUpColor: chartColors.up, wickDownColor: chartColors.down,
     })
-
     const volSeries = priceChart.addSeries(HistogramSeries, {
-      color: '#3b82f6',
-      priceFormat: { type: 'volume' },
-      priceScaleId: 'volume',
+      color: '#3b82f6', priceFormat: { type: 'volume' }, priceScaleId: 'volume',
     })
-    volSeries.priceScale().applyOptions({ 
-      scaleMargins: { top: 0.90, bottom: 0 },
-      minimumWidth: PRICE_AXIS_WIDTH,
-    })
+    volSeries.priceScale().applyOptions({ scaleMargins: { top: 0.88, bottom: 0 } })
 
-    // 2. MACD图 (120px)
-    const macdChart = createChart(macdContainerRef.current!, createChartOptions(120))
+    // 2. MACD图
+    const macdChart = createChartWithFixedAxis(macdCanvasRef.current!, 120)
     chartsRef.current.push(macdChart)
-
     const difSeries = macdChart.addSeries(LineSeries, { color: '#f59e0b', lineWidth: 2 })
     const deaSeries = macdChart.addSeries(LineSeries, { color: '#3b82f6', lineWidth: 2 })
     const macdHist = macdChart.addSeries(HistogramSeries, { color: '#10b981' })
 
-    // 3. RSI图 (100px)
-    const rsiChart = createChart(rsiContainerRef.current!, createChartOptions(100))
+    // 3. RSI图
+    const rsiChart = createChartWithFixedAxis(rsiCanvasRef.current!, 100)
     chartsRef.current.push(rsiChart)
-
     const rsiSeries = rsiChart.addSeries(LineSeries, { color: '#8b5cf6', lineWidth: 2 })
 
-    // 4. 布林带图 (180px + 60px时间轴 = 240px)
-    const bollChart = createChart(bollContainerRef.current!, createChartOptions(240, true))
+    // 4. 布林带图 - 增加时间轴区域高度
+    const bollChart = createChartWithFixedAxis(bollCanvasRef.current!, 220, true)
     chartsRef.current.push(bollChart)
-
     const bbUpper = bollChart.addSeries(LineSeries, { color: '#ef4444', lineWidth: 1 })
     const bbMid = bollChart.addSeries(LineSeries, { color: '#f59e0b', lineWidth: 2 })
     const bbLower = bollChart.addSeries(LineSeries, { color: '#10b981', lineWidth: 1 })
 
     // 设置数据
     const candleData = data.map(d => ({ 
-      time: d.time as Time, 
-      open: d.open, 
-      high: d.high, 
-      low: d.low, 
-      close: d.close 
+      time: d.time as Time, open: d.open, high: d.high, low: d.low, close: d.close 
     }))
     const volData = data.map(d => ({ 
-      time: d.time as Time, 
-      value: d.volume, 
+      time: d.time as Time, value: d.volume, 
       color: d.close >= d.open ? 'rgba(239, 68, 68, 0.5)' : 'rgba(34, 197, 94, 0.5)' 
     }))
 
@@ -228,9 +216,7 @@ export function UnifiedChart({ code }: Props) {
     difSeries.setData(data.map((d, i) => ({ time: d.time as Time, value: dif[i] })))
     deaSeries.setData(data.map((d, i) => ({ time: d.time as Time, value: dea[i] })))
     macdHist.setData(data.map((d, i) => ({ 
-      time: d.time as Time, 
-      value: hist[i], 
-      color: hist[i] >= 0 ? '#10b981' : '#ef4444' 
+      time: d.time as Time, value: hist[i], color: hist[i] >= 0 ? '#10b981' : '#ef4444' 
     })))
 
     const rsi = calcRSI(closes)
@@ -241,22 +227,19 @@ export function UnifiedChart({ code }: Props) {
     bbMid.setData(data.slice(19).map((d, i) => ({ time: d.time as Time, value: mid[i] })))
     bbLower.setData(data.slice(19).map((d, i) => ({ time: d.time as Time, value: lower[i] })))
 
-    // 联动缩放
+    // 联动
     let isSyncing = false
     chartsRef.current.forEach((chart, index) => {
       chart.timeScale().subscribeVisibleLogicalRangeChange((range) => {
         if (isSyncing || !range) return
         isSyncing = true
         chartsRef.current.forEach((otherChart, otherIndex) => {
-          if (index !== otherIndex) {
-            otherChart.timeScale().setVisibleLogicalRange(range)
-          }
+          if (index !== otherIndex) otherChart.timeScale().setVisibleLogicalRange(range)
         })
         isSyncing = false
       })
     })
 
-    // 初始视图
     chartsRef.current.forEach(chart => chart.timeScale().fitContent())
 
     return () => {
@@ -265,48 +248,35 @@ export function UnifiedChart({ code }: Props) {
     }
   }, [data])
 
-  if (loading) {
-    return <div style={{ padding: 40, textAlign: 'center', color: '#64748b' }}>加载图表数据中...</div>
-  }
+  if (loading) return <div style={{ padding: 40, textAlign: 'center', color: '#64748b' }}>加载中...</div>
+  if (data.length === 0) return <div style={{ padding: 40, textAlign: 'center', color: '#64748b' }}>暂无数据</div>
 
-  if (data.length === 0) {
-    return <div style={{ padding: 40, textAlign: 'center', color: '#64748b' }}>暂无K线数据</div>
-  }
-
-  // CSS 强制对齐布局
-  const chartContainerStyle: React.CSSProperties = {
-    width: `${CHART_WIDTH}px`,
-    margin: '0 auto',
-  }
-
-  const rowStyle: React.CSSProperties = {
-    width: `${CHART_WIDTH}px`,
+  // 外层容器：居中 + 滚动
+  const wrapperStyle: React.CSSProperties = {
+    width: '100%',
+    overflowX: 'auto',
     display: 'flex',
     justifyContent: 'center',
   }
 
+  // 图表区域：固定总宽度
+  const chartAreaStyle: React.CSSProperties = {
+    width: `${TOTAL_WIDTH}px`,
+    flexShrink: 0,
+  }
+
+  // 单个图表行
+  const rowStyle: React.CSSProperties = {
+    width: `${TOTAL_WIDTH}px`,
+  }
+
   return (
-    <div ref={containerRef} style={{ width: '100%', overflowX: 'auto' }}>
-      <div style={chartContainerStyle}>
-        {/* K线图 */}
-        <div style={rowStyle}>
-          <div ref={priceContainerRef} style={{ width: `${CHART_WIDTH}px`, height: '180px' }} />
-        </div>
-        
-        {/* MACD图 */}
-        <div style={rowStyle}>
-          <div ref={macdContainerRef} style={{ width: `${CHART_WIDTH}px`, height: '120px' }} />
-        </div>
-        
-        {/* RSI图 */}
-        <div style={rowStyle}>
-          <div ref={rsiContainerRef} style={{ width: `${CHART_WIDTH}px`, height: '100px' }} />
-        </div>
-        
-        {/* 布林带图 (含时间轴) */}
-        <div style={rowStyle}>
-          <div ref={bollContainerRef} style={{ width: `${CHART_WIDTH}px`, height: '240px' }} />
-        </div>
+    <div style={wrapperStyle}>
+      <div style={chartAreaStyle}>
+        <div style={rowStyle} ref={priceCanvasRef} />
+        <div style={rowStyle} ref={macdCanvasRef} />
+        <div style={rowStyle} ref={rsiCanvasRef} />
+        <div style={rowStyle} ref={bollCanvasRef} />
       </div>
     </div>
   )
