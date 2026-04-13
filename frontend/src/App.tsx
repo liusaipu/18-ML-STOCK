@@ -1,8 +1,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import './App.css'
 import { STOCKS } from './stocks'
-import { KlineChart } from './KlineChart'
-import { MACDChart, RSIChart, BollingerChart } from './indicatorCharts'
+import { UnifiedChart } from './UnifiedChart'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import rehypeSlug from 'rehype-slug'
@@ -53,7 +52,7 @@ import {
   RemoveComparable,
   DownloadComparableReports,
   GetStockQuote,
-  GetStockKlines,
+  // GetStockKlines,
   GetStockConcepts,
   ExportCurrentFinancialData,
   ExportHistoricalFinancialData,
@@ -73,7 +72,7 @@ type DownloadResult = main.DownloadResult
 type HistoryMeta = main.HistoryMeta
 type StockProfile = main.StockProfile
 type StockQuote = downloader.StockQuote
-type KlineData = downloader.KlineData
+// type KlineData = downloader.KlineData
 
 function getStepValue(steps: StepResult[], stepNum: number, year: string, key: string): number {
   const step = steps.find((s) => s.stepNum === stepNum)
@@ -176,8 +175,9 @@ function App() {
   const [industryUpdating, setIndustryUpdating] = useState(false)
   const [quote, setQuote] = useState<StockQuote | null>(null)
   const [quoteError, setQuoteError] = useState<string>('')
-  const [klines, setKlines] = useState<KlineData[]>([])
-  const [klineError, setKlineError] = useState<string>('')
+  // K线数据由 UnifiedChart 组件内部管理
+  // const [klines, setKlines] = useState<KlineData[]>([])
+  // const [klineError, setKlineError] = useState<string>('')
   const [activityMap, setActivityMap] = useState<Record<string, main.WatchlistActivitySummary>>({})
   const [activitySort, setActivitySort] = useState<'none' | 'desc' | 'asc'>('none')
   const [flashCode, setFlashCode] = useState<string | null>(null)
@@ -616,17 +616,18 @@ function App() {
     }
   }, [])
 
-  const loadKlines = useCallback(async (code: string) => {
-    try {
-      setKlineError('')
-      const list = await GetStockKlines(code)
-      setKlines(list || [])
-    } catch (err: any) {
-      setKlines([])
-      setKlineError('K线数据获取失败')
-      console.error('K线加载失败:', err)
-    }
-  }, [])
+  // K线数据由 UnifiedChart 组件内部管理
+  // const loadKlines = useCallback(async (code: string) => {
+  //   try {
+  //     setKlineError('')
+  //     const list = await GetStockKlines(code)
+  //     setKlines(list || [])
+  //   } catch (err: any) {
+  //     setKlines([])
+  //     setKlineError('K线数据获取失败')
+  //     console.error('K线加载失败:', err)
+  //   }
+  // }, [])
 
   const handleSelectSuggestion = async (stock: Stock) => {
     setQuery('')
@@ -640,8 +641,8 @@ function App() {
       setProfile(null)
       setQuote(null)
       setQuoteError('')
-      setKlines([])
-      setKlineError('')
+      // setKlines([])
+      // setKlineError('')
       setDownloadResult(null)
       setReport(null)
       setViewingHistory(null)
@@ -653,7 +654,7 @@ function App() {
       await loadConcepts(stock.code)
       await loadComparables(stock.code)
       await loadQuote(stock.code)
-      await loadKlines(stock.code)
+      // await loadKlines(stock.code)
     } catch (e) {
       alert(String(e))
     } finally {
@@ -673,8 +674,8 @@ function App() {
         setProfile(null)
         setQuote(null)
         setQuoteError('')
-        setKlines([])
-        setKlineError('')
+        // setKlines([])
+        // setKlineError('')
         setImportResult(null)
         setDownloadResult(null)
         setReport(null)
@@ -1150,14 +1151,8 @@ function App() {
     },
     div({ className, children, ...props }: any) {
       const code = selectedStock?.code || ''
-      if (className === 'chart-macd' && code) {
-        return <MACDChart code={code} width={520} height={220} />
-      }
-      if (className === 'chart-rsi' && code) {
-        return <RSIChart code={code} width={520} height={220} />
-      }
-      if (className === 'chart-bollinger' && code) {
-        return <BollingerChart code={code} width={520} height={220} />
+      if (className === 'chart-unified' && code) {
+        return <UnifiedChart code={code} height={800} />
       }
       return (
         <div className={className} {...props}>
@@ -1273,8 +1268,8 @@ function App() {
                   setProfile(null)
                   setQuote(null)
                   setQuoteError('')
-                  setKlines([])
-                  setKlineError('')
+                  // setKlines([])
+                  // setKlineError('')
                   setImportResult(null)
                   setDownloadResult(null)
                   setReport(null)
@@ -1287,7 +1282,7 @@ function App() {
                   loadConcepts(s.code)
                   loadComparables(s.code)
                   loadQuote(s.code)
-                  loadKlines(s.code)
+                  // loadKlines(s.code)
                 }}
               >
                 <span className="watch-drag-handle" title={activitySort === 'none' ? '拖动排序' : '排序中禁用拖动'}>☰</span>
@@ -1800,19 +1795,7 @@ function App() {
               <div className="quote-error">{quoteError}</div>
             )}
 
-            {selectedStock && (
-              <Collapsible title={`📈 K线走势${klines.length > 0 ? ` (${klines.length}日)` : ''}`}>
-                <div className="stock-kline" style={{ marginTop: 0, marginBottom: 0 }}>
-                  {klines.length > 0 ? (
-                    <KlineChart data={klines} height={220} />
-                  ) : klineError ? (
-                    <div className="quote-error" style={{ marginTop: 4 }}>{klineError}</div>
-                  ) : (
-                    <div style={{ color: '#64748b', fontSize: 13, padding: '8px 0' }}>暂无K线数据（网络受限或该股票无数据）</div>
-                  )}
-                </div>
-              </Collapsible>
-            )}
+            
           </>
         ) : (
           <div className="placeholder">
