@@ -56,6 +56,22 @@ export function UnifiedChart({ code }: Props) {
       return ema
     }
     
+    // 均线：MA5, MA30, MA180, MA250(年线)
+    const calcMA = (arr: number[], period: number): number[] => {
+      const ma: number[] = []
+      for (let i = 0; i < arr.length; i++) {
+        if (i < period - 1) { ma.push(arr[i]); continue }
+        let sum = 0
+        for (let j = i - period + 1; j <= i; j++) sum += arr[j]
+        ma.push(sum / period)
+      }
+      return ma
+    }
+    const ma5 = calcMA(closes, 5)
+    const ma30 = calcMA(closes, 30)
+    const ma180 = calcMA(closes, 180)
+    const ma250 = calcMA(closes, 250)
+    
     // MACD
     const ema12 = calcEMA(closes, 12)
     const ema26 = calcEMA(closes, 26)
@@ -90,7 +106,7 @@ export function UnifiedChart({ code }: Props) {
       bbLower.push(mean - 2 * std)
     }
     
-    return { dif, dea, hist, rsi, bbUpper, bbMid, bbLower }
+    return { dif, dea, hist, rsi, bbUpper, bbMid, bbLower, ma5, ma30, ma180, ma250 }
   }
 
   // 初始化图表
@@ -107,12 +123,20 @@ export function UnifiedChart({ code }: Props) {
     })
     chartInstanceRef.current = chart
 
-    const { dif, dea, hist, rsi, bbUpper, bbMid, bbLower } = calculateIndicators(data)
+    const { dif, dea, hist, rsi, bbUpper, bbMid, bbLower, ma5, ma30, ma180, ma250 } = calculateIndicators(data)
     const dates = data.map(d => d.time)
 
     const option: echarts.EChartsOption = {
       backgroundColor: 'transparent',
       animation: false,
+      legend: {
+        data: ['K线', 'MA5', 'MA30', 'MA180', 'MA250'],
+        top: 10,
+        right: 20,
+        textStyle: { color: '#94a3b8', fontSize: 11 },
+        itemStyle: { borderWidth: 0 },
+        itemGap: 10,
+      },
       tooltip: {
         trigger: 'axis',
         axisPointer: { type: 'cross' },
@@ -121,11 +145,19 @@ export function UnifiedChart({ code }: Props) {
         textStyle: { color: '#94a3b8' },
       },
       // 使用 grid 布局，四个图表上下排列
+      // K线高度翻倍(280)，下面3个图表高度压缩一半
       grid: [
-        { left: '5%', right: '5%', top: '3%', height: '22%' },  // K线
-        { left: '5%', right: '5%', top: '28%', height: '14%' }, // MACD
-        { left: '5%', right: '5%', top: '45%', height: '12%' }, // RSI
-        { left: '5%', right: '5%', top: '60%', height: '22%' }, // 布林带
+        { left: '60', right: '20', top: '40', height: '280', containLabel: true },   // K线：280 (原140x2)
+        { left: '60', right: '20', top: '340', height: '45', containLabel: true },   // MACD：45 (原90/2)
+        { left: '60', right: '20', top: '405', height: '35', containLabel: true },   // RSI：35 (原70/2)
+        { left: '60', right: '20', top: '460', height: '70', containLabel: true },   // 布林带：70 (原140/2)
+      ],
+      // 使用graphic添加图表标题
+      graphic: [
+        { type: 'text', left: 10, top: 20, style: { text: 'K线', fill: '#94a3b8', fontSize: 12 } },
+        { type: 'text', left: 10, top: 325, style: { text: 'MACD', fill: '#94a3b8', fontSize: 12 } },
+        { type: 'text', left: 10, top: 390, style: { text: 'RSI', fill: '#94a3b8', fontSize: 12 } },
+        { type: 'text', left: 10, top: 445, style: { text: '布林带', fill: '#94a3b8', fontSize: 12 } },
       ],
       xAxis: [
         { type: 'category', data: dates, boundaryGap: false, axisLine: { onZero: false }, splitLine: { show: false }, gridIndex: 0 },
@@ -134,15 +166,20 @@ export function UnifiedChart({ code }: Props) {
         { type: 'category', data: dates, boundaryGap: false, axisLine: { onZero: false }, splitLine: { show: false }, gridIndex: 3 },
       ],
       yAxis: [
-        { scale: true, splitArea: { show: false }, splitLine: { lineStyle: { color: 'rgba(148, 163, 184, 0.1)' } }, gridIndex: 0 },
-        { scale: true, splitArea: { show: false }, splitLine: { lineStyle: { color: 'rgba(148, 163, 184, 0.1)' } }, gridIndex: 1 },
-        { scale: true, splitArea: { show: false }, splitLine: { lineStyle: { color: 'rgba(148, 163, 184, 0.1)' } }, max: 100, min: 0, gridIndex: 2 },
-        { scale: true, splitArea: { show: false }, splitLine: { lineStyle: { color: 'rgba(148, 163, 184, 0.1)' } }, gridIndex: 3 },
+        // K线区域：左轴价格，右轴成交量（压缩到1/4高度）
+        { scale: true, splitArea: { show: false }, splitLine: { lineStyle: { color: 'rgba(148, 163, 184, 0.1)' } }, gridIndex: 0, position: 'left' },
+        { scale: true, splitLine: { show: false }, gridIndex: 0, position: 'right', axisLabel: { show: false }, axisLine: { show: false }, axisTick: { show: false }, max: (value: any) => value.max * 4 },  // 压缩成交量柱到1/4
+        // MACD
+        { scale: true, splitArea: { show: false }, splitLine: { lineStyle: { color: 'rgba(148, 163, 184, 0.1)' } }, gridIndex: 1, position: 'left' },
+        // RSI
+        { scale: true, splitArea: { show: false }, splitLine: { lineStyle: { color: 'rgba(148, 163, 184, 0.1)' } }, max: 100, min: 0, gridIndex: 2, position: 'left' },
+        // 布林带
+        { scale: true, splitArea: { show: false }, splitLine: { lineStyle: { color: 'rgba(148, 163, 184, 0.1)' } }, gridIndex: 3, position: 'left' },
       ],
-      // 数据缩放：统一控制所有图表
+      // 数据缩放：默认显示最近6个月（约120个交易日）
       dataZoom: [
-        { type: 'inside', xAxisIndex: [0, 1, 2, 3], start: 50, end: 100 },
-        { type: 'slider', xAxisIndex: [0, 1, 2, 3], start: 50, end: 100, height: 20, bottom: 10 },
+        { type: 'inside', xAxisIndex: [0, 1, 2, 3], start: Math.max(0, (data.length - 120) / data.length * 100), end: 100 },
+        { type: 'slider', xAxisIndex: [0, 1, 2, 3], start: Math.max(0, (data.length - 120) / data.length * 100), end: 100, height: 20, bottom: 10 },
       ],
       series: [
         // K线 + 成交量
@@ -169,24 +206,29 @@ export function UnifiedChart({ code }: Props) {
             },
           })),
           xAxisIndex: 0,
-          yAxisIndex: 0,
+          yAxisIndex: 1,  // 使用右侧y轴
         },
-        // MACD
-        { name: 'DIF', type: 'line', data: dif, smooth: true, lineStyle: { color: colors.macd }, symbol: 'none', xAxisIndex: 1, yAxisIndex: 1 },
-        { name: 'DEA', type: 'line', data: dea, smooth: true, lineStyle: { color: colors.signal }, symbol: 'none', xAxisIndex: 1, yAxisIndex: 1 },
+        // 均线
+        { name: 'MA5', type: 'line', data: ma5, smooth: false, lineStyle: { color: '#fbbf24', width: 1.5 }, symbol: 'none', xAxisIndex: 0, yAxisIndex: 0 },
+        { name: 'MA30', type: 'line', data: ma30, smooth: false, lineStyle: { color: '#60a5fa', width: 1.5 }, symbol: 'none', xAxisIndex: 0, yAxisIndex: 0 },
+        { name: 'MA180', type: 'line', data: ma180, smooth: false, lineStyle: { color: '#a78bfa', width: 1.5 }, symbol: 'none', xAxisIndex: 0, yAxisIndex: 0 },
+        { name: 'MA250', type: 'line', data: ma250, smooth: false, lineStyle: { color: '#f87171', width: 1.5 }, symbol: 'none', xAxisIndex: 0, yAxisIndex: 0 },
+        // MACD - yAxisIndex: 2
+        { name: 'DIF', type: 'line', data: dif, smooth: true, lineStyle: { color: colors.macd }, symbol: 'none', xAxisIndex: 1, yAxisIndex: 2 },
+        { name: 'DEA', type: 'line', data: dea, smooth: true, lineStyle: { color: colors.signal }, symbol: 'none', xAxisIndex: 1, yAxisIndex: 2 },
         { 
           name: 'MACD', type: 'bar', data: hist.map(v => ({
             value: v,
             itemStyle: { color: v >= 0 ? colors.histPositive : colors.histNegative },
           })),
-          xAxisIndex: 1, yAxisIndex: 1,
+          xAxisIndex: 1, yAxisIndex: 2,
         },
-        // RSI
-        { name: 'RSI', type: 'line', data: rsi, smooth: true, lineStyle: { color: colors.rsi, width: 2 }, symbol: 'none', xAxisIndex: 2, yAxisIndex: 2 },
-        // 布林带
-        { name: '上轨', type: 'line', data: bbUpper, smooth: true, lineStyle: { color: colors.bbUpper }, symbol: 'none', xAxisIndex: 3, yAxisIndex: 3 },
-        { name: '中轨', type: 'line', data: bbMid, smooth: true, lineStyle: { color: colors.bbMid, width: 2 }, symbol: 'none', xAxisIndex: 3, yAxisIndex: 3 },
-        { name: '下轨', type: 'line', data: bbLower, smooth: true, lineStyle: { color: colors.bbLower }, symbol: 'none', xAxisIndex: 3, yAxisIndex: 3 },
+        // RSI - yAxisIndex: 3
+        { name: 'RSI', type: 'line', data: rsi, smooth: true, lineStyle: { color: colors.rsi, width: 2 }, symbol: 'none', xAxisIndex: 2, yAxisIndex: 3 },
+        // 布林带 - yAxisIndex: 4
+        { name: '上轨', type: 'line', data: bbUpper, smooth: true, lineStyle: { color: colors.bbUpper }, symbol: 'none', xAxisIndex: 3, yAxisIndex: 4 },
+        { name: '中轨', type: 'line', data: bbMid, smooth: true, lineStyle: { color: colors.bbMid, width: 2 }, symbol: 'none', xAxisIndex: 3, yAxisIndex: 4 },
+        { name: '下轨', type: 'line', data: bbLower, smooth: true, lineStyle: { color: colors.bbLower }, symbol: 'none', xAxisIndex: 3, yAxisIndex: 4 },
       ],
     }
 
@@ -207,7 +249,7 @@ export function UnifiedChart({ code }: Props) {
   if (data.length === 0) return <div style={{ padding: 40, textAlign: 'center', color: '#64748b' }}>暂无K线数据</div>
 
   return (
-    <div style={{ width: '100%', height: '700px' }}>
+    <div style={{ width: '100%', height: '600px' }}>
       <div ref={chartRef} style={{ width: '100%', height: '100%' }} />
     </div>
   )
