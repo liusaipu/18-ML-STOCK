@@ -83,10 +83,16 @@ const chartColors = {
   border: 'rgba(148, 163, 184, 0.2)',
 }
 
-// 统一的右轴宽度配置
+// 统一的右轴宽度配置 - 确保所有图表右轴对齐
 const rightPriceScaleOptions = {
   borderColor: chartColors.border,
-  minimumWidth: 60, // 固定最小宽度
+  minimumWidth: 70, // 固定最小宽度
+  maximumWidth: 70, // 固定最大宽度，确保一致
+  visible: true,
+  scaleMargins: {
+    top: 0.1,
+    bottom: 0.1,
+  },
 }
 
 // 时间轴配置
@@ -204,23 +210,17 @@ export function UnifiedChart({ code }: Props) {
 
     const rsiSeries = rsiChart.addSeries(LineSeries, { color: '#8b5cf6', lineWidth: 2 })
 
-    // 4. 布林带图
+    // 4. 布林带图（底部图表，显示时间轴）
     const bollChart = createChart(container, {
       ...commonOptions,
-      height: chartHeight + 50, // 增加更多高度给时间轴
+      height: chartHeight + 80, // 增加更多高度给时间轴
       timeScale: { 
         ...commonOptions.timeScale,
         visible: true, // 只有底部显示时间轴
         timeVisible: false, // 只显示日期，不显示时间
-        tickMarkMaxCharacterLength: 10,
+        tickMarkMaxCharacterLength: 8, // 缩短日期显示
+        // 注意：timeScale 没有 fontSize 选项
         borderVisible: true,
-      },
-      // 底部图表需要更大的底部边距给时间轴标签
-      layout: {
-        background: { type: ColorType.Solid, color: 'transparent' },
-        textColor: chartColors.text,
-        fontSize: 11,
-        attributionLogo: false,
       },
     })
     bollChartRef.current = bollChart
