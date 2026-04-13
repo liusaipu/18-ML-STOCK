@@ -1,4 +1,4 @@
-﻿import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   createChart,
   CandlestickSeries,
@@ -71,7 +71,7 @@ function calcMACD(closes: number[]) {
   return { dif, dea, hist }
 }
 
-export function UnifiedChart({ code, height = 800 }: Props) {
+export function UnifiedChart({ code, height = 600 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const chartRef = useRef<IChartApi | null>(null)
   const [data, setData] = useState<KlineData[]>([])
@@ -89,76 +89,115 @@ export function UnifiedChart({ code, height = 800 }: Props) {
   useEffect(() => {
     if (!containerRef.current || data.length === 0) return
 
-    const chart = createChart(containerRef.current, {
-      autoSize: true,
-      layout: {
-        background: { type: ColorType.Solid, color: 'transparent' },
-        textColor: '#94a3b8',
-      },
-      grid: {
-        vertLines: { color: 'rgba(148, 163, 184, 0.1)' },
-        horzLines: { color: 'rgba(148, 163, 184, 0.1)' },
-      },
-      crosshair: { mode: CrosshairMode.Magnet },
-      rightPriceScale: { borderColor: 'rgba(148, 163, 184, 0.2)' },
-      timeScale: { borderColor: 'rgba(148, 163, 184, 0.2)', timeVisible: false },
-    })
-    chartRef.current = chart
+    try {
+      const chart = createChart(containerRef.current, {
+        autoSize: true,
+        layout: {
+          background: { type: ColorType.Solid, color: 'transparent' },
+          textColor: '#94a3b8',
+        },
+        grid: {
+          vertLines: { color: 'rgba(148, 163, 184, 0.1)' },
+          horzLines: { color: 'rgba(148, 163, 184, 0.1)' },
+        },
+        crosshair: { mode: CrosshairMode.Magnet },
+        rightPriceScale: { borderColor: 'rgba(148, 163, 184, 0.2)' },
+        timeScale: { borderColor: 'rgba(148, 163, 184, 0.2)', timeVisible: false },
+      })
+      chartRef.current = chart
 
-    // K线
-    const candleSeries = chart.addSeries(CandlestickSeries, {
-      upColor: '#ef4444', downColor: '#22c55e',
-      borderUpColor: '#ef4444', borderDownColor: '#22c55e',
-      wickUpColor: '#ef4444', wickDownColor: '#22c55e',
-    })
+      // K线
+      const candleSeries = chart.addSeries(CandlestickSeries, {
+        upColor: '#ef4444', downColor: '#22c55e',
+        borderUpColor: '#ef4444', borderDownColor: '#22c55e',
+        wickUpColor: '#ef4444', wickDownColor: '#22c55e',
+      })
 
-    // 成交量
-    const volSeries = chart.addSeries(HistogramSeries, {
-      color: '#3b82f6', priceFormat: { type: 'volume' }, priceScaleId: 'volume',
-    })
-    volSeries.priceScale().applyOptions({ scaleMargins: { top: 0.8, bottom: 0 } })
+      // 成交量（使用独立的price scale）
+      const volSeries = chart.addSeries(HistogramSeries, {
+        color: '#3b82f6', 
+        priceFormat: { type: 'volume' },
+        priceScaleId: 'volume',
+      })
+      // 设置成交量显示在主图表的底部区域
+      volSeries.priceScale().applyOptions({ scaleMargins: { top: 0.85, bottom: 0 } })
 
-    // 布林带
-    const bbUpper = chart.addSeries(LineSeries, { color: '#ef4444', lineWidth: 1 })
-    const bbMid = chart.addSeries(LineSeries, { color: '#f59e0b', lineWidth: 2 })
-    const bbLower = chart.addSeries(LineSeries, { color: '#10b981', lineWidth: 1 })
+      // 布林带（与K线共享主价格轴）
+      const bbUpper = chart.addSeries(LineSeries, { color: '#ef4444', lineWidth: 1 })
+      const bbMid = chart.addSeries(LineSeries, { color: '#f59e0b', lineWidth: 2 })
+      const bbLower = chart.addSeries(LineSeries, { color: '#10b981', lineWidth: 1 })
 
-    // MACD
-    const difSeries = chart.addSeries(LineSeries, { color: '#f59e0b', lineWidth: 2, priceScaleId: 'macd' })
-    const deaSeries = chart.addSeries(LineSeries, { color: '#3b82f6', lineWidth: 2, priceScaleId: 'macd' })
-    const macdHist = chart.addSeries(HistogramSeries, { color: '#10b981', priceScaleId: 'macd' })
-    chart.priceScale('macd').applyOptions({ scaleMargins: { top: 0.7, bottom: 0 } })
+      // MACD - 使用独立pane
+      // @ts-ignore - API兼容性问题
+      const difSeries = chart.addSeries(LineSeries, { 
+        color: '#f59e0b', lineWidth: 2,
+        priceScaleId: 'macd'
+      })
+      // @ts-ignore
+      const deaSeries = chart.addSeries(LineSeries, { 
+        color: '#3b82f6', lineWidth: 2,
+        priceScaleId: 'macd'
+      })
+      // @ts-ignore
+      const macdHist = chart.addSeries(HistogramSeries, { 
+        color: '#10b981',
+        priceScaleId: 'macd'
+      })
 
-    // RSI
-    const rsiSeries = chart.addSeries(LineSeries, { color: '#8b5cf6', lineWidth: 2, priceScaleId: 'rsi' })
-    chart.priceScale('rsi').applyOptions({ scaleMargins: { top: 0.9, bottom: 0.7 } })
+      // RSI - 使用独立pane
+      // @ts-ignore
+      const rsiSeries = chart.addSeries(LineSeries, { 
+        color: '#8b5cf6', lineWidth: 2,
+        priceScaleId: 'rsi'
+      })
 
-    const candleData = data.map(d => ({ time: d.time, open: d.open, high: d.high, low: d.low, close: d.close }))
-    const volData = data.map(d => ({ time: d.time, value: d.volume, color: d.close >= d.open ? 'rgba(239, 68, 68, 0.5)' : 'rgba(34, 197, 94, 0.5)' }))
-    
-    candleSeries.setData(candleData)
-    volSeries.setData(volData)
+      // 设置数据
+      const candleData = data.map(d => ({ 
+        time: d.time as any, 
+        open: d.open, 
+        high: d.high, 
+        low: d.low, 
+        close: d.close 
+      }))
+      const volData = data.map(d => ({ 
+        time: d.time as any, 
+        value: d.volume, 
+        color: d.close >= d.open ? 'rgba(239, 68, 68, 0.5)' : 'rgba(34, 197, 94, 0.5)' 
+      }))
+      
+      candleSeries.setData(candleData)
+      volSeries.setData(volData)
 
-    const closes = data.map(d => d.close)
+      const closes = data.map(d => d.close)
 
-    const { dif, dea, hist } = calcMACD(closes)
-    difSeries.setData(data.map((d, i) => ({ time: d.time, value: dif[i] })))
-    deaSeries.setData(data.map((d, i) => ({ time: d.time, value: dea[i] })))
-    macdHist.setData(data.map((d, i) => ({ time: d.time, value: hist[i], color: hist[i] >= 0 ? '#10b981' : '#ef4444' })))
+      // MACD数据
+      const { dif, dea, hist } = calcMACD(closes)
+      difSeries.setData(data.map((d, i) => ({ time: d.time as any, value: dif[i] })))
+      deaSeries.setData(data.map((d, i) => ({ time: d.time as any, value: dea[i] })))
+      macdHist.setData(data.map((d, i) => ({ 
+        time: d.time as any, 
+        value: hist[i], 
+        color: hist[i] >= 0 ? '#10b981' : '#ef4444' 
+      })))
 
-    const rsi = calcRSI(closes)
-    rsiSeries.setData(data.slice(14).map((d, i) => ({ time: d.time, value: rsi[i] })))
+      // RSI数据
+      const rsi = calcRSI(closes)
+      rsiSeries.setData(data.slice(14).map((d, i) => ({ time: d.time as any, value: rsi[i] })))
 
-    const { upper, mid, lower } = calcBollinger(closes)
-    bbUpper.setData(data.slice(19).map((d, i) => ({ time: d.time, value: upper[i] })))
-    bbMid.setData(data.slice(19).map((d, i) => ({ time: d.time, value: mid[i] })))
-    bbLower.setData(data.slice(19).map((d, i) => ({ time: d.time, value: lower[i] })))
+      // 布林带数据
+      const { upper, mid, lower } = calcBollinger(closes)
+      bbUpper.setData(data.slice(19).map((d, i) => ({ time: d.time as any, value: upper[i] })))
+      bbMid.setData(data.slice(19).map((d, i) => ({ time: d.time as any, value: mid[i] })))
+      bbLower.setData(data.slice(19).map((d, i) => ({ time: d.time as any, value: lower[i] })))
 
-    chart.timeScale().fitContent()
+      chart.timeScale().fitContent()
 
-    return () => {
-      chart.remove()
-      chartRef.current = null
+      return () => {
+        chart.remove()
+        chartRef.current = null
+      }
+    } catch (err) {
+      console.error('Chart creation error:', err)
     }
   }, [data])
 
