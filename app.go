@@ -668,6 +668,13 @@ func (a *App) UpdateModule4Only(symbol string) (*analyzer.AnalysisReport, error)
 	// 8. 保存更新后的报告
 	_, _ = a.storage.SaveReport(symbol, updatedContent, true)
 
+	// 8.5 保存分析快照（用于前端亮点与风险恢复）
+	_ = a.storage.SaveSnapshot(symbol, &analyzer.AnalysisReport{
+		Symbol:          symbol,
+		MarkdownContent: updatedContent,
+		Years:           finData.Years,
+	})
+
 	// 9. 更新缓存哈希
 	compHash, _ := a.storage.ComputeComparablesHash(symbol)
 	_ = a.storage.SaveAnalysisCache(symbol, "", compHash)
@@ -1269,6 +1276,8 @@ func (a *App) analyzeStockInternal(symbol string, overwriteLatest bool, customRI
 	}
 	// 自动保存报告到本地
 	_, _ = a.storage.SaveReport(symbol, report.MarkdownContent, overwriteLatest)
+	// 保存分析快照（用于前端亮点与风险恢复）
+	_ = a.storage.SaveSnapshot(symbol, report)
 	// 保存分析缓存
 	if hash, err := a.storage.ComputeDataHash(symbol); err == nil {
 		if compHash, err := a.storage.ComputeComparablesHash(symbol); err == nil {
@@ -1301,6 +1310,14 @@ func (a *App) DeleteReport(symbol, filename string) error {
 		return fmt.Errorf("存储未初始化")
 	}
 	return a.storage.DeleteReport(symbol, filename)
+}
+
+// LoadAnalysisSnapshot 加载指定股票的最新分析快照（用于恢复亮点与风险面板）
+func (a *App) LoadAnalysisSnapshot(symbol string) (*analyzer.AnalysisReport, error) {
+	if a.storage == nil {
+		return nil, fmt.Errorf("存储未初始化")
+	}
+	return a.storage.LoadSnapshot(symbol)
 }
 
 // GetStockDataHistory 获取某只股票的财务数据历史归档

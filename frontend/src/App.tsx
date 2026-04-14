@@ -62,6 +62,7 @@ import {
   UpdateIndustryDatabase,
   GetIndustryDBMeta,
   UpdateModule4Only,
+  LoadAnalysisSnapshot,
 } from '../wailsjs/go/main/App'
 import type { main, analyzer, downloader } from '../wailsjs/go/models'
 
@@ -475,6 +476,21 @@ function App() {
     })
     return list
   }, [watchlist, activityMap, activitySort])
+
+  // 当切换股票时，若内存中没有快照，尝试从磁盘加载
+  useEffect(() => {
+    if (!selectedStock) return
+    if (snapshots[selectedStock.code]) return
+    LoadAnalysisSnapshot(selectedStock.code)
+      .then((snapshot) => {
+        if (snapshot) {
+          setSnapshots((prev) => ({ ...prev, [selectedStock.code]: snapshot }))
+        }
+      })
+      .catch(() => {
+        // 忽略加载失败的错误
+      })
+  }, [selectedStock, snapshots])
 
   const currentSnapshot = selectedStock ? snapshots[selectedStock.code] : null
   const { highlights, risks } = useMemo(() => {
@@ -1135,8 +1151,9 @@ function App() {
           <button
             className="trace-trigger-btn"
             onClick={() => {
+              const sourceReport = report || currentSnapshot
               const matched =
-                report?.stepResults?.flatMap((step) =>
+                sourceReport?.stepResults?.flatMap((step) =>
                   stepNums.includes(step.stepNum) && step.traces ? step.traces : []
                 ) || []
               if (matched.length > 0) {

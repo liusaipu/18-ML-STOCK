@@ -41,7 +41,11 @@ func GenerateMarkdown(symbol string, years []string, steps []StepResult, scores 
 	writeModule3(&b, steps, years, latest, prev)
 
 	// ==================== 模块4: 行业横向对比分析 ====================
-	writeModule4(&b, steps, latest, comp, industry)
+	activityScore := -1.0
+	if activity != nil {
+		activityScore = activity.Score
+	}
+	writeModule4(&b, steps, latest, comp, industry, activityScore)
 
 	// ==================== 模块5: 十五五政策匹配度评估 ====================
 	writeModule5(&b, policy)
@@ -416,7 +420,7 @@ func writeModule3(b *strings.Builder, steps []StepResult, years []string, latest
 }
 
 // ========== 模块4: 行业横向对比分析 ==========
-func writeModule4(b *strings.Builder, steps []StepResult, latest string, comp *ComparableAnalysis, industry *IndustryComparison) {
+func writeModule4(b *strings.Builder, steps []StepResult, latest string, comp *ComparableAnalysis, industry *IndustryComparison, activityScore float64) {
 	b.WriteString("# 模块4: 行业横向对比分析\n\n")
 
 	// 行业均值对比（新增）
@@ -463,7 +467,8 @@ func writeModule4(b *strings.Builder, steps []StepResult, latest string, comp *C
 		RevenueGrowth: getStepValue(steps, 9, latest, "growthRate"),
 		DebtRatio:     getStepValue(steps, 3, latest, "debtRatio"),
 		CashRatio:     getStepValue(steps, 15, latest, "cashRatio"),
-		MScore:        getStepValue(steps, 8, latest, "MScore"),
+		AScore:        getStepValue(steps, 8, latest, "AScore"),
+		ActivityScore: activityScore,
 	}
 
 	b.WriteString(fmt.Sprintf("## 4.1 可比公司关键指标对比（%s）", latest) + traceTrigger(3,9,10,15,16) + "\n\n")
@@ -479,29 +484,121 @@ func writeModule4(b *strings.Builder, steps []StepResult, latest string, comp *C
 		target.DebtRatio, comp.Average.DebtRatio, comp.Max.DebtRatio, comp.Min.DebtRatio, RankPercentile(comp.Metrics, target, "debtRatio")))
 	b.WriteString(fmt.Sprintf("| **净利润现金含量** | %.2f%% | %.2f%% | %.2f%% | %.2f%% | %.0f%% |\n",
 		target.CashRatio, comp.Average.CashRatio, comp.Max.CashRatio, comp.Min.CashRatio, RankPercentile(comp.Metrics, target, "cashRatio")))
-	b.WriteString(fmt.Sprintf("| **M-Score** | %.3f | %.3f | %.3f | %.3f | %.0f%% |\n",
-		target.MScore, comp.Average.MScore, comp.Max.MScore, comp.Min.MScore, RankPercentile(comp.Metrics, target, "mScore")))
-	b.WriteString("\n")
-
-	b.WriteString("## 4.2 可比公司明细\n\n")
-	b.WriteString("| 公司 | ROE | 毛利率 | 营收增长 | 负债率 | 现金含量 | M-Score |\n")
-	b.WriteString("|------|-----|--------|----------|--------|----------|---------|\n")
-	// 当前公司放第一行
-	b.WriteString(fmt.Sprintf("| **%s** | %.2f%% | %.2f%% | %.2f%% | %.2f%% | %.2f%% | %.3f |\n",
-		"当前公司", target.ROE, target.GrossMargin, target.RevenueGrowth, target.DebtRatio, target.CashRatio, target.MScore))
-	for _, m := range comp.Metrics {
-		displayName := m.Name
-		if displayName == "" {
-			displayName = m.Symbol
-		}
-		b.WriteString(fmt.Sprintf("| %s | %.2f%% | %.2f%% | %.2f%% | %.2f%% | %.2f%% | %.3f |\n",
-			displayName, m.ROE, m.GrossMargin, m.RevenueGrowth, m.DebtRatio, m.CashRatio, m.MScore))
+	b.WriteString(fmt.Sprintf("| **A-Score** | %.1f | %.1f | %.1f | %.1f | %.0f%% |\n",
+		target.AScore, comp.Average.AScore, comp.Max.AScore, comp.Min.AScore, RankPercentile(comp.Metrics, target, "aScore")))
+	if target.ActivityScore >= 0 || comp.Average.ActivityScore >= 0 {
+		avgAct := comp.Average.ActivityScore
+		if avgAct < 0 { avgAct = 0 }
+		b.WriteString(fmt.Sprintf("| **活跃度** | %.0f | %.0f | %.0f | %.0f | %.0f%% |\n",
+			math.Max(0, target.ActivityScore), avgAct, math.Max(0, comp.Max.ActivityScore), math.Max(0, comp.Min.ActivityScore), RankPercentile(comp.Metrics, target, "activityScore")))
 	}
-	b.WriteString(fmt.Sprintf("| **平均值** | %.2f%% | %.2f%% | %.2f%% | %.2f%% | %.2f%% | %.3f |\n",
-		comp.Average.ROE, comp.Average.GrossMargin, comp.Average.RevenueGrowth, comp.Average.DebtRatio, comp.Average.CashRatio, comp.Average.MScore))
 	b.WriteString("\n")
 
-	b.WriteString("> **解读**: 排名百分位表示当前公司在可比公司中的相对位置（越高越好，负债率与 M-Score 为反向指标）。M-Score 已作为子指标纳入 A-Score 综合风险体系。\n\n")
+	// 4.2 可比公司明细（含加权评分、排序、蓝色亮条）
+	all := make([]*ComparableMetrics, 0, len(comp.Metrics)+1)
+	all = append(all, target)
+	for _, m := range comp.Metrics {
+		all = append(all, m)
+	}
+
+	// 计算缺失活跃度的中位数替代值
+	medianActivity := medianActivityScore(all)
+
+	// 按综合得分排序
+	type scored struct {
+		*ComparableMetrics
+		score float64
+		rank  int
+	}
+	scoredList := make([]scored, 0, len(all))
+	for _, m := range all {
+		scoredList = append(scoredList, scored{
+			ComparableMetrics: m,
+			score:             calcComparableScore(m, all, medianActivity),
+		})
+	}
+	// 降序
+	for i := 0; i < len(scoredList); i++ {
+		for j := i + 1; j < len(scoredList); j++ {
+			if scoredList[i].score < scoredList[j].score {
+				scoredList[i], scoredList[j] = scoredList[j], scoredList[i]
+			}
+		}
+	}
+	for i := range scoredList {
+		scoredList[i].rank = i + 1
+	}
+
+	// 找到当前公司的排名
+	targetRank := 1
+	for _, s := range scoredList {
+		if s.Symbol == "当前公司" {
+			targetRank = s.rank
+			break
+		}
+	}
+	total := len(scoredList)
+	percentile := float64(targetRank-1) / float64(total) * 100 // 越小越好
+
+	var advice string
+	if targetRank == 1 {
+		advice = "当前公司综合评分最高，建议重点关注/持有 🥇"
+	} else if percentile < 30 {
+		advice = "当前公司质地优良，建议持有"
+	} else if percentile < 60 {
+		advice = "当前公司表现中等，可继续持有观察"
+	} else {
+		advice = "当前公司相对可比公司存在明显短板，建议谨慎"
+	}
+
+	// 蓝色亮条
+	b.WriteString("<div style=\"background:#e6f7ff;padding:12px 16px;border-radius:8px;border-left:4px solid #1890ff;margin:12px 0;\">\n")
+	b.WriteString(fmt.Sprintf("  <strong>💡 综合评分排名</strong>（满分100）<br/>\n"))
+	b.WriteString(fmt.Sprintf("  当前公司在 <strong>%d</strong> 家可比公司中排名第 <strong>%d</strong>，综合得分 <strong>%.1f</strong>。<br/>\n", total, targetRank, scoredList[targetRank-1].score))
+	b.WriteString(fmt.Sprintf("  <span style=\"color:#096dd9;\">%s</span>\n", advice))
+	b.WriteString("</div>\n\n")
+
+	b.WriteString("## 4.2 可比公司明细")
+	b.WriteString(`<details style="display:inline-block;position:relative;margin-left:8px;vertical-align:middle;">`)
+	b.WriteString(`<summary style="cursor:pointer;list-style:none;color:#1890ff;font-size:14px;">ℹ️</summary>`)
+	b.WriteString(`<div style="position:absolute;left:28px;top:-8px;width:360px;background:#fff;border:1px solid #d9d9d9;border-radius:8px;padding:12px;box-shadow:0 4px 12px rgba(0,0,0,0.15);z-index:100;font-size:13px;line-height:1.6;color:#333;">`)
+	b.WriteString(`<strong>综合得分计算方式</strong><br/>`)
+	b.WriteString(`在“当前公司 + 可比公司”池内，对每个指标做 Min-Max 标准化（0~100 分），再按以下权重加权求和：<br/>`)
+	b.WriteString(`• ROE 25%　• 毛利率 20%　• 营收增长 15%　• 现金含量 10%<br/>`)
+	b.WriteString(`• 负债率 10%（反向，越低越好）<br/>`)
+	b.WriteString(`• A-Score 10%（反向，越低越好）<br/>`)
+	b.WriteString(`• 活跃度 10%<br/>`)
+	b.WriteString(`<em>缺失活跃度时，使用可比池有效样本的中位数替代，标记为 *</em>`)
+	b.WriteString(`</div></details>`)
+	b.WriteString("\n\n")
+	b.WriteString("| 排名 | 公司 | ROE | 毛利率 | 营收增长 | 负债率 | 现金含量 | A-Score | 活跃度 | 综合得分 |\n")
+	b.WriteString("|------|------|-----|--------|----------|--------|----------|---------|--------|----------|\n")
+	for _, s := range scoredList {
+		displayName := s.Name
+		if displayName == "" {
+			displayName = s.Symbol
+		}
+		if s.Symbol == "当前公司" {
+			displayName = "**当前公司**"
+		}
+		actStr := "-"
+		if s.ActivityScore >= 0 {
+			actStr = fmt.Sprintf("%.0f", s.ActivityScore)
+		} else if medianActivity > 0 {
+			actStr = fmt.Sprintf("%.0f*", medianActivity)
+		}
+		b.WriteString(fmt.Sprintf("| %d | %s | %.2f%% | %.2f%% | %.2f%% | %.2f%% | %.2f%% | %.1f | %s | %.1f |\n",
+			s.rank, displayName, s.ROE, s.GrossMargin, s.RevenueGrowth, s.DebtRatio, s.CashRatio, s.AScore, actStr, s.score))
+	}
+	avgActStr := "-"
+	if comp.Average.ActivityScore >= 0 {
+		avgActStr = fmt.Sprintf("%.0f", comp.Average.ActivityScore)
+	}
+	b.WriteString(fmt.Sprintf("| — | **平均值** | %.2f%% | %.2f%% | %.2f%% | %.2f%% | %.2f%% | %.1f | %s | — |\n",
+		comp.Average.ROE, comp.Average.GrossMargin, comp.Average.RevenueGrowth, comp.Average.DebtRatio, comp.Average.CashRatio, comp.Average.AScore, avgActStr))
+	b.WriteString("\n")
+
+	b.WriteString("> **解读**: 排名百分位表示当前公司在可比公司中的相对位置（越高越好，负债率与 A-Score 为反向指标）。活跃度带 `*` 表示使用样本中位数替代（该可比公司暂无本地缓存数据）。综合得分基于 ROE(25%)、毛利率(20%)、营收增长(15%)、现金含量(10%)、负债率(10%)、A-Score(10%)、活跃度(10%) 加权计算。\n\n")
 
 	// 多年度趋势对比
 	if len(comp.YearlyTrends) >= 2 && len(comp.CommonYears) >= 2 {
@@ -527,8 +624,8 @@ func writeModule4(b *strings.Builder, steps []StepResult, latest string, comp *C
 }
 
 // WriteModule4Only 仅生成模块4内容（用于增量更新）
-func WriteModule4Only(b *strings.Builder, steps []StepResult, latest string, comp *ComparableAnalysis, industry *IndustryComparison) {
-	writeModule4(b, steps, latest, comp, industry)
+func WriteModule4Only(b *strings.Builder, steps []StepResult, latest string, comp *ComparableAnalysis, industry *IndustryComparison, activityScore float64) {
+	writeModule4(b, steps, latest, comp, industry, activityScore)
 }
 
 // ========== 模块5: 十五五政策匹配度评估 ==========
@@ -2284,4 +2381,98 @@ func ascoreBadge(v float64) string {
 		return "🟢 低风险（A-Score 40-60）"
 	}
 	return "🟢 安全（A-Score < 40）"
+}
+
+func normalizeScore(value, min, max float64, reverse bool) float64 {
+	if max == min {
+		return 50
+	}
+	if reverse {
+		return (max - value) / (max - min) * 100
+	}
+	return (value - min) / (max - min) * 100
+}
+
+func medianActivityScore(list []*ComparableMetrics) float64 {
+	var vals []float64
+	for _, m := range list {
+		if m.ActivityScore >= 0 {
+			vals = append(vals, m.ActivityScore)
+		}
+	}
+	if len(vals) == 0 {
+		return 50
+	}
+	for i := 0; i < len(vals); i++ {
+		for j := i + 1; j < len(vals); j++ {
+			if vals[i] > vals[j] {
+				vals[i], vals[j] = vals[j], vals[i]
+			}
+		}
+	}
+	mid := len(vals) / 2
+	if len(vals)%2 == 1 {
+		return vals[mid]
+	}
+	return (vals[mid-1] + vals[mid]) / 2
+}
+
+func calcComparableScore(m *ComparableMetrics, all []*ComparableMetrics, medianActivity float64) float64 {
+	var minROE, maxROE, minGM, maxGM, minGrowth, maxGrowth, minDebt, maxDebt, minCash, maxCash, minAScore, maxAScore, minAct, maxAct float64
+	first := true
+	for _, x := range all {
+		if first {
+			minROE, maxROE = x.ROE, x.ROE
+			minGM, maxGM = x.GrossMargin, x.GrossMargin
+			minGrowth, maxGrowth = x.RevenueGrowth, x.RevenueGrowth
+			minDebt, maxDebt = x.DebtRatio, x.DebtRatio
+			minCash, maxCash = x.CashRatio, x.CashRatio
+			minAScore, maxAScore = x.AScore, x.AScore
+			first = false
+			continue
+		}
+		if x.ROE < minROE { minROE = x.ROE }
+		if x.ROE > maxROE { maxROE = x.ROE }
+		if x.GrossMargin < minGM { minGM = x.GrossMargin }
+		if x.GrossMargin > maxGM { maxGM = x.GrossMargin }
+		if x.RevenueGrowth < minGrowth { minGrowth = x.RevenueGrowth }
+		if x.RevenueGrowth > maxGrowth { maxGrowth = x.RevenueGrowth }
+		if x.DebtRatio < minDebt { minDebt = x.DebtRatio }
+		if x.DebtRatio > maxDebt { maxDebt = x.DebtRatio }
+		if x.CashRatio < minCash { minCash = x.CashRatio }
+		if x.CashRatio > maxCash { maxCash = x.CashRatio }
+		if x.AScore < minAScore { minAScore = x.AScore }
+		if x.AScore > maxAScore { maxAScore = x.AScore }
+	}
+	firstAct := true
+	for _, x := range all {
+		act := x.ActivityScore
+		if act < 0 {
+			act = medianActivity
+		}
+		if firstAct {
+			minAct, maxAct = act, act
+			firstAct = false
+			continue
+		}
+		if act < minAct { minAct = act }
+		if act > maxAct { maxAct = act }
+	}
+	if firstAct {
+		minAct, maxAct = 0, 100
+	}
+
+	act := m.ActivityScore
+	if act < 0 {
+		act = medianActivity
+	}
+
+	s := normalizeScore(m.ROE, minROE, maxROE, false)*0.25 +
+		normalizeScore(m.GrossMargin, minGM, maxGM, false)*0.20 +
+		normalizeScore(m.RevenueGrowth, minGrowth, maxGrowth, false)*0.15 +
+		normalizeScore(m.DebtRatio, minDebt, maxDebt, true)*0.10 +
+		normalizeScore(m.CashRatio, minCash, maxCash, false)*0.10 +
+		normalizeScore(m.AScore, minAScore, maxAScore, true)*0.10 +
+		normalizeScore(act, minAct, maxAct, false)*0.10
+	return s
 }

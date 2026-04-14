@@ -60,6 +60,8 @@ export function ImportFinancialReports(arg1:string):Promise<main.ImportResult>;
 
 export function InitIndustryDatabase():Promise<void>;
 
+export function LoadAnalysisSnapshot(arg1:string):Promise<analyzer.AnalysisReport>;
+
 export function RefreshIndustryBaselines():Promise<Record<string, analyzer.IndustryBaseline>>;
 
 export function RefreshStockProfile(arg1:string):Promise<main.StockProfile>;

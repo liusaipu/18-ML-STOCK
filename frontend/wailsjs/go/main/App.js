@@ -114,6 +114,10 @@ export function InitIndustryDatabase() {
   return window['go']['main']['App']['InitIndustryDatabase']();
 }
 
+export function LoadAnalysisSnapshot(arg1) {
+  return window['go']['main']['App']['LoadAnalysisSnapshot'](arg1);
+}
+
 export function RefreshIndustryBaselines() {
   return window['go']['main']['App']['RefreshIndustryBaselines']();
 }

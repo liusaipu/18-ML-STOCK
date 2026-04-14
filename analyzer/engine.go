@@ -158,7 +158,9 @@ func RegenerateModule4Only(baseDir, symbol string, comp *ComparableAnalysis, ind
 		step18Dividend(data),
 	}
 
+	activityScore := loadActivityScore(baseDir, symbol)
+
 	var b strings.Builder
-	writeModule4(&b, steps, data.Years[0], comp, industry)
+	writeModule4(&b, steps, data.Years[0], comp, industry, activityScore)
 	return b.String(), nil
 }

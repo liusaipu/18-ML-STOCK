@@ -762,3 +762,43 @@ func (s *Storage) LoadRIMCache(symbol string) (*downloader.RIMExternalData, erro
 	}
 	return wrapper.Data, nil
 }
+
+// SaveSnapshot 保存分析报告快照（用于前端亮点与风险恢复）
+func (s *Storage) SaveSnapshot(symbol string, report *analyzer.AnalysisReport) error {
+	dir := filepath.Join(s.dataDir, "snapshots")
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return err
+	}
+	path := filepath.Join(dir, symbol+".json")
+	data, err := json.MarshalIndent(report, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, data, 0644)
+}
+
+// LoadSnapshot 加载分析报告快照
+func (s *Storage) LoadSnapshot(symbol string) (*analyzer.AnalysisReport, error) {
+	path := filepath.Join(s.dataDir, "snapshots", symbol+".json")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	var report analyzer.AnalysisReport
+	if err := json.Unmarshal(data, &report); err != nil {
+		return nil, err
+	}
+	return &report, nil
+}
+
+// DeleteSnapshot 删除分析报告快照
+func (s *Storage) DeleteSnapshot(symbol string) error {
+	path := filepath.Join(s.dataDir, "snapshots", symbol+".json")
+	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	return nil
+}

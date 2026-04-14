@@ -1,7 +1,9 @@
 package analyzer
 
 import (
+	"encoding/json"
 	"fmt"
+	"os"
 	"path/filepath"
 )
 
@@ -15,6 +17,8 @@ type ComparableMetrics struct {
 	DebtRatio     float64 `json:"debtRatio"`
 	CashRatio     float64 `json:"cashRatio"`
 	MScore        float64 `json:"mScore"`
+	AScore        float64 `json:"aScore"`
+	ActivityScore float64 `json:"activityScore"` // -1 表示缺失
 }
 
 // YearlyComparableMetrics 单一年度的可比公司指标集合
@@ -69,6 +73,7 @@ func BuildComparableAnalysis(baseDir string, comparables []string, nameMap map[s
 		}
 
 		latest := data.Years[0]
+		activityScore := loadActivityScore(baseDir, comp)
 		m := &ComparableMetrics{
 			Symbol:        comp,
 			Name:          nameMap[comp],
@@ -78,6 +83,8 @@ func BuildComparableAnalysis(baseDir string, comparables []string, nameMap map[s
 			DebtRatio:     getStepValue(steps, 3, latest, "debtRatio"),
 			CashRatio:     getStepValue(steps, 15, latest, "cashRatio"),
 			MScore:        getStepValue(steps, 8, latest, "MScore"),
+			AScore:        getStepValue(steps, 8, latest, "AScore"),
+			ActivityScore: activityScore,
 		}
 		result.Metrics[comp] = m
 		result.HasData = true
@@ -96,6 +103,8 @@ func BuildComparableAnalysis(baseDir string, comparables []string, nameMap map[s
 				DebtRatio:     getStepValue(steps, 3, year, "debtRatio"),
 				CashRatio:     getStepValue(steps, 15, year, "cashRatio"),
 				MScore:        getStepValue(steps, 8, year, "MScore"),
+				AScore:        getStepValue(steps, 8, year, "AScore"),
+				ActivityScore: activityScore,
 			}
 		}
 	}
@@ -143,6 +152,22 @@ func BuildComparableAnalysis(baseDir string, comparables []string, nameMap map[s
 	return result, nil
 }
 
+func loadActivityScore(baseDir, symbol string) float64 {
+	path := filepath.Join(baseDir, "data", symbol, "activity.json")
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return -1
+	}
+	var data ActivityData
+	if err := json.Unmarshal(b, &data); err != nil {
+		return -1
+	}
+	if data.Score > 0 {
+		return data.Score
+	}
+	return -1
+}
+
 func loadComparableFinancialData(baseDir, symbol string) (*FinancialData, error) {
 	stockDir := filepath.Join(baseDir, "comparables", symbol)
 	bs, err := loadFloatJSONFile(filepath.Join(stockDir, "balance_sheet.json"))
@@ -181,6 +206,7 @@ func calcAverage(metrics map[string]*ComparableMetrics) *ComparableMetrics {
 	}
 	avg := &ComparableMetrics{Symbol: "平均值"}
 	var count float64
+	var activityCount float64
 	for _, m := range metrics {
 		avg.ROE += m.ROE
 		avg.GrossMargin += m.GrossMargin
@@ -188,7 +214,12 @@ func calcAverage(metrics map[string]*ComparableMetrics) *ComparableMetrics {
 		avg.DebtRatio += m.DebtRatio
 		avg.CashRatio += m.CashRatio
 		avg.MScore += m.MScore
+		avg.AScore += m.AScore
 		count++
+		if m.ActivityScore >= 0 {
+			avg.ActivityScore += m.ActivityScore
+			activityCount++
+		}
 	}
 	if count > 0 {
 		avg.ROE /= count
@@ -197,6 +228,12 @@ func calcAverage(metrics map[string]*ComparableMetrics) *ComparableMetrics {
 		avg.DebtRatio /= count
 		avg.CashRatio /= count
 		avg.MScore /= count
+		avg.AScore /= count
+	}
+	if activityCount > 0 {
+		avg.ActivityScore /= activityCount
+	} else {
+		avg.ActivityScore = -1
 	}
 	return avg
 }
@@ -220,6 +257,8 @@ func calcMax(metrics map[string]*ComparableMetrics) *ComparableMetrics {
 		if m.DebtRatio > max.DebtRatio { max.DebtRatio = m.DebtRatio }
 		if m.CashRatio > max.CashRatio { max.CashRatio = m.CashRatio }
 		if m.MScore > max.MScore { max.MScore = m.MScore }
+		if m.AScore > max.AScore { max.AScore = m.AScore }
+		if m.ActivityScore >= 0 && (max.ActivityScore < 0 || m.ActivityScore > max.ActivityScore) { max.ActivityScore = m.ActivityScore }
 	}
 	return max
 }
@@ -243,6 +282,8 @@ func calcMin(metrics map[string]*ComparableMetrics) *ComparableMetrics {
 		if m.DebtRatio < min.DebtRatio { min.DebtRatio = m.DebtRatio }
 		if m.CashRatio < min.CashRatio { min.CashRatio = m.CashRatio }
 		if m.MScore < min.MScore { min.MScore = m.MScore }
+		if m.AScore < min.AScore { min.AScore = m.AScore }
+		if m.ActivityScore >= 0 && (min.ActivityScore < 0 || m.ActivityScore < min.ActivityScore) { min.ActivityScore = m.ActivityScore }
 	}
 	return min
 }
@@ -263,6 +304,13 @@ func RankPercentile(metrics map[string]*ComparableMetrics, target *ComparableMet
 		case "debtRatio": v = -m.DebtRatio // 负债率越低越好
 		case "cashRatio": v = m.CashRatio
 		case "mScore": v = -m.MScore // MScore 越低越好
+		case "aScore": v = -m.AScore // AScore 越低越好
+		case "activityScore":
+			if m.ActivityScore >= 0 {
+				v = m.ActivityScore
+			} else {
+				v = -9999 // 缺失值排最后
+			}
 		}
 		list = append(list, pair{s, v})
 	}
@@ -287,6 +335,13 @@ func RankPercentile(metrics map[string]*ComparableMetrics, target *ComparableMet
 	case "debtRatio": targetVal = -target.DebtRatio
 	case "cashRatio": targetVal = target.CashRatio
 	case "mScore": targetVal = -target.MScore
+	case "aScore": targetVal = -target.AScore
+	case "activityScore":
+		if target.ActivityScore >= 0 {
+			targetVal = target.ActivityScore
+		} else {
+			targetVal = -9999
+		}
 	}
 
 	for i, p := range list {
