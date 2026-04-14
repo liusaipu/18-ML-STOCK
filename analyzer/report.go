@@ -78,10 +78,10 @@ func GenerateMarkdown(symbol string, years []string, steps []StepResult, scores 
 	writeModule13(&b, sentiment)
 
 	// ==================== 模块15: 综合投资建议 ====================
-	writeModule14(&b, symbol, steps, latest, latestScore, quote, rim, technical, ml)
+	writeModule14(&b, symbol, steps, latest, latestScore, quote, rim, technical, ml, sentiment)
 
 	// ==================== 模块16: 结论与附录 ====================
-	writeModule15(&b, symbol, steps, years, latest, latestScore)
+	writeModule15(&b, symbol, steps, years, latest, latestScore, sentiment)
 
 	b.WriteString("---\n\n")
 	b.WriteString("*报告生成时间：基于最新导入的财务数据*\n")
@@ -551,12 +551,6 @@ func writeModule4(b *strings.Builder, steps []StepResult, latest string, comp *C
 		advice = "当前公司相对可比公司存在明显短板，建议谨慎"
 	}
 
-	// 蓝色亮条
-	b.WriteString("<div style=\"background:#e6f7ff;padding:12px 16px;border-radius:8px;border-left:4px solid #1890ff;margin:12px 0;\">\n")
-	b.WriteString(fmt.Sprintf("  <strong>💡 综合评分排名</strong>（满分100）<br/>\n"))
-	b.WriteString(fmt.Sprintf("  当前公司在 <strong>%d</strong> 家可比公司中排名第 <strong>%d</strong>，综合得分 <strong>%.1f</strong>。<br/>\n", total, targetRank, scoredList[targetRank-1].score))
-	b.WriteString(fmt.Sprintf("  <span style=\"color:#096dd9;\">%s</span>\n", advice))
-	b.WriteString("</div>\n\n")
 
 	b.WriteString("## 4.2 可比公司明细")
 	b.WriteString(`<details style="display:inline-block;position:relative;margin-left:8px;vertical-align:middle;">`)
@@ -600,6 +594,9 @@ func writeModule4(b *strings.Builder, steps []StepResult, latest string, comp *C
 
 	b.WriteString("> **解读**: 排名百分位表示当前公司在可比公司中的相对位置（越高越好，负债率与 A-Score 为反向指标）。活跃度带 `*` 表示使用样本中位数替代（该可比公司暂无本地缓存数据）。综合得分基于 ROE(25%)、毛利率(20%)、营收增长(15%)、现金含量(10%)、负债率(10%)、A-Score(10%)、活跃度(10%) 加权计算。\n\n")
 
+	b.WriteString(fmt.Sprintf("> **💡 综合评分排名**（满分100）\n"))
+	b.WriteString(fmt.Sprintf("> 当前公司在 **%d** 家可比公司中排名第 **%d**，综合得分 **%.1f**。\n", total, targetRank, scoredList[targetRank-1].score))
+	b.WriteString(fmt.Sprintf("> %s\n\n", advice))
 	// 多年度趋势对比
 	if len(comp.YearlyTrends) >= 2 && len(comp.CommonYears) >= 2 {
 		b.WriteString("## 4.3 多年度趋势对比（当前公司 vs 可比均值）\n\n")
@@ -1384,7 +1381,7 @@ func writeModule13(b *strings.Builder, sentiment *SentimentData) {
 }
 
 // ========== 模块15: 综合投资建议 ==========
-func writeModule14(b *strings.Builder, symbol string, steps []StepResult, latest string, score *YearScore, quote *QuoteData, rim *RIMData, technical *TechnicalData, ml *MLPredictionData) {
+func writeModule14(b *strings.Builder, symbol string, steps []StepResult, latest string, score *YearScore, quote *QuoteData, rim *RIMData, technical *TechnicalData, ml *MLPredictionData, sentiment *SentimentData) {
 	b.WriteString("# 模块15: 综合投资建议\n\n")
 
 	weighted := 0.0
@@ -1420,6 +1417,9 @@ func writeModule14(b *strings.Builder, symbol string, steps []StepResult, latest
 	b.WriteString(fmt.Sprintf("| **入场区间** | %s |\n", entryRange))
 	b.WriteString(fmt.Sprintf("| **止损位** | %s |\n", stopLoss))
 	b.WriteString(fmt.Sprintf("| **目标位** | %s |\n", target))
+	if sentiment != nil && sentiment.HasData {
+		b.WriteString(fmt.Sprintf("| **舆情情绪** | %s |\n", sentimentSummary(sentiment)))
+	}
 	b.WriteString("\n")
 
 	b.WriteString("## 15.3 操作策略\n\n")
@@ -1450,6 +1450,16 @@ func writeModule14(b *strings.Builder, symbol string, steps []StepResult, latest
 		b.WriteString("- 等待风险释放、基本面反转后再考虑\n\n")
 		b.WriteString("**策略B：持有者**\n")
 		b.WriteString("- 建议减仓或设置严格止损\n")
+	}
+	if sentiment != nil && sentiment.HasData {
+		b.WriteString("\n> **舆情提示**：")
+		if sentiment.Score > 0.3 {
+			b.WriteString(fmt.Sprintf("近期舆情整体偏正面（热度 %d 条），可作为辅助参考，但不宜单独作为决策依据。\n", sentiment.HeatIndex))
+		} else if sentiment.Score < -0.3 {
+			b.WriteString(fmt.Sprintf("近期舆情整体偏负面（热度 %d 条），建议保持谨慎，关注后续公告与风险释放。\n", sentiment.HeatIndex))
+		} else {
+			b.WriteString(fmt.Sprintf("近期舆情整体中性（热度 %d 条），建议以基本面判断为主，持续跟踪舆情变化。\n", sentiment.HeatIndex))
+		}
 	}
 	b.WriteString("\n---\n\n")
 }
@@ -1544,7 +1554,7 @@ func formatTradeLevels(quote *QuoteData, rim *RIMData, technical *TechnicalData,
 }
 
 // ========== 模块16: 结论与附录 ==========
-func writeModule15(b *strings.Builder, symbol string, steps []StepResult, years []string, latest string, score *YearScore) {
+func writeModule15(b *strings.Builder, symbol string, steps []StepResult, years []string, latest string, score *YearScore, sentiment *SentimentData) {
 	b.WriteString("# 模块16: 结论与附录\n\n")
 
 	weighted := 0.0
@@ -1557,6 +1567,9 @@ func writeModule15(b *strings.Builder, symbol string, steps []StepResult, years 
 	b.WriteString(fmt.Sprintf("%s %s年报", symbol, latest))
 	b.WriteString(fmt.Sprintf(" 综合评分 %.0f 分，评级 %s。", weighted, investmentGrade(weighted)))
 	b.WriteString(oneSentenceAdvice(symbol, weighted, steps, latest))
+	if sentiment != nil && sentiment.HasData {
+		b.WriteString(fmt.Sprintf(" 舆情方面：%s。", sentimentSummary(sentiment)))
+	}
 	b.WriteString("**\n\n")
 
 	b.WriteString("## 16.2 关键数据速查\n\n")
@@ -1586,6 +1599,9 @@ func writeModule15(b *strings.Builder, symbol string, steps []StepResult, years 
 			b.WriteString(fmt.Sprintf("%d. %s：%s\n", i+1, r.Category, r.Desc))
 		}
 	}
+	if sentiment != nil && sentiment.HasData && sentiment.Score < -0.3 {
+		b.WriteString(fmt.Sprintf("%d. 舆情情绪：近期舆情整体偏负面（热度 %d 条），需关注市场风险。\n", len(risks)+1, sentiment.HeatIndex))
+	}
 	b.WriteString("\n**正面因素**:\n")
 	positives := positiveFactors(steps, latest)
 	if len(positives) == 0 {
@@ -1593,6 +1609,15 @@ func writeModule15(b *strings.Builder, symbol string, steps []StepResult, years 
 	} else {
 		for i, p := range positives {
 			b.WriteString(fmt.Sprintf("%d. %s\n", i+1, p))
+		}
+	}
+	if sentiment != nil && sentiment.HasData && sentiment.Score > 0.3 {
+		start := len(positives) + 1
+		if len(positives) == 0 {
+			start = 1
+			b.WriteString(fmt.Sprintf("%d. 舆情情绪：近期舆情整体偏正面（热度 %d 条），市场关注度较好。\n", start, sentiment.HeatIndex))
+		} else {
+			b.WriteString(fmt.Sprintf("%d. 舆情情绪：近期舆情整体偏正面（热度 %d 条），市场关注度较好。\n", start, sentiment.HeatIndex))
 		}
 	}
 	b.WriteString("\n")
@@ -1608,6 +1633,19 @@ type RiskItem struct {
 	Indicator string
 	Severity  string
 	Desc      string
+}
+
+func sentimentSummary(sentiment *SentimentData) string {
+	if sentiment == nil || !sentiment.HasData {
+		return "暂无数据"
+	}
+	desc := "中性"
+	if sentiment.Score > 0.3 {
+		desc = "偏多"
+	} else if sentiment.Score < -0.3 {
+		desc = "偏空"
+	}
+	return fmt.Sprintf("%s（热度 %d 条）", desc, sentiment.HeatIndex)
 }
 
 func scoreToStars(score float64) string {

@@ -60,13 +60,19 @@ func FetchStockSentiment(market, code string) (*SentimentData, error) {
 		}
 	}
 
-	// 2. fallback 新浪财经新闻
+	// 2. fallback 东财公司公告
+	data, err = fetchSentimentFromEastMoneyNotices(code)
+	if err == nil && data != nil && data.HasData {
+		return data, nil
+	}
+
+	// 3. fallback 新浪财经新闻
 	data, err = fetchSentimentFromSinaNews(code)
 	if err == nil && data != nil && data.HasData {
 		return data, nil
 	}
 
-	// 3. 所有数据源失败，返回空数据结构（带提示）
+	// 4. 所有数据源失败，返回空数据结构（带提示）
 	return &SentimentData{
 		Score:         0,
 		HeatIndex:     0,
@@ -136,6 +142,65 @@ func fetchSentimentFromEastMoneyReports(code string) (*SentimentData, error) {
 	for i := range data.Summaries {
 		s := calcSingleSentiment(data.Summaries[i].Title)
 		data.Summaries[i].Sentiment = s
+	}
+	return data, nil
+}
+
+// ========== 东财公告接口 ==========
+func fetchSentimentFromEastMoneyNotices(code string) (*SentimentData, error) {
+	begin := time.Now().AddDate(0, -6, 0).Format("2006-01-02")
+	end := time.Now().Format("2006-01-02")
+	url := fmt.Sprintf(
+		"https://np-anotice-stock.eastmoney.com/api/security/ann?sr=-1&page_size=20&page_index=1&ann_type=A&client_source=web&stock_list=%s&begin_time=%s&end_time=%s",
+		code, begin, end,
+	)
+
+	client := &http.Client{Timeout: 15 * time.Second}
+	resp, err := client.Get(url)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	var result struct {
+		Data struct {
+			List []struct {
+				Title      string `json:"title"`
+				NoticeDate string `json:"notice_date"`
+			} `json:"list"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(body, &result); err != nil {
+		return nil, err
+	}
+	if len(result.Data.List) == 0 {
+		return nil, fmt.Errorf("东财公告数据为空")
+	}
+
+	var titles []string
+	var summaries []SentimentSummary
+	for _, item := range result.Data.List {
+		if strings.TrimSpace(item.Title) == "" {
+			continue
+		}
+		titles = append(titles, item.Title)
+		date := strings.Split(item.NoticeDate, " ")[0]
+		summaries = append(summaries, SentimentSummary{
+			Title:  item.Title,
+			Source: "东方财富公告",
+			Date:   date,
+		})
+	}
+
+	data := analyzeSentiment(titles)
+	data.Summaries = summaries
+	for i := range data.Summaries {
+		data.Summaries[i].Sentiment = calcSingleSentiment(data.Summaries[i].Title)
 	}
 	return data, nil
 }

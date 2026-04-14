@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
@@ -37,13 +38,24 @@ type FinancialReportData struct {
 
 // DownloadFinancialReports 从东方财富下载指定股票的所有年报财务数据
 // 东方财富失败时自动尝试腾讯财经作为备用数据源
-func DownloadFinancialReports(market, code string) (*FinancialReportData, error) {
+// maxYears 可选，默认为 5 年
+func DownloadFinancialReports(market, code string, maxYears ...int) (*FinancialReportData, error) {
+	limit := 5
+	if len(maxYears) > 0 && maxYears[0] > 0 {
+		limit = maxYears[0]
+	}
+
 	if strings.ToUpper(market) == "HK" {
-		return nil, fmt.Errorf("港股财报暂不支持网络下载，请手动导入 CSV")
+		// 港股通过 Python 脚本获取
+		result, err := fetchHKFinancialsFromPython(code, limit)
+		if err == nil {
+			return result, nil
+		}
+		return nil, fmt.Errorf("港股财报下载失败:\n%v\n\n建议:\n1. 检查网络连接\n2. 确保已安装 akshare\n3. 使用CSV导入功能手动导入财报数据", err)
 	}
 	
 	// 先尝试东方财富
-	result, err := downloadFromEastMoney(market, code)
+	result, err := downloadFromEastMoney(market, code, limit)
 	if err == nil {
 		return result, nil
 	}
@@ -59,7 +71,7 @@ func DownloadFinancialReports(market, code string) (*FinancialReportData, error)
 }
 
 // downloadFromEastMoney 从东方财富下载财务数据
-func downloadFromEastMoney(market, code string) (*FinancialReportData, error) {
+func downloadFromEastMoney(market, code string, maxYears int) (*FinancialReportData, error) {
 	fullCode := market + code // e.g. SH603501
 
 	// 1. 分别为三张表确定 companyType（保险/金融股各表可能不同）
@@ -77,7 +89,7 @@ func downloadFromEastMoney(market, code string) (*FinancialReportData, error) {
 	}
 
 	// 2. 获取年报日期列表
-	dates, err := getAnnualReportDates(code)
+	dates, err := getAnnualReportDates(code, maxYears)
 	if err != nil {
 		return nil, fmt.Errorf("获取年报日期列表失败: %w\n可能原因: 网络连接不稳定或该股票暂无财务数据", err)
 	}
@@ -191,7 +203,7 @@ func getCompanyTypeForEndpoint(endpoint, fullCode string) (int, error) {
 }
 
 // getAnnualReportDates 通过 datacenter-web API 获取所有年报日期（带重试）
-func getAnnualReportDates(code string) ([]string, error) {
+func getAnnualReportDates(code string, maxYears int) ([]string, error) {
 	url := fmt.Sprintf("%s?sortColumns=REPORT_DATE&sortTypes=-1&pageSize=500&pageNumber=1&reportName=RPT_DMSK_FN_BALANCE&columns=REPORT_DATE&source=WEB&filter=(SECURITY_CODE=\"%s\")", dcBaseURL, code)
 	url = strings.ReplaceAll(url, `"`, "%22")
 	
@@ -245,9 +257,9 @@ func getAnnualReportDates(code string) ([]string, error) {
 			}
 		}
 	}
-	// 只保留最近5年
-	if len(dates) > 5 {
-		dates = dates[:5]
+	// 只保留最近N年
+	if maxYears > 0 && len(dates) > maxYears {
+		dates = dates[:maxYears]
 	}
 	return dates, nil
 }
@@ -898,6 +910,7 @@ func fetchHKProfileFromPython(code string) (*hkProfileResult, error) {
 	script := fetchHKProfileScriptPath()
 	python := resolvePythonExecutable()
 	cmd := exec.Command(python, script, code)
+	cmd.Env = append(os.Environ(), "PYTHONIOENCODING=utf-8")
 	
 	// Windows: 隐藏 CMD 窗口
 	if runtime.GOOS == "windows" {
@@ -915,6 +928,60 @@ func fetchHKProfileFromPython(code string) (*hkProfileResult, error) {
 		return nil, fmt.Errorf("解析港股资料失败: %v, raw: %s", err, string(output))
 	}
 	return &result, nil
+}
+
+// hkFinancialsResult Python 脚本返回的港股财务数据
+type hkFinancialsResult struct {
+	Symbol          string                            `json:"symbol"`
+	Years           []string                          `json:"years"`
+	BalanceSheet    map[string]map[string]float64     `json:"balanceSheet"`
+	IncomeStatement map[string]map[string]float64     `json:"incomeStatement"`
+	CashFlow        map[string]map[string]float64     `json:"cashFlow"`
+	Errors          []string                          `json:"errors"`
+}
+
+// fetchHKFinancialsScriptPath 返回 fetch_hk_financials.py 绝对路径
+func fetchHKFinancialsScriptPath() string {
+	_, b, _, _ := runtime.Caller(0)
+	base := filepath.Dir(b)
+	root := findProjectRootByMarker(base, filepath.Join("scripts", "fetch_hk_financials.py"))
+	if root != "" {
+		return filepath.Join(root, "scripts", "fetch_hk_financials.py")
+	}
+	return filepath.Join(base, "..", "scripts", "fetch_hk_financials.py")
+}
+
+// fetchHKFinancialsFromPython 调用 Python 脚本获取港股财务数据
+func fetchHKFinancialsFromPython(code string, maxYears int) (*FinancialReportData, error) {
+	script := fetchHKFinancialsScriptPath()
+	python := resolvePythonExecutable()
+	cmd := exec.Command(python, script, code, fmt.Sprintf("%d", maxYears))
+	cmd.Env = append(os.Environ(), "PYTHONIOENCODING=utf-8")
+	
+	if runtime.GOOS == "windows" {
+		cmd.SysProcAttr = &syscall.SysProcAttr{
+			HideWindow: true,
+		}
+	}
+	
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return nil, fmt.Errorf("fetch_hk_financials.py 执行失败: %v, output: %s", err, string(output))
+	}
+	var result hkFinancialsResult
+	if err := json.Unmarshal(output, &result); err != nil {
+		return nil, fmt.Errorf("解析港股财务数据失败: %v, raw: %s", err, string(output))
+	}
+	if len(result.Years) == 0 {
+		return nil, fmt.Errorf("未获取到任何年报数据")
+	}
+	return &FinancialReportData{
+		Symbol:          result.Symbol,
+		Years:           result.Years,
+		BalanceSheet:    result.BalanceSheet,
+		IncomeStatement: result.IncomeStatement,
+		CashFlow:        result.CashFlow,
+	}, nil
 }
 
 func parseStrFloat(s string) float64 {
@@ -1008,7 +1075,14 @@ func parseEastMoneyKlines(lines []string) []KlineData {
 
 func fetchKlinesFromTencent(market, code string, limit int) ([]KlineData, error) {
 	prefix := strings.ToLower(market)
-	url := fmt.Sprintf("https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param=%s%s,day,,,%d,qfq", prefix, code, limit)
+	isHK := strings.ToUpper(market) == "HK"
+	var url string
+	if isHK {
+		// 港股腾讯接口末尾不能加 qfq
+		url = fmt.Sprintf("https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param=%s%s,day,,,%d,", prefix, code, limit)
+	} else {
+		url = fmt.Sprintf("https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param=%s%s,day,,,%d,qfq", prefix, code, limit)
+	}
 	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Get(url)
 	if err != nil {
@@ -1038,9 +1112,14 @@ func fetchKlinesFromTencent(market, code string, limit int) ([]KlineData, error)
 		return nil, fmt.Errorf("腾讯K线数据为空")
 	}
 
-	days := stockData.QfqDay
-	if len(days) == 0 {
+	var days [][]any
+	if isHK {
 		days = stockData.Day
+	} else {
+		days = stockData.QfqDay
+		if len(days) == 0 {
+			days = stockData.Day
+		}
 	}
 	if len(days) == 0 {
 		return nil, fmt.Errorf("腾讯K线数据为空")

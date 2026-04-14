@@ -38,8 +38,8 @@ export function DownloadReport(arg1, arg2) {
   return window['go']['main']['App']['DownloadReport'](arg1, arg2);
 }
 
-export function DownloadReports(arg1) {
-  return window['go']['main']['App']['DownloadReports'](arg1);
+export function DownloadReports(arg1, arg2) {
+  return window['go']['main']['App']['DownloadReports'](arg1, arg2);
 }
 
 export function ExportCurrentFinancialData(arg1) {
@@ -148,6 +148,10 @@ export function SaveDefaultPolicyLibrary() {
 
 export function SearchStocks(arg1) {
   return window['go']['main']['App']['SearchStocks'](arg1);
+}
+
+export function SendNotification(arg1, arg2) {
+  return window['go']['main']['App']['SendNotification'](arg1, arg2);
 }
 
 export function UpdateIndustryDatabase() {

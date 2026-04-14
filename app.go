@@ -17,6 +17,7 @@ import (
 	"github.com/stock-analyzer/downloader"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
+	toast "git.sr.ht/~jackmordaunt/go-toast/v2"
 )
 
 // debugLog 直接写入日志文件，确保日志被记录
@@ -488,7 +489,7 @@ func (a *App) ImportFinancialReports(symbol string) (*ImportResult, error) {
 }
 
 // DownloadReports 从网络下载指定股票的财报数据
-func (a *App) DownloadReports(symbol string) (*DownloadResult, error) {
+func (a *App) DownloadReports(symbol string, maxYears int) (*DownloadResult, error) {
 	if a.storage == nil {
 		return nil, fmt.Errorf("存储未初始化")
 	}
@@ -502,7 +503,7 @@ func (a *App) DownloadReports(symbol string) (*DownloadResult, error) {
 	market := strings.ToUpper(parts[1])
 
 	// 下载数据
-	data, err := downloader.DownloadFinancialReports(market, code)
+	data, err := downloader.DownloadFinancialReports(market, code, maxYears)
 	if err != nil {
 		return nil, fmt.Errorf("下载财报失败: %w", err)
 	}
@@ -1667,6 +1668,16 @@ func (a *App) UpdateIndustryDatabase() (*downloader.IndustryUpdateResult, error)
 		return result, fmt.Errorf("更新成功但热重载失败: %w", reloadErr)
 	}
 	return result, nil
+}
+
+// SendNotification 发送系统通知（Windows Toast）
+func (a *App) SendNotification(title, content string) error {
+	notification := toast.Notification{
+		AppID: "Stock Analyzer",
+		Title: title,
+		Body:  content,
+	}
+	return notification.Push()
 }
 
 // GetIndustryDBMeta 获取行业数据库元信息

@@ -1911,6 +1911,22 @@ body.light .cp-remove:hover {
   margin-top: 4px;
 }
 
+.cp-status-line {
+  height: 18px;
+  line-height: 18px;
+  margin-top: 4px;
+  font-size: 12px;
+}
+
+.cp-status-line span {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  vertical-align: middle;
+}
+
 .cp-download {
   flex: 1;
   text-align: center;

@@ -63,6 +63,7 @@ import {
   GetIndustryDBMeta,
   UpdateModule4Only,
   LoadAnalysisSnapshot,
+  SendNotification,
 } from '../wailsjs/go/main/App'
 import type { main, analyzer, downloader } from '../wailsjs/go/models'
 
@@ -171,6 +172,7 @@ function App() {
   const [showCompDropdown, setShowCompDropdown] = useState(false)
   const [compDownloading, setCompDownloading] = useState(false)
   const [compReportsDownloaded, setCompReportsDownloaded] = useState(false)
+  const [compDownloadStatus, setCompDownloadStatus] = useState<{type: 'success' | 'error' | null, message: string}>({type: null, message: ''})
   const [concepts, setConcepts] = useState<downloader.StockConcepts | null>(null)
   const [policyLibMeta, setPolicyLibMeta] = useState<{version: string, updatedAt: string} | null>(null)
   const [policyUpdating, setPolicyUpdating] = useState(false)
@@ -383,8 +385,31 @@ function App() {
     })
     // 加载政策库元信息
     loadPolicyLibMeta()
-    // 加载行业数据库元信息
-    loadIndustryDBMeta()
+    // 加载行业数据库元信息，并根据设置决定是否自动更新
+    const autoUpdateIndustry = async () => {
+      const meta = await GetIndustryDBMeta()
+      const formatted = {
+        version: meta.version || '1.0',
+        updatedAt: meta.updatedAt || '未更新',
+        count: meta.count || 0,
+      }
+      setIndustryDBMeta(formatted)
+      if (!settings.autoUpdateIndustryDB) return
+      if (formatted.updatedAt === '未更新') {
+        handleUpdateIndustryDB()
+        return
+      }
+      try {
+        const last = new Date(formatted.updatedAt.replace(/-/g, '/'))
+        const days = (Date.now() - last.getTime()) / (1000 * 60 * 60 * 24)
+        if (days >= 7) {
+          handleUpdateIndustryDB()
+        }
+      } catch {
+        // ignore
+      }
+    }
+    autoUpdateIndustry()
   }, [])
 
   // 自选股变化时刷新活跃度
@@ -740,7 +765,15 @@ function App() {
     setDownloading(true)
     setDownloadStatus({type: null, message: ''})
     try {
-      const result = await DownloadReports(selectedStock.code)
+      const maxYears = typeof settings.reportYears === 'number' && settings.reportYears > 0
+        ? Math.floor(settings.reportYears)
+        : 5
+      const result = await Promise.race([
+        DownloadReports(selectedStock.code, maxYears),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('下载超时，请检查网络或刷新页面后重试')), 30000)
+        )
+      ]) as Awaited<ReturnType<typeof DownloadReports>>
       setDownloadResult(result)
       if (result.success) {
         // 简化消息：年份多时显示范围
@@ -817,6 +850,9 @@ function App() {
       setReport(result)
       setViewingHistory(null)
       setHistoryContent('')
+      if (settings.analysisNotification) {
+        SendNotification('分析完成', `${selectedStock.name || selectedStock.code} 的十八步分析已完成`).catch(() => {})
+      }
       if (result) {
         setSnapshots((prev) => ({ ...prev, [selectedStock.code]: result }))
       }
@@ -930,6 +966,9 @@ function App() {
       setReport(result)
       setViewingHistory(null)
       setHistoryContent('')
+      if (settings.analysisNotification) {
+        SendNotification('分析完成', `${selectedStock.name || selectedStock.code} 的十八步分析（含RIM估值）已完成`).catch(() => {})
+      }
       if (result) {
         setSnapshots((prev) => ({ ...prev, [selectedStock.code]: result }))
       }
@@ -1041,17 +1080,24 @@ function App() {
   const handleDownloadComparables = async () => {
     if (!selectedStock || comparables.length === 0) return
     setCompDownloading(true)
+    setCompDownloadStatus({type: null, message: ''})
     try {
       const result = await DownloadComparableReports(selectedStock.code)
       if (result) {
-        alert(result.message)
         if (result.success) {
           setCompReportsDownloaded(true)
+          setCompDownloadStatus({type: 'success', message: result.message})
+          setTimeout(() => setCompDownloadStatus({type: null, message: ''}), 3000)
+        } else {
+          setCompDownloadStatus({type: 'error', message: result.message || '下载失败'})
+          setTimeout(() => setCompDownloadStatus({type: null, message: ''}), 5000)
         }
       }
     } catch (err: any) {
       console.error('下载可比公司财报失败:', err)
-      alert(String(err))
+      const msg = err?.message || String(err)
+      setCompDownloadStatus({type: 'error', message: msg.length > 60 ? msg.slice(0, 60) + '...' : msg})
+      setTimeout(() => setCompDownloadStatus({type: null, message: ''}), 5000)
     } finally {
       setCompDownloading(false)
     }
@@ -1699,6 +1745,15 @@ function App() {
                     )
                   })()}
                 </div>
+                {compDownloadStatus.type && !compDownloading && (
+                  <div className="cp-status-line">
+                    {compDownloadStatus.type === 'success' ? (
+                      <span className="status-success" title={compDownloadStatus.message}>{compDownloadStatus.message}</span>
+                    ) : (
+                      <span className="status-error" title={compDownloadStatus.message}>{compDownloadStatus.message.length > 40 ? compDownloadStatus.message.slice(0, 40) + '...' : compDownloadStatus.message}</span>
+                    )}
+                  </div>
+                )}
               </div>
             </Collapsible>
 

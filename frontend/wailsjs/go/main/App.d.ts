@@ -22,7 +22,7 @@ export function DownloadComparableReports(arg1:string):Promise<main.DownloadResu
 
 export function DownloadReport(arg1:string,arg2:string):Promise<void>;
 
-export function DownloadReports(arg1:string):Promise<main.DownloadResult>;
+export function DownloadReports(arg1:string,arg2:number):Promise<main.DownloadResult>;
 
 export function ExportCurrentFinancialData(arg1:string):Promise<void>;
 
@@ -77,6 +77,8 @@ export function ReorderWatchlist(arg1:Array<string>):Promise<void>;
 export function SaveDefaultPolicyLibrary():Promise<void>;
 
 export function SearchStocks(arg1:string):Promise<Array<main.StockInfo>>;
+
+export function SendNotification(arg1:string,arg2:string):Promise<void>;
 
 export function UpdateIndustryDatabase():Promise<downloader.IndustryUpdateResult>;
 

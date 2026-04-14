@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
 获取港股基本资料
 用法: python3 fetch_hk_profile.py <code>
@@ -6,7 +7,14 @@
 """
 import json
 import sys
+import io
+import os
 import pandas as pd
+
+# 强制 stdout 使用 UTF-8，避免 Windows 下 GBK 编码导致中文乱码
+if sys.platform == "win32":
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
+    os.environ["PYTHONIOENCODING"] = "utf-8"
 
 try:
     import akshare as ak

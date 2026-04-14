@@ -1,5 +1,37 @@
 # Changelog
 
+## [v1.3.12] - 2026-04-14
+
+### 新增 (Features)
+- **舆情数据源扩展**
+  - 在原有东财研报 + 新浪新闻 fallback 基础上，新增**东财公司公告**作为中间 fallback 数据源
+  - 公告数据来自 `np-anotice-stock.eastmoney.com/api/security/ann`，覆盖最近 6 个月的公司公告/重大事项
+  - 抓取公告标题后进行情感分析，输出情绪得分、热度指数、利好/风险关键词及舆情摘要
+  - 优先级：东财研报 → 东财公告 → 新浪财经新闻
+- **港股财报网络下载支持**
+  - 新增 `scripts/fetch_hk_financials.py`，通过 akshare 获取港股资产负债表、利润表、现金流量表年报数据
+  - 对港股财务科目做中文映射，兼容现有 A 股 18 步分析引擎
+  - 港股下载取消原来的"暂不支持"限制，分析流程与 A 股一致
+- **港股 K 线支持**
+  - 修复腾讯财经 K 线接口对港股的参数兼容性问题（港股接口末尾不加 `qfq`，读取 `day` 键）
+  - `FetchStockKlines` 对港股可正常返回日 K 数据，支持技术面分析与前端 ECharts 展示
+
+### 优化 (Improvements)
+- **设置开关全面打通**
+  - **财报下载年限**：`reportYears` 设置项从前端真正传递到后端下载逻辑，A 股/港股均支持下载 3~10 年财报（默认 5 年）
+  - **自动更新行业库**：应用启动时自动检测，若开启 `autoUpdateIndustryDB` 且行业库超过 7 天未更新（或从未更新），自动在后台静默更新
+  - **分析完成通知**：若开启 `analysisNotification`，十八步分析完成后自动发送 Windows Toast 系统通知
+- **报告样式修复**：模块 4.2 的"综合评分排名"蓝色亮条改为 blockquote 形式，与"解读"条保持一致，深色/浅色模式下均能正确显示
+- **可比公司下载提示优化**：下载可比公司财报后，成功/失败结果改为按钮下方轻量提示条（成功 3 秒隐去，失败 5 秒隐去），不再弹出 alert
+
+### 文档
+- 修正 `功能列表.md` 中 K 线图表库描述：`lightweight-charts` → `Apache ECharts`
+- `README.md` / `plan.md` 更新：将 LLM 智能财报问答标记为"暂不实现"；iOS App 与 Engine-C 列为长期规划
+
+### 平台安装注意
+- **Windows**：需要预装 Python 3.10+，并执行 `pip install onnxruntime scikit-learn numpy akshare`；需安装 WebView2 Runtime（Win10/11 通常已预装）
+- **macOS**：需要预装 Python 3.10+，并执行 `pip3 install onnxruntime scikit-learn numpy akshare`；首次运行若提示安全拦截，需在"系统设置 > 隐私与安全性"中允许
+
 ## [v1.3.11] - 2026-04-14
 
 ### 新增 (Features)
