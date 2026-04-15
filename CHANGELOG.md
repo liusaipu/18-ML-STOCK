@@ -11,6 +11,8 @@
   - 数据后端统一计算：优先读取本地最新年度财报数据计算 ROE，结合东方财富/腾讯行情接口获取的股息率实时得出
 
 ### 修复 (Fixes)
+- **股东回报率单位换算修正**
+  - 修复 `app.go` 中 `fillShareholderReturnRate` 的单位错误：后端计算的 ROE 是百分比数值（如 20 表示 20%），需先除以 100 转为小数后再参与股东回报率计算。之前未除 100 导致结果被放大了 100 倍（如显示 1000% 而非 10%）
 - **Release 构建包完整性修复**
   - 修复 `build-release.sh` 和 `build-windows.ps1` 未打包 `scripts/` 目录的问题，确保发布的 zip 包包含所有 Python 脚本
   - 修复 Go 后端脚本路径查找逻辑：`industry_updater.go`、`policy_updater.go`、`eastmoney.go` 中的脚本路径函数在打包后的 Windows 应用中优先在 `exe` 同级目录查找 `scripts/`，解决用户端更新政策库/行业数据库/港股数据时"脚本不存在"的报错

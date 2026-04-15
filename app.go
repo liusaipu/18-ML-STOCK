@@ -797,7 +797,7 @@ func (a *App) fillShareholderReturnRate(symbol string, quote *downloader.StockQu
 	if quote == nil || quote.PB <= 0 {
 		return
 	}
-	// 尝试从本地财务数据计算最新一年 ROE
+	// 尝试从本地财务数据计算最新一年 ROE（百分比数值，如 20 表示 20%）
 	var roe float64
 	if data, err := analyzer.LoadFinancialData(a.storage.DataDir(), symbol); err == nil && len(data.Years) > 0 {
 		year := data.Years[0] // 最新年份
@@ -806,10 +806,19 @@ func (a *App) fillShareholderReturnRate(symbol string, quote *downloader.StockQu
 		if equity > 0 {
 			roe = profit / equity * 100
 		}
+		// 优先用现金流量表中的分红现金估算股息率（虽包含利息支出，会轻微高估，但不会出现行情接口的异常高值）
+		dividendCash := data.GetValueOrZero(data.CashFlow, "分配股利、利润或偿付利息支付的现金", year)
+		if dividendCash > 0 && quote.MarketCap > 0 {
+			quote.DividendYield = dividendCash / quote.MarketCap
+		}
 	}
-	// 若财务数据不可用，尝试从 Profile 的 EPS 和 PE 反推（ROE ≈ EPS / BPS = PE/PB 不对，放弃）
+	// 若财务数据未覆盖，且行情接口的股息率异常（>20% 视为不可靠），则清零
+	if quote.DividendYield > 0.20 {
+		quote.DividendYield = 0
+	}
 	if roe > 0 {
-		quote.ShareholderReturnRate = roe / quote.PB
+		// roe 是百分比数值，需先除以 100 转为小数，再与股息率（已是小数）相加
+		quote.ShareholderReturnRate = (roe / 100) / quote.PB
 		if quote.DividendYield > 0 {
 			quote.ShareholderReturnRate += quote.DividendYield
 		}
