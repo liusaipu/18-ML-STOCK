@@ -4,7 +4,7 @@
 
 Every new release **must** follow this checklist before building and publishing.
 
-### 1. Version Sync (Hard Requirement)
+### 1. Version Sync & Bump After Release (Hard Requirement)
 The following two files must contain the **exact same version number**:
 
 - `wails.json` → `info.productVersion`
@@ -13,6 +13,11 @@ The following two files must contain the **exact same version number**:
 > **Why?** `wails.json` drives the Windows executable metadata, while `frontend/src/Settings.tsx` drives the version shown in **Settings → About**. If they diverge, users will see the wrong version in the UI.
 
 Both build scripts (`build-release.sh` and `build-windows.ps1`) now enforce this check and will **fail the build** if the versions do not match.
+
+#### Version Bump Rule
+**Immediately after a release is published, bump both version numbers to the *next* unreleased version** (e.g., after releasing `v1.3.13`, bump to `1.3.14`).
+
+> **Rationale:** Any intermediate build produced from `main` should identify itself as the *upcoming* version, not the already-released old version. This prevents confusion when sharing test builds or debugging artifacts.
 
 ### 2. Build Prerequisites
 - Ensure `frontend/dist` is rebuilt from scratch when the frontend code has changed:
