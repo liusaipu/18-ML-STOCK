@@ -16,6 +16,14 @@ if [ -z "$VERSION" ]; then
     exit 1
 fi
 
+# Verify frontend Settings.tsx version matches
+SETTINGS_VERSION=$(grep -o "const version = '[^']*'" frontend/src/Settings.tsx | cut -d"'" -f2)
+if [ "$VERSION" != "$SETTINGS_VERSION" ]; then
+    echo "Error: Version mismatch! wails.json=$VERSION, frontend/src/Settings.tsx=$SETTINGS_VERSION"
+    echo "Please sync the version in frontend/src/Settings.tsx before building."
+    exit 1
+fi
+
 echo "Building release packages for version: $VERSION"
 
 export PATH=$PATH:/usr/local/go/bin

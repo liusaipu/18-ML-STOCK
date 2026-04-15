@@ -129,8 +129,23 @@ function Start-Dev {
 
 function Build-Project {
     param([string]$Platform = "windows/amd64")
+
+    # 版本一致性校验
+    $wailsJson = Get-Content "$ProjectRoot\wails.json" -Raw | ConvertFrom-Json
+    $wailsVersion = $wailsJson.info.productVersion
+    $settingsContent = Get-Content "$ProjectRoot\frontend\src\Settings.tsx" -Raw
+    $settingsMatch = [regex]::Match($settingsContent, "const version = '([^']+)'")
+    if (-not $settingsMatch.Success) {
+        Write-Error "无法从 Settings.tsx 读取版本号"
+        exit 1
+    }
+    $settingsVersion = $settingsMatch.Groups[1].Value
+    if ($wailsVersion -ne $settingsVersion) {
+        Write-Error "版本号不一致: wails.json=$wailsVersion, Settings.tsx=$settingsVersion。请先同步版本号再构建。"
+        exit 1
+    }
     
-    Write-Info "构建 Windows 版本 ($Platform)..."
+    Write-Info "构建 Windows 版本 $wailsVersion ($Platform)..."
     Install-FrontendDeps
     
     New-Item -ItemType Directory -Force -Path $BinDir | Out-Null
