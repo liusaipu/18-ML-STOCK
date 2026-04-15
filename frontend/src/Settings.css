@@ -398,6 +398,28 @@ body.light .settings-data-btn:hover {
   background: #e5e7eb;
 }
 
+.settings-action-status {
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.settings-action-status .status-success {
+  color: #22c55e;
+}
+
+.settings-action-status .status-error {
+  color: #ef4444;
+}
+
+body.light .settings-action-status .status-success {
+  color: #16a34a;
+}
+
+body.light .settings-action-status .status-error {
+  color: #dc2626;
+}
+
 /* 关于页面 */
 .about-section {
   text-align: center;

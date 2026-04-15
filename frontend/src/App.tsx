@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
+import { useState, useEffect, useMemo, useRef, useCallback, Children, cloneElement } from 'react'
 import './App.css'
 import { STOCKS } from './stocks'
 import { UnifiedChart } from './UnifiedChart'
@@ -16,6 +16,41 @@ function formatAmount(val: number, unit: string): string {
   if (abs >= 1e8) return `${(val / 1e8).toFixed(2)} 亿${unit}`
   if (abs >= 1e4) return `${(val / 1e4).toFixed(2)} 万${unit}`
   return `${val.toFixed(0)} ${unit}`
+}
+
+function DetailsComponent({ children, ...props }: any) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDetailsElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const handleClickOutside = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [open])
+
+  const wrappedChildren = Children.map(children, (child: any) => {
+    if (!child) return child
+    if (child.type === 'summary') {
+      return cloneElement(child, {
+        onClick: (e: React.MouseEvent) => {
+          e.preventDefault()
+          setOpen((prev) => !prev)
+        }
+      })
+    }
+    return child
+  })
+
+  return (
+    <details ref={ref} open={open} {...props}>
+      {wrappedChildren}
+    </details>
+  )
 }
 
 function Collapsible({ title, children, defaultExpanded = false }: { title: React.ReactNode; children: React.ReactNode; defaultExpanded?: boolean }) {
@@ -178,6 +213,8 @@ function App() {
   const [policyUpdating, setPolicyUpdating] = useState(false)
   const [industryDBMeta, setIndustryDBMeta] = useState<{version: string, updatedAt: string, count: number} | null>(null)
   const [industryUpdating, setIndustryUpdating] = useState(false)
+  const [policyActionStatus, setPolicyActionStatus] = useState<{type: 'success' | 'error' | null, message: string}>({type: null, message: ''})
+  const [industryActionStatus, setIndustryActionStatus] = useState<{type: 'success' | 'error' | null, message: string}>({type: null, message: ''})
   const [quote, setQuote] = useState<StockQuote | null>(null)
   const [quoteError, setQuoteError] = useState<string>('')
   // K线数据由 UnifiedChart 组件内部管理
@@ -595,16 +632,21 @@ function App() {
   // 更新政策库
   const handleUpdatePolicyLibrary = useCallback(async () => {
     setPolicyUpdating(true)
+    setPolicyActionStatus({type: null, message: ''})
     try {
       const result = await UpdatePolicyLibrary()
       if (result) {
         const meta = { version: result.path ? 'external' : 'builtin', updatedAt: new Date().toLocaleString('zh-CN') }
         setPolicyLibMeta(meta)
         localStorage.setItem('policy_library_meta', JSON.stringify(meta))
-        alert(`政策库更新成功！\n新增行业关键词: ${result.added_industry_keywords}\n新增概念关键词: ${result.added_concept_keywords}\n行业总数: ${result.total_industries}\n概念总数: ${result.total_concepts}`)
+        const msg = `政策库更新成功：新增行业关键词 ${result.added_industry_keywords} 个，概念关键词 ${result.added_concept_keywords} 个，行业 ${result.total_industries} 个，概念 ${result.total_concepts} 个`
+        setPolicyActionStatus({type: 'success', message: msg})
+        setTimeout(() => setPolicyActionStatus({type: null, message: ''}), 3000)
       }
     } catch (err: any) {
-      alert('政策库更新失败: ' + String(err))
+      const msg = '政策库更新失败: ' + (err?.message || String(err))
+      setPolicyActionStatus({type: 'error', message: msg.length > 100 ? msg.slice(0, 100) + '...' : msg})
+      setTimeout(() => setPolicyActionStatus({type: null, message: ''}), 5000)
     } finally {
       setPolicyUpdating(false)
     }
@@ -627,14 +669,20 @@ function App() {
   // 更新行业数据库
   const handleUpdateIndustryDB = useCallback(async () => {
     setIndustryUpdating(true)
+    setIndustryActionStatus({type: null, message: ''})
     try {
       const result = await UpdateIndustryDatabase()
       if (result) {
         await loadIndustryDBMeta()
-        alert(`行业数据库更新成功！\n更新行业数: ${result.updated_count}\n跳过行业数: ${result.skipped_count}\n行业总数: ${result.total_industries}`)
+        const msg = `行业数据库更新成功：更新行业 ${result.updated_count} 个，跳过 ${result.skipped_count} 个，行业总数 ${result.total_industries} 个`
+        setIndustryActionStatus({type: 'success', message: msg})
+        setTimeout(() => setIndustryActionStatus({type: null, message: ''}), 5000)
       }
     } catch (err: any) {
-      alert('行业数据库更新失败: ' + String(err))
+      console.error('更新行业数据库失败:', err)
+      const msg = '行业数据库更新失败: ' + (err?.message || String(err))
+      setIndustryActionStatus({type: 'error', message: msg.length > 100 ? msg.slice(0, 100) + '...' : msg})
+      setTimeout(() => setIndustryActionStatus({type: null, message: ''}), 5000)
     } finally {
       setIndustryUpdating(false)
     }
@@ -1187,6 +1235,7 @@ function App() {
   }, [displayContent])
 
   const markdownComponents = useMemo(() => ({
+    details: DetailsComponent,
     span({ className, 'data-steps': dataSteps, children, ...props }: any) {
       if (className === 'trace-trigger' && dataSteps) {
         const stepNums = String(dataSteps)
@@ -1260,6 +1309,8 @@ function App() {
         industryUpdating={industryUpdating}
         onUpdatePolicyLibrary={handleUpdatePolicyLibrary}
         onUpdateIndustryDB={handleUpdateIndustryDB}
+        policyActionStatus={policyActionStatus}
+        industryActionStatus={industryActionStatus}
       />
 
       {/* 左栏：自选列表 */}

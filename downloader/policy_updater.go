@@ -3,6 +3,7 @@ package downloader
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
@@ -36,6 +37,7 @@ func UpdatePolicyLibrary(dataDir string) (*PolicyUpdateResult, error) {
 	script := updatePolicyScriptPath()
 	python := resolvePythonExecutable()
 	cmd := exec.Command(python, script, dataDir)
+	cmd.Env = append(os.Environ(), "PYTHONIOENCODING=utf-8")
 	
 	// Windows: 隐藏 CMD 窗口
 	if runtime.GOOS == "windows" {
@@ -44,9 +46,12 @@ func UpdatePolicyLibrary(dataDir string) (*PolicyUpdateResult, error) {
 		}
 	}
 	
-	output, err := cmd.CombinedOutput()
+	output, err := cmd.Output()
 	if err != nil {
-		return nil, fmt.Errorf("政策库更新脚本执行失败: %v, output: %s", err, string(output))
+		if exitErr, ok := err.(*exec.ExitError); ok && len(exitErr.Stderr) > 0 {
+			return nil, fmt.Errorf("政策库更新脚本执行失败: %v, stderr: %s", err, string(exitErr.Stderr))
+		}
+		return nil, fmt.Errorf("政策库更新脚本执行失败: %v", err)
 	}
 	var result PolicyUpdateResult
 	if err := json.Unmarshal(output, &result); err != nil {

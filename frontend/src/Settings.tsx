@@ -69,6 +69,8 @@ interface SettingsProps {
   industryUpdating?: boolean
   onUpdatePolicyLibrary?: () => void
   onUpdateIndustryDB?: () => void
+  policyActionStatus?: { type: 'success' | 'error' | null; message: string }
+  industryActionStatus?: { type: 'success' | 'error' | null; message: string }
 }
 
 export function Settings({ 
@@ -79,7 +81,9 @@ export function Settings({
   policyUpdating = false,
   industryUpdating = false,
   onUpdatePolicyLibrary,
-  onUpdateIndustryDB
+  onUpdateIndustryDB,
+  policyActionStatus,
+  industryActionStatus
 }: SettingsProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [activeTab, setActiveTab] = useState<'appearance' | 'chart' | 'data' | 'about'>('appearance')
@@ -107,7 +111,7 @@ export function Settings({
     saveSettings(newSettings)
   }
 
-  const version = '1.3.10'
+  const version = '1.3.13'
 
   return (
     <>
@@ -211,6 +215,15 @@ export function Settings({
                     {policyUpdating ? '更新中...' : '🔄 更新政策库'}
                   </button>
                 )}
+                {policyActionStatus?.type && !policyUpdating && (
+                  <div className="settings-action-status">
+                    {policyActionStatus.type === 'success' ? (
+                      <span className="status-success">{policyActionStatus.message}</span>
+                    ) : (
+                      <span className="status-error">{policyActionStatus.message.length > 40 ? policyActionStatus.message.slice(0, 40) + '...' : policyActionStatus.message}</span>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* 行业均值数据库 */}
@@ -231,6 +244,15 @@ export function Settings({
                   >
                     {industryUpdating ? '更新中(约2-3分钟)...' : '🔄 更新行业数据库'}
                   </button>
+                )}
+                {industryActionStatus?.type && !industryUpdating && (
+                  <div className="settings-action-status">
+                    {industryActionStatus.type === 'success' ? (
+                      <span className="status-success">{industryActionStatus.message}</span>
+                    ) : (
+                      <span className="status-error">{industryActionStatus.message.length > 40 ? industryActionStatus.message.slice(0, 40) + '...' : industryActionStatus.message}</span>
+                    )}
+                  </div>
                 )}
               </div>
             </div>
