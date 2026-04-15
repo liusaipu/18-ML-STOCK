@@ -11,7 +11,9 @@
 ### 优化 (Improvements)
 - **模块 4.2 信息弹窗交互优化**
   - 可比公司明细标题右侧的 ℹ️ 说明弹窗，现支持点击弹窗外部任意区域自动关闭，无需再次点击图标
-
-### 平台安装注意
-- **Windows**：需要预装 Python 3.10+，并执行 `pip install onnxruntime scikit-learn numpy akshare`；需安装 WebView2 Runtime（Win10/11 通常已预装）
-- **macOS**：需要预装 Python 3.10+，并执行 `pip3 install onnxruntime scikit-learn numpy akshare`；首次运行若提示安全拦截，需在"系统设置 > 隐私与安全性"中允许
+- **股票信息卡新增股东回报率速算**
+  - 在「市盈率 (PE)」与「市净率 (PB)」下方新增「股东回报率」指标
+  - 计算公式：股东回报率 = ROE / PB + 股息率（≈ 盈利收益率 + 股息率）
+  - 颜色提示：>10% 绿色、6%~10% 黄色、<6% 灰色
+  - 鼠标悬停显示公式拆解与说明
+  - 数据后端统一计算：优先读取本地最新年度财报数据计算 ROE，结合行情股息率实时得出

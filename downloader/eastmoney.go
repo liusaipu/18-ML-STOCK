@@ -385,10 +385,12 @@ type StockQuote struct {
 	PreviousClose        float64 `json:"previousClose"`
 	CirculatingMarketCap float64 `json:"circulatingMarketCap"`
 	VolumeRatio          float64 `json:"volumeRatio"`
-	PE                   float64 `json:"pe"`
-	PB                   float64 `json:"pb"`
-	MarketCap            float64 `json:"marketCap"`
-	QuoteTime            string  `json:"quoteTime"`
+	PE                    float64 `json:"pe"`
+	PB                    float64 `json:"pb"`
+	DividendYield         float64 `json:"dividendYield"`
+	ShareholderReturnRate float64 `json:"shareholderReturnRate"`
+	MarketCap             float64 `json:"marketCap"`
+	QuoteTime             string  `json:"quoteTime"`
 }
 
 // FetchStockProfile 获取股票基本资料（东方财富公司概况 + 腾讯行情补充数值）
@@ -736,7 +738,7 @@ func FetchStockQuote(market, code string) (*StockQuote, error) {
 	default:
 		secid = "0." + code
 	}
-	url := fmt.Sprintf("http://push2.eastmoney.com/api/qt/stock/get?secid=%s&fields=f2,f3,f4,f5,f6,f7,f8,f10,f15,f16,f17,f18,f20,f21,f9,f23", secid)
+	url := fmt.Sprintf("http://push2.eastmoney.com/api/qt/stock/get?secid=%s&fields=f2,f3,f4,f5,f6,f7,f8,f10,f15,f16,f17,f18,f20,f21,f9,f23,f133", secid)
 	body, err := httpGetWithReferer(url, "https://quote.eastmoney.com/")
 	if err == nil {
 		var resp struct {
@@ -760,6 +762,7 @@ func FetchStockQuote(market, code string) (*StockQuote, error) {
 			quote.CirculatingMarketCap = parseAnyFloat(resp.Data["f21"])
 			quote.PE = parseAnyFloat(resp.Data["f9"])
 			quote.PB = parseAnyFloat(resp.Data["f23"])
+				quote.DividendYield = parseAnyFloat(resp.Data["f133"]) / 100 // 接口返回百分比数值，转为小数
 			if quote.CurrentPrice > 0 {
 				return quote, nil
 			}
@@ -849,6 +852,10 @@ func fetchQuoteFromTencent(market, code string) (*StockQuote, error) {
 	if !isHK && len(parts) > 49 {
 		quote.VolumeRatio = parseStrFloat(parts[49])
 	}
+		// 股息率：腾讯接口 parts[62] 为股息率（百分比数值）
+		if len(parts) > 62 {
+			quote.DividendYield = parseStrFloat(parts[62]) / 100
+		}
 	// 时间格式：A股为 YYYYMMDDHHMMSS(14位)，港股为 YYYY/MM/DD HH:MM:SS
 	if len(parts) > 30 && parts[30] != "" {
 		timeStr := parts[30]

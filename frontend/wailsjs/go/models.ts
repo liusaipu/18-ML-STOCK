@@ -510,6 +510,8 @@ export namespace downloader {
 	    volumeRatio: number;
 	    pe: number;
 	    pb: number;
+	    dividendYield: number;
+	    shareholderReturnRate: number;
 	    marketCap: number;
 	    quoteTime: string;
 	
@@ -534,6 +536,8 @@ export namespace downloader {
 	        this.volumeRatio = source["volumeRatio"];
 	        this.pe = source["pe"];
 	        this.pb = source["pb"];
+	        this.dividendYield = source["dividendYield"];
+	        this.shareholderReturnRate = source["shareholderReturnRate"];
 	        this.marketCap = source["marketCap"];
 	        this.quoteTime = source["quoteTime"];
 	    }

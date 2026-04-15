@@ -1535,6 +1535,30 @@ function App() {
                       : '--'}
                   </span>
                 </div>
+                <div className="stock-info-item">
+                  <span className="stock-info-label">股东回报率</span>
+                  {(() => {
+                    const rate = quote?.shareholderReturnRate
+                    if (rate == null || rate <= 0) {
+                      return <span className="stock-info-value">--</span>
+                    }
+                    let color = '#94a3b8'
+                    if (rate > 0.10) color = '#22c55e'
+                    else if (rate >= 0.06) color = '#eab308'
+                    const dy = quote?.dividendYield || 0
+                    const ey = rate - dy
+                    const tooltip = `股东回报率 ≈ 盈利收益率(ROE/PB) + 股息率\n当前: ${(ey * 100).toFixed(2)}% + ${(dy * 100).toFixed(2)}% = ${(rate * 100).toFixed(2)}%\n假设公司维持当前盈利能力且估值不变，该数字可视为股东每年的名义总回报。`
+                    return (
+                      <span
+                        className="stock-info-value"
+                        style={{ color, cursor: 'help' }}
+                        title={tooltip}
+                      >
+                        {(rate * 100).toFixed(2)}%
+                      </span>
+                    )
+                  })()}
+                </div>
               </div>
               <div className="stock-info-footer">
                 <span className="stock-info-time">

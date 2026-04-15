@@ -768,6 +768,7 @@ func (a *App) GetStockQuote(symbol string) (*downloader.StockQuote, error) {
 		if err == nil && time.Since(info.ModTime()) < 15*time.Minute {
 			// 校验缓存数据是否合理（过滤掉错误解析的巨大盘百分比或时间戳）
 			if cached.CurrentPrice > 0 && cached.ChangePercent > -50 && cached.ChangePercent < 50 {
+				a.fillShareholderReturnRate(symbol, cached)
 				return cached, nil
 			}
 		}
@@ -787,7 +788,32 @@ func (a *App) GetStockQuote(symbol string) (*downloader.StockQuote, error) {
 		return nil, fmt.Errorf("获取行情失败: %w", err)
 	}
 	_ = a.storage.SaveStockQuote(symbol, quote)
+	a.fillShareholderReturnRate(symbol, quote)
 	return quote, nil
+}
+
+// fillShareholderReturnRate 根据最新财务数据填充股东回报率
+func (a *App) fillShareholderReturnRate(symbol string, quote *downloader.StockQuote) {
+	if quote == nil || quote.PB <= 0 {
+		return
+	}
+	// 尝试从本地财务数据计算最新一年 ROE
+	var roe float64
+	if data, err := analyzer.LoadFinancialData(a.storage.DataDir(), symbol); err == nil && len(data.Years) > 0 {
+		year := data.Years[0] // 最新年份
+		profit := data.GetValueOrZero(data.IncomeStatement, "净利润", year)
+		equity := data.GetValueOrZero(data.BalanceSheet, "所有者权益合计", year)
+		if equity > 0 {
+			roe = profit / equity * 100
+		}
+	}
+	// 若财务数据不可用，尝试从 Profile 的 EPS 和 PE 反推（ROE ≈ EPS / BPS = PE/PB 不对，放弃）
+	if roe > 0 {
+		quote.ShareholderReturnRate = roe / quote.PB
+		if quote.DividendYield > 0 {
+			quote.ShareholderReturnRate += quote.DividendYield
+		}
+	}
 }
 
 // CacheStatus 分析缓存状态

@@ -65,7 +65,7 @@ func GenerateMarkdown(symbol string, years []string, steps []StepResult, scores 
 	// ==================== 模块10: ML机器学习预测 ====================
 	writeModule9(&b, steps, latest, prev, ml)
 
-	// ==================== 模块11: 智能选股6大条件 ====================
+	// ==================== 模块11: 智能选股7大条件 ====================
 	writeModule10(&b, steps, latest, prev)
 
 	// ==================== 模块12: 芒格逆向思维检查 ====================
@@ -152,7 +152,7 @@ func writeTOC(b *strings.Builder) {
 	b.WriteString("- [模块8: A-Score 综合风险画像](#模块8-a-score-综合风险画像)\n")
 	b.WriteString("- [模块9: 技术面分析](#模块9-技术面分析)\n")
 	b.WriteString("- [模块10: ML机器学习预测](#模块10-ml机器学习预测)\n")
-	b.WriteString("- [模块11: 智能选股6大条件](#模块11-智能选股6大条件)\n")
+	b.WriteString("- [模块11: 智能选股7大条件](#模块11-智能选股7大条件)\n")
 	b.WriteString("- [模块12: 芒格逆向思维检查](#模块12-芒格逆向思维检查)\n")
 	b.WriteString("- [模块13: 巴菲特-芒格投资检查清单](#模块13-巴菲特-芒格投资检查清单)\n")
 	b.WriteString("- [模块14: 社交媒体情绪监控](#模块14-社交媒体情绪监控)\n")
@@ -1140,9 +1140,9 @@ func writeModule9(b *strings.Builder, steps []StepResult, latest, prev string, m
 	b.WriteString("---\n\n")
 }
 
-// ========== 模块11: 智能选股6大条件 ==========
+// ========== 模块11: 智能选股7大条件 ==========
 func writeModule10(b *strings.Builder, steps []StepResult, latest, prev string) {
-	b.WriteString("# 模块11: 智能选股6大条件\n\n")
+	b.WriteString("# 模块11: 智能选股7大条件\n\n")
 	b.WriteString("## 11.1 条件检查表" + traceTrigger(3,9,10,15,16) + "\n\n")
 
 	roe := getStepValue(steps, 16, latest, "roe")
