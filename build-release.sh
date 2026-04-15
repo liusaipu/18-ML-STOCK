@@ -23,8 +23,14 @@ export PATH=$PATH:/usr/local/go/bin
 build_mac() {
   echo "Building macOS universal binary..."
   /Users/lobster/go/bin/wails build -platform darwin/universal -clean
+
+  # 复制 ml_models 和 scripts 到构建目录
+  echo "Copying ml_models and scripts to build directory..."
+  cp -r "$(pwd)/ml_models" "$BIN_DIR/"
+  cp -r "$(pwd)/scripts" "$BIN_DIR/"
+
   cd "$BIN_DIR"
-  zip -r "stock-analyzer_macos_universal_v${VERSION}.zip" stock-analyzer.app
+  zip -r "stock-analyzer_macos_universal_v${VERSION}.zip" stock-analyzer.app ml_models/ scripts/
   cd - > /dev/null
   echo "macOS package: ${BIN_DIR}/stock-analyzer_macos_universal_v${VERSION}.zip"
 }
@@ -35,12 +41,13 @@ build_windows() {
   # 使用默认设置，让 Wails 自动处理
   /Users/lobster/go/bin/wails build -platform windows/amd64 -clean
   
-  # 复制 ml_models 到构建目录（Windows 需要这些文件）
-  echo "Copying ml_models to build directory..."
+  # 复制 ml_models 和 scripts 到构建目录（Windows 需要这些文件）
+  echo "Copying ml_models and scripts to build directory..."
   cp -r "$(pwd)/ml_models" "$BIN_DIR/"
+  cp -r "$(pwd)/scripts" "$BIN_DIR/"
   
   cd "$BIN_DIR"
-  zip -r "stock-analyzer_windows_amd64_v${VERSION}.zip" stock-analyzer.exe ml_models/
+  zip -r "stock-analyzer_windows_amd64_v${VERSION}.zip" stock-analyzer.exe ml_models/ scripts/
   cd - > /dev/null
   echo "Windows package: ${BIN_DIR}/stock-analyzer_windows_amd64_v${VERSION}.zip"
 }

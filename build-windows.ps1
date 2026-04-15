@@ -142,6 +142,11 @@ function Build-Project {
         Write-Error "构建失败"
         exit 1
     }
+
+    # 复制 ml_models 和 scripts 到构建目录
+    Write-Info "复制 ml_models 和 scripts 到构建目录..."
+    Copy-Item -Recurse -Force "$ProjectRoot\ml_models" "$BinDir\"
+    Copy-Item -Recurse -Force "$ProjectRoot\scripts" "$BinDir\"
     
     Write-Success "构建完成: $BinDir\stock-analyzer.exe"
 }
@@ -149,15 +154,15 @@ function Build-Project {
 function Package-Build {
     Write-Info "打包 Windows 版本..."
     
-    $timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
-    $version = "v1.1.8"  # 可以从 wails.json 读取
-    $zipName = "stock-analyzer-${version}-windows-amd64_${timestamp}.zip"
+    $wailsJson = Get-Content "$ProjectRoot\wails.json" -Raw | ConvertFrom-Json
+    $version = $wailsJson.info.productVersion
+    $zipName = "stock-analyzer-windows-amd64-v${version}.zip"
     $zipPath = "$BinDir\$zipName"
     
     Build-Project
     
     Write-Info "创建压缩包: $zipName"
-    Compress-Archive -Path "$BinDir\stock-analyzer.exe" -DestinationPath $zipPath -Force
+    Compress-Archive -Path "$BinDir\stock-analyzer.exe","$BinDir\ml_models","$BinDir\scripts" -DestinationPath $zipPath -Force
     
     $size = (Get-Item $zipPath).Length / 1MB
     Write-Success "打包完成: $zipPath ($([math]::Round($size, 2)) MB)"

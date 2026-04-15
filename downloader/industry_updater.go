@@ -23,6 +23,14 @@ type IndustryUpdateResult struct {
 
 // updateIndustryScriptPath 返回 update_industry_database.py 绝对路径
 func updateIndustryScriptPath() string {
+	// Priority 1: Direct check in executable directory (for packaged Windows app)
+	if exe, err := os.Executable(); err == nil {
+		exeDir := filepath.Dir(exe)
+		p := filepath.Join(exeDir, "scripts", "update_industry_database.py")
+		if _, err := os.Stat(p); err == nil {
+			return p
+		}
+	}
 	_, b, _, _ := runtime.Caller(0)
 	base := filepath.Dir(b)
 	root := findProjectRootByMarker(base, filepath.Join("scripts", "update_industry_database.py"))

@@ -23,6 +23,14 @@ type PolicyUpdateResult struct {
 
 // updatePolicyScriptPath 返回 update_policy_library.py 绝对路径
 func updatePolicyScriptPath() string {
+	// Priority 1: Direct check in executable directory (for packaged Windows app)
+	if exe, err := os.Executable(); err == nil {
+		exeDir := filepath.Dir(exe)
+		p := filepath.Join(exeDir, "scripts", "update_policy_library.py")
+		if _, err := os.Stat(p); err == nil {
+			return p
+		}
+	}
 	_, b, _, _ := runtime.Caller(0)
 	base := filepath.Dir(b)
 	root := findProjectRootByMarker(base, filepath.Join("scripts", "update_policy_library.py"))
