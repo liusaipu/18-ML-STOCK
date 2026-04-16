@@ -774,7 +774,7 @@ function App() {
       const items = await GetRiskRadar(code, industry)
       setRiskRadar(items || [])
     } catch (err: any) {
-      setRiskRadar(null)
+      setRiskRadar([])
       console.error('风险雷达加载失败:', err)
     }
   }, [])
@@ -1982,6 +1982,53 @@ function App() {
               </div>
             </Collapsible>
 
+            {currentSnapshot && (
+              <Collapsible title="💡 亮点与风险">
+                <div className="highlights-risks" style={{ marginTop: 0, marginBottom: 0 }}>
+                  {highlights.length > 0 && (
+                    <div className="hr-section">
+                      <div className="hr-title">✅ 亮点</div>
+                      {highlights.map((h, idx) => (
+                        <div key={`h-${idx}`} className="highlight-item">
+                          {h}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {risks.length > 0 && (
+                    <div className="hr-section">
+                      <div className="hr-title">⚠️ 风险</div>
+                      {risks.map((r, idx) => (
+                        <div key={`r-${idx}`} className="risk-item">
+                          {r}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </Collapsible>
+            )}
+
+            {selectedStock && (
+              <Collapsible title="📊 行业对比雷达">
+                <div className="risk-radar-collapsible-body" style={{ marginTop: 0, marginBottom: 0 }}>
+                  {riskRadar ? (
+                    <div className="risk-radar-list">
+                      {riskRadar.map((item, idx) => (
+                        <div key={idx} className={`risk-radar-row risk-radar-${item.level}`} title={item.message}>
+                          <span className="risk-radar-icon">{item.icon}</span>
+                          <span className="risk-radar-name">{item.name}</span>
+                          <span className="risk-radar-msg">{item.message}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="risk-radar-empty">暂无对比数据（请先执行18步分析）</div>
+                  )}
+                </div>
+              </Collapsible>
+            )}
+
             <Collapsible title="🏢 可比公司">
               <div className="comparable-panel" style={{ marginTop: 0, marginBottom: 0 }}>
                 <div className="cp-search">
@@ -2083,53 +2130,6 @@ function App() {
                 )}
               </div>
             </Collapsible>
-
-            {currentSnapshot && (
-              <Collapsible title="💡 亮点与风险">
-                <div className="highlights-risks" style={{ marginTop: 0, marginBottom: 0 }}>
-                  {highlights.length > 0 && (
-                    <div className="hr-section">
-                      <div className="hr-title">✅ 亮点</div>
-                      {highlights.map((h, idx) => (
-                        <div key={`h-${idx}`} className="highlight-item">
-                          {h}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  {risks.length > 0 && (
-                    <div className="hr-section">
-                      <div className="hr-title">⚠️ 风险</div>
-                      {risks.map((r, idx) => (
-                        <div key={`r-${idx}`} className="risk-item">
-                          {r}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </Collapsible>
-            )}
-
-            {selectedStock && (
-              <Collapsible title="📊 行业对比雷达">
-                <div className="risk-radar-collapsible-body" style={{ marginTop: 0, marginBottom: 0 }}>
-                  {riskRadar ? (
-                    <div className="risk-radar-list">
-                      {riskRadar.map((item, idx) => (
-                        <div key={idx} className={`risk-radar-row risk-radar-${item.level}`} title={item.message}>
-                          <span className="risk-radar-icon">{item.icon}</span>
-                          <span className="risk-radar-name">{item.name}</span>
-                          <span className="risk-radar-msg">{item.message}</span>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="risk-radar-empty">请先下载财报以查看行业对比雷达</div>
-                  )}
-                </div>
-              </Collapsible>
-            )}
 
             {quote && (
               <Collapsible title="📈 实时行情">
