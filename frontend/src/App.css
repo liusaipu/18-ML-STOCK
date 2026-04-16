@@ -2335,72 +2335,102 @@ body.light .rim-eps-item input {
   pointer-events: auto !important;
 }
 
-/* 财报异常雷达 */
-.risk-radar-card {
-  background: rgba(20, 27, 36, 0.6);
-  border: 1px solid #2a3a4a;
-  border-radius: 8px;
-  padding: 10px 12px;
-  margin-bottom: 10px;
+/* 下载报告下拉菜单 */
+.download-dropdown {
+  position: relative;
 }
-body.light .risk-radar-card {
-  background: rgba(255, 255, 255, 0.8);
+.download-dropdown-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 4px;
+  min-width: 150px;
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  box-shadow: 0 10px 24px rgba(0,0,0,0.35);
+  padding: 4px 0;
+  z-index: 2000;
+}
+body.light .download-dropdown-menu {
+  background: #ffffff;
   border-color: #e5e7eb;
+  box-shadow: 0 10px 24px rgba(0,0,0,0.12);
 }
-.risk-radar-header {
+.download-dropdown-item {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  margin-bottom: 8px;
-}
-.risk-radar-title {
+  gap: 8px;
+  padding: 8px 12px;
   font-size: 13px;
-  font-weight: 600;
   color: #e6e6e6;
+  cursor: pointer;
+  white-space: nowrap;
 }
-body.light .risk-radar-title {
+body.light .download-dropdown-item {
   color: #1f2937;
 }
-.risk-radar-sub {
-  font-size: 11px;
-  color: #94a3b8;
+.download-dropdown-item:hover {
+  background: rgba(59, 130, 246, 0.15);
 }
-body.light .risk-radar-sub {
-  color: #6b7280;
+body.light .download-dropdown-item:hover {
+  background: rgba(59, 130, 246, 0.08);
 }
-.risk-radar-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
+
+/* 财报雷达 (Collapsible 版本) */
+.risk-radar-collapsible-body {
+  padding: 2px 0;
+}
+.risk-radar-list {
+  display: flex;
+  flex-direction: column;
   gap: 6px;
 }
-.risk-radar-item {
+.risk-radar-row {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   padding: 6px 8px;
   border-radius: 6px;
   font-size: 12px;
   background: rgba(30, 41, 54, 0.5);
   border: 1px solid transparent;
   cursor: default;
+  min-width: 0;
 }
-body.light .risk-radar-item {
+body.light .risk-radar-row {
   background: rgba(243, 244, 246, 0.6);
 }
-.risk-radar-icon {
+.risk-radar-row .risk-radar-icon {
   font-size: 13px;
   line-height: 1;
+  flex-shrink: 0;
 }
-.risk-radar-name {
-  flex: 1;
+.risk-radar-row .risk-radar-name {
+  flex-shrink: 0;
   color: #e6e6e6;
+  min-width: 64px;
 }
-body.light .risk-radar-name {
+body.light .risk-radar-row .risk-radar-name {
   color: #374151;
 }
-.risk-radar-status {
+.risk-radar-row .risk-radar-status {
+  flex-shrink: 0;
   font-weight: 500;
   font-size: 11px;
+  min-width: 32px;
+}
+.risk-radar-row .risk-radar-msg {
+  flex: 1;
+  min-width: 0;
+  color: #94a3b8;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-left: 4px;
+}
+body.light .risk-radar-row .risk-radar-msg {
+  color: #6b7280;
 }
 .risk-radar-high {
   border-color: rgba(239, 68, 68, 0.35);

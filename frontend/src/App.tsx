@@ -66,6 +66,7 @@ function Collapsible({ title, children, defaultExpanded = false }: { title: Reac
     </div>
   )
 }
+import { toPng } from 'html-to-image'
 import {
   GetWatchlist,
   GetWatchlistActivity,
@@ -242,6 +243,8 @@ function App() {
   const reportMatchesRef = useRef<HTMLElement[]>([])
   const reportSearchIndexRef = useRef(0)
   const reportLastQueryRef = useRef('')
+  const downloadMenuRef = useRef<HTMLDivElement>(null)
+  const downloadMenuBtnRef = useRef<HTMLButtonElement>(null)
   const [traceDrawerOpen, setTraceDrawerOpen] = useState(false)
   const [currentTrace, setCurrentTrace] = useState<analyzer.CalcTrace | null>(null)
   const [traceList, setTraceList] = useState<analyzer.CalcTrace[]>([])
@@ -249,6 +252,7 @@ function App() {
   const [lastAnalysisAt, setLastAnalysisAt] = useState('')
   const [trendDrawerCode, setTrendDrawerCode] = useState<string | null>(null)
   const [riskRadar, setRiskRadar] = useState<RiskRadarItem[] | null>(null)
+  const [downloadMenuOpen, setDownloadMenuOpen] = useState(false)
 
   // RIM 参数弹窗状态
   const [showRIMModal, setShowRIMModal] = useState(false)
@@ -1148,6 +1152,45 @@ function App() {
     }
   }
 
+  const handleDownloadImage = async () => {
+    if (!selectedStock || !reportContentRef.current) return
+    const markdownBody = reportContentRef.current.querySelector('.markdown-body') as HTMLElement | null
+    if (!markdownBody) {
+      alert('没有可下载的报告内容')
+      return
+    }
+    try {
+      const dataUrl = await toPng(markdownBody, {
+        quality: 0.95,
+        backgroundColor: getComputedStyle(document.body).backgroundColor,
+        pixelRatio: 2,
+      })
+      const link = document.createElement('a')
+      link.download = `${selectedStock.code}_投资分析报告.png`
+      link.href = dataUrl
+      link.click()
+    } catch (err: any) {
+      alert('生成图片失败: ' + String(err))
+    }
+  }
+
+  // 下载菜单点击外部关闭
+  useEffect(() => {
+    if (!downloadMenuOpen) return
+    const handleClickOutside = (e: MouseEvent) => {
+      if (
+        downloadMenuRef.current &&
+        !downloadMenuRef.current.contains(e.target as Node) &&
+        downloadMenuBtnRef.current &&
+        !downloadMenuBtnRef.current.contains(e.target as Node)
+      ) {
+        setDownloadMenuOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [downloadMenuOpen])
+
   const handleDeleteReport = async () => {
     if (!selectedStock || !displayContent) {
       return
@@ -1776,29 +1819,6 @@ function App() {
               </div>
             </div>
 
-            {/* 财报异常雷达 */}
-            {selectedStock && (
-              <div className="risk-radar-card">
-                <div className="risk-radar-header">
-                  <span className="risk-radar-title">📊 财报异常雷达</span>
-                  <span className="risk-radar-sub">最近一年关键风险信号</span>
-                </div>
-                {riskRadar ? (
-                  <div className="risk-radar-grid">
-                    {riskRadar.map((item, idx) => (
-                      <div key={idx} className={`risk-radar-item risk-radar-${item.level}`} title={item.message}>
-                        <span className="risk-radar-icon">{item.icon}</span>
-                        <span className="risk-radar-name">{item.name}</span>
-                        <span className="risk-radar-status">{item.status}</span>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="risk-radar-empty">请先下载财报以查看风险雷达</div>
-                )}
-              </div>
-            )}
-
             {/* 导入按钮放在最上方 */}
             <div className="actions-sub" style={{ marginBottom: 8, justifyContent: 'flex-start' }}>
               <button className="btn-text" onClick={handleImport} disabled={loading}>
@@ -1938,6 +1958,27 @@ function App() {
                       </button>
                     </div>
                   ))}
+                </div>
+              </Collapsible>
+            )}
+
+            {selectedStock && (
+              <Collapsible title="📊 财报雷达">
+                <div className="risk-radar-collapsible-body" style={{ marginTop: 0, marginBottom: 0 }}>
+                  {riskRadar ? (
+                    <div className="risk-radar-list">
+                      {riskRadar.map((item, idx) => (
+                        <div key={idx} className={`risk-radar-row risk-radar-${item.level}`} title={item.message}>
+                          <span className="risk-radar-icon">{item.icon}</span>
+                          <span className="risk-radar-name">{item.name}</span>
+                          <span className="risk-radar-status">{item.status}</span>
+                          <span className="risk-radar-msg">{item.message}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="risk-radar-empty">请先下载财报以查看财报雷达</div>
+                  )}
                 </div>
               </Collapsible>
             )}
@@ -2232,22 +2273,48 @@ function App() {
             >
               删除报告
             </button>
-            <button
-              className="btn-download"
-              onClick={handleReportDownload}
-              disabled={!displayContent}
-              title={!displayContent ? '请先执行分析' : '下载当前显示的报告'}
-            >
-              下载报告
-            </button>
-            <button
-              className="btn-download"
-              onClick={handleExportExcel}
-              disabled={!selectedStock}
-              title={!selectedStock ? '请先选择股票' : '导出当前股票财务数据Excel'}
-            >
-              导出Excel
-            </button>
+            <div className="download-dropdown" ref={downloadMenuRef}>
+              <button
+                ref={downloadMenuBtnRef}
+                className="btn-download"
+                onClick={() => setDownloadMenuOpen(!downloadMenuOpen)}
+                disabled={!displayContent}
+                title={!displayContent ? '请先执行分析' : '下载当前显示的报告'}
+              >
+                下载报告 ▼
+              </button>
+              {downloadMenuOpen && (
+                <div className="download-dropdown-menu">
+                  <div
+                    className="download-dropdown-item"
+                    onClick={() => {
+                      setDownloadMenuOpen(false)
+                      handleReportDownload()
+                    }}
+                  >
+                    <span>📝</span> Markdown 格式
+                  </div>
+                  <div
+                    className="download-dropdown-item"
+                    onClick={() => {
+                      setDownloadMenuOpen(false)
+                      handleExportExcel()
+                    }}
+                  >
+                    <span>📊</span> Excel 格式
+                  </div>
+                  <div
+                    className="download-dropdown-item"
+                    onClick={() => {
+                      setDownloadMenuOpen(false)
+                      handleDownloadImage()
+                    }}
+                  >
+                    <span>🖼️</span> 长图片
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
         <div className="report-content" ref={reportContentRef}>
