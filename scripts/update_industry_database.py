@@ -232,7 +232,7 @@ def main():
     for industry, stocks in industry_groups.items():
         print(f"处理行业: {industry} ({len(stocks)} 只股票)", file=sys.stderr)
         
-        if len(stocks) < 2:
+        if len(stocks) < 1:
             skipped_count += 1
             continue
         
