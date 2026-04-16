@@ -1971,7 +1971,6 @@ function App() {
                         <div key={idx} className={`risk-radar-row risk-radar-${item.level}`} title={item.message}>
                           <span className="risk-radar-icon">{item.icon}</span>
                           <span className="risk-radar-name">{item.name}</span>
-                          <span className="risk-radar-status">{item.status}</span>
                           <span className="risk-radar-msg">{item.message}</span>
                         </div>
                       ))}

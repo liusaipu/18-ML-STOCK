@@ -2409,16 +2409,10 @@ body.light .risk-radar-row {
 .risk-radar-row .risk-radar-name {
   flex-shrink: 0;
   color: #e6e6e6;
-  min-width: 64px;
+  min-width: 0;
 }
 body.light .risk-radar-row .risk-radar-name {
   color: #374151;
-}
-.risk-radar-row .risk-radar-status {
-  flex-shrink: 0;
-  font-weight: 500;
-  font-size: 11px;
-  min-width: 32px;
 }
 .risk-radar-row .risk-radar-msg {
   flex: 1;
@@ -2427,7 +2421,8 @@ body.light .risk-radar-row .risk-radar-name {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  margin-left: 4px;
+  text-align: right;
+  margin-left: 8px;
 }
 body.light .risk-radar-row .risk-radar-msg {
   color: #6b7280;
