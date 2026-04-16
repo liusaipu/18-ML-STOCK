@@ -393,13 +393,13 @@ function App() {
   }
 
   // 左栏宽度可拖动调整
-  const [sidebarWidth, setSidebarWidth] = useState(220)
+  const [sidebarWidth, setSidebarWidth] = useState(260)
   const [isResizing, setIsResizing] = useState(false)
 
   useEffect(() => {
     if (!isResizing) return
     const handleMouseMove = (e: MouseEvent) => {
-      const newWidth = Math.min(Math.max(e.clientX, 180), 380)
+      const newWidth = Math.min(Math.max(e.clientX, 200), 400)
       setSidebarWidth(newWidth)
     }
     const handleMouseUp = () => setIsResizing(false)
@@ -1504,68 +1504,72 @@ function App() {
             { key: 'analyzed', label: '已分析' },
             { key: 'unanalyzed', label: '未分析' },
           ]
+          const hasFilter = watchlistFilter !== 'none' || watchlistIndustryFilter !== '全部'
+          const title = `🔍 筛选器${hasFilter ? ' (' + displayWatchlist.length + '/' + watchlist.length + '只)' : ''}`
           return (
-            <div className="watchlist-filters" style={{ padding: '8px 12px', borderBottom: '1px solid rgba(148,163,184,0.15)' }}>
-              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center', marginBottom: '6px' }}>
-                {filterButtons.map((btn) => (
-                  <button
-                    key={btn.key}
-                    onClick={() => setWatchlistFilter(btn.key)}
-                    style={{
-                      padding: '3px 8px',
-                      fontSize: '12px',
-                      borderRadius: '4px',
-                      border: '1px solid ' + (watchlistFilter === btn.key ? '#3b82f6' : 'rgba(148,163,184,0.3)'),
-                      background: watchlistFilter === btn.key ? '#3b82f6' : 'transparent',
-                      color: watchlistFilter === btn.key ? '#fff' : '#94a3b8',
-                      cursor: 'pointer',
-                      lineHeight: 1.4,
-                    }}
-                  >
-                    {btn.label}
-                  </button>
-                ))}
-                {industries.length > 0 && (
-                  <select
-                    value={watchlistIndustryFilter}
-                    onChange={(e) => setWatchlistIndustryFilter(e.target.value)}
-                    style={{
-                      padding: '3px 6px',
-                      fontSize: '12px',
-                      borderRadius: '4px',
-                      border: '1px solid rgba(148,163,184,0.3)',
-                      background: 'transparent',
-                      color: '#94a3b8',
-                      marginLeft: '4px',
-                    }}
-                  >
-                    <option value="全部">全部行业</option>
-                    {industries.map((ind) => (
-                      <option key={ind} value={ind}>{ind}</option>
-                    ))}
-                  </select>
-                )}
+            <Collapsible title={title} defaultExpanded={false}>
+              <div className="watchlist-filters" style={{ padding: '8px 0 4px' }}>
+                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center', marginBottom: '6px' }}>
+                  {filterButtons.map((btn) => (
+                    <button
+                      key={btn.key}
+                      onClick={() => setWatchlistFilter(btn.key)}
+                      style={{
+                        padding: '3px 8px',
+                        fontSize: '12px',
+                        borderRadius: '4px',
+                        border: '1px solid ' + (watchlistFilter === btn.key ? '#3b82f6' : 'rgba(148,163,184,0.3)'),
+                        background: watchlistFilter === btn.key ? '#3b82f6' : 'transparent',
+                        color: watchlistFilter === btn.key ? '#fff' : '#94a3b8',
+                        cursor: 'pointer',
+                        lineHeight: 1.4,
+                      }}
+                    >
+                      {btn.label}
+                    </button>
+                  ))}
+                  {industries.length > 0 && (
+                    <select
+                      value={watchlistIndustryFilter}
+                      onChange={(e) => setWatchlistIndustryFilter(e.target.value)}
+                      style={{
+                        padding: '3px 6px',
+                        fontSize: '12px',
+                        borderRadius: '4px',
+                        border: '1px solid rgba(148,163,184,0.3)',
+                        background: 'transparent',
+                        color: '#94a3b8',
+                        marginLeft: '4px',
+                      }}
+                    >
+                      <option value="全部">全部行业</option>
+                      {industries.map((ind) => (
+                        <option key={ind} value={ind}>{ind}</option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+                <div style={{ fontSize: '11px', color: '#64748b' }}>
+                  显示 {displayWatchlist.length} / {watchlist.length} 只
+                  {hasFilter && (
+                    <button
+                      onClick={() => { setWatchlistFilter('none'); setWatchlistIndustryFilter('全部') }}
+                      style={{
+                        marginLeft: '8px',
+                        fontSize: '11px',
+                        color: '#3b82f6',
+                        background: 'none',
+                        border: 'none',
+                        cursor: 'pointer',
+                        padding: 0,
+                      }}
+                    >
+                      清除筛选
+                    </button>
+                  )}
+                </div>
               </div>
-              <div style={{ fontSize: '11px', color: '#64748b' }}>
-                显示 {displayWatchlist.length} / {watchlist.length} 只
-                {(watchlistFilter !== 'none' || watchlistIndustryFilter !== '全部') && (
-                  <button
-                    onClick={() => { setWatchlistFilter('none'); setWatchlistIndustryFilter('全部') }}
-                    style={{
-                      marginLeft: '8px',
-                      fontSize: '11px',
-                      color: '#3b82f6',
-                      background: 'none',
-                      border: 'none',
-                      cursor: 'pointer',
-                      padding: 0,
-                    }}
-                  >
-                    清除筛选
-                  </button>
-                )}
-              </div>
-            </div>
+            </Collapsible>
           )
         })()}
 

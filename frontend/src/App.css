@@ -62,7 +62,7 @@ body.light .theme-toggle:hover {
 
 /* 左栏 */
 .sidebar {
-  width: 220px;
+  width: 260px;
   background: #141b24;
   border-right: 1px solid #1f2933;
   display: flex;
@@ -393,7 +393,7 @@ body.light .watch-drag-handle {
 
 /* 中栏 */
 .info-panel {
-  width: 300px;
+  width: 340px;
   background: #0f1419;
   border-right: 1px solid #1f2933;
   padding: 20px;
