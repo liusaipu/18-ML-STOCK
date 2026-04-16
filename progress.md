@@ -4,7 +4,7 @@
 
 ## 项目状态概览
 
-- **当前版本**: v1.3.17
+- **当前版本**: v1.3.16
 - **最后更新时间**: 2026-04-16
 - **Git分支**: main
 - **未提交更改**: 已提交
@@ -868,35 +868,39 @@
 
 ---
 
-### Session 2026-04-16 (Part 7) - 同步文档、更新 GitHub 并发布 v1.3.17
+### Session 2026-04-16 (Part 7) - 同步文档、更新 GitHub 并发布 v1.3.16
 
 **本次会话目标**:
-- [x] 同步文档（plan.md 阶段15完成状态、CHANGELOG.md v1.3.17）
-- [x] Bump 版本号至 1.3.17
+- [x] 同步文档（plan.md 阶段15完成状态、CHANGELOG.md）
+- [x] 确保版本号保持 1.3.16
 - [x] 提交代码并推送至 origin/main
-- [x] 打 tag `v1.3.17`
+- [x] 打 tag `v1.3.16`
 - [x] 构建 Windows 发布包
+- [x] 创建 GitHub Release（Release notes 使用 UTF-8 避免乱码）
 
 **已完成工作**:
 1. **文档同步**
    - `plan.md`：将阶段15的「财报异常雷达」和「一键导出财务数据 Excel」标记为 `[x]` 已完成
-   - `CHANGELOG.md`：新增 v1.3.17 变更记录（行业对比雷达、下载下拉菜单、布局优化、空状态修复、nil pointer 修复）
-   - `progress.md`：更新版本号至 1.3.17，新增本次会话记录
+   - `CHANGELOG.md`：将 Part 4/5/6 的变更（下载下拉菜单、行业对比雷达、布局优化、空状态修复、nil pointer 修复）统一归到 v1.3.16 下
+   - `progress.md`：更新版本号与发布记录
 
 2. **版本号同步**
-   - `wails.json`：`productVersion` 从 `1.3.16` → `1.3.17`
-   - `frontend/src/Settings.tsx`：`const version` 从 `'1.3.16'` → `'1.3.17'`
+   - `wails.json` 与 `frontend/src/Settings.tsx` 保持 `1.3.16`
 
 3. **Git 操作**
    - 提交所有文档和版本号变更
    - 推送至 `origin/main`
-   - 创建并推送 tag `v1.3.17`
+   - 创建并推送 tag `v1.3.16`
 
 4. **发布构建**
-   - 执行 `build-windows.ps1` 构建 Windows 发布包
+   - 构建 Windows 发布包
    - 确认 ZIP 包包含 `ml_models/` 和 `scripts/` 目录
 
-**版本发布**: v1.3.17
+5. **GitHub Release**
+   - 创建 Release v1.3.16，使用 UTF-8 编码的 notes 避免乱码
+   - 上传 `stock-analyzer-windows-amd64-v1.3.16.zip`
+
+**版本发布**: v1.3.16
 
 **待办事项**:
 - 无
