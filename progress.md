@@ -792,6 +792,48 @@
 
 ---
 
+### Session 2026-04-16 (Part 5) - 财报雷达升级为行业对比雷达
+
+**本次会话目标**:
+- [x] 解决财报雷达与亮点与风险的功能重叠
+- [x] 将财报雷达升级为行业对比雷达
+- [x] 移到【亮点与风险】下方
+
+**已完成工作**:
+1. **功能差异化：行业均值对比**
+   - 后端 `analyzer/risk_radar.go`: `BuildRiskRadar` 增加 `industry` 参数
+   - 调用 `analyzer.GetIndustryMetrics(industry)` 获取行业均值
+   - 每个指标消息格式改为 `当前值 (行业均值 xx)`
+   - 异常判定结合行业均值：如 ROE 低于行业均值 30% 时标黄
+   - 支持对比的指标：净利润现金含量、ROE、资产负债率、A-Score风险
+
+2. **位置与名称调整**
+   - 标题从「财报雷达」改为「📊 行业对比雷达」
+   - 位置从「财务数据历史」与「概念 & 风口」之间，移至「💡 亮点与风险」下方
+   - 与「亮点与风险」形成互补：文字摘要（上）+ 定量对比（下）
+
+3. **接口与调用链更新**
+   - `app.go`: `GetRiskRadar(symbol, industry)` 增加行业参数
+   - 前端 `App.tsx`: `loadRiskRadar` 传入 `profile?.industry`，`loadProfile` 返回 profile 供调用链使用
+   - Wails 绑定已重新生成
+
+**测试结果汇总**:
+| 功能模块 | 状态 | 备注 |
+|---------|------|------|
+| Go 编译 | ✅ 通过 | `go build ./...` 成功 |
+| 前端编译 | ✅ 通过 | `tsc && vite build` 成功 |
+| Wails 绑定 | ✅ 通过 | `wails generate module` 成功 |
+
+**改动详情**:
+- 修改: `analyzer/risk_radar.go` (+~40行，引入行业均值对比)
+- 修改: `app.go` (+1行，GetRiskRadar 增加 industry 参数)
+- 修改: `frontend/src/App.tsx` (+~15行，调用链与位置调整)
+
+**下次会话计划**:
+- 按需继续优化
+
+---
+
 ## 功能开发状态
 
 | 模块 | 状态 | 备注 |
