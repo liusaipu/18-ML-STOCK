@@ -1718,12 +1718,29 @@ function App() {
                     ? `更新于: ${new Date(profile.updatedAt).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}`
                     : '暂无数据'}
                 </span>
-                <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
                   <button
                     className="stock-info-refresh"
                     onClick={() => setTrendDrawerCode(selectedStock!.code)}
-                    title="查看财务指标趋势"
-                    style={{ color: '#10b981' }}
+                    title="查看近5年财务指标趋势"
+                    style={{
+                      background: '#10b98120',
+                      border: '1px solid #10b98180',
+                      color: '#10b981',
+                      padding: '3px 10px',
+                      borderRadius: 4,
+                      fontSize: 12,
+                      cursor: 'pointer',
+                      transition: 'all .15s ease',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = '#10b98135'
+                      e.currentTarget.style.borderColor = '#10b981'
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = '#10b98120'
+                      e.currentTarget.style.borderColor = '#10b98180'
+                    }}
                   >
                     财务趋势
                   </button>
