@@ -154,6 +154,190 @@ type WatchlistActivitySummary struct {
 	Grade string  `json:"grade"`
 }
 
+// WatchlistFilterItem 自选股筛选数据项
+type WatchlistFilterItem struct {
+	Code                  string  `json:"code"`
+	Industry              string  `json:"industry"`
+	ShareholderReturnRate float64 `json:"shareholderReturnRate"`
+	AScore                float64 `json:"aScore"`
+	HasFinancialData      bool    `json:"hasFinancialData"`
+	HasSnapshot           bool    `json:"hasSnapshot"`
+	LastAnalyzedAt        string  `json:"lastAnalyzedAt"`
+}
+
+// GetWatchlistFilterData 批量获取自选股的筛选数据
+func (a *App) GetWatchlistFilterData() ([]WatchlistFilterItem, error) {
+	if a.storage == nil {
+		return nil, fmt.Errorf("存储未初始化")
+	}
+	watchlist, err := a.storage.LoadWatchlist()
+	if err != nil {
+		return nil, err
+	}
+
+	var results []WatchlistFilterItem
+	for _, item := range watchlist {
+		result := WatchlistFilterItem{Code: item.Code}
+
+		// 1. 基本信息（行业、PB、市值）
+		var profile *StockProfile
+		if p, err := a.GetStockProfile(item.Code); err == nil && p != nil {
+			profile = p
+			result.Industry = p.Industry
+		}
+
+		// 2. 股东回报率（优先用本地财报计算，避免批量网络请求）
+		if data, err := analyzer.LoadFinancialData(a.storage.DataDir(), item.Code); err == nil && len(data.Years) > 0 {
+			year := data.Years[0]
+			profit := data.GetValueOrZero(data.IncomeStatement, "净利润", year)
+			equity := data.GetValueOrZero(data.BalanceSheet, "所有者权益合计", year)
+			if equity > 0 {
+				roe := profit / equity // 小数形式，如 0.1973
+				if profile != nil && profile.PB > 0 {
+					result.ShareholderReturnRate = roe / profile.PB
+					// 股息率：用现金流量表分红现金 / 总市值
+					dividendCash := data.GetValueOrZero(data.CashFlow, "分配股利、利润或偿付利息支付的现金", year)
+					if profile.MarketCap > 0 && dividendCash > 0 {
+						dy := dividendCash / profile.MarketCap
+						if dy <= 0.20 { // 过滤异常高值
+							result.ShareholderReturnRate += dy
+						}
+					}
+				}
+			}
+		}
+
+		// 3. 快照数据（A-Score）
+		if snapshot, err := a.LoadAnalysisSnapshot(item.Code); err == nil && snapshot != nil {
+			result.HasSnapshot = true
+			if len(snapshot.Years) > 0 {
+				latest := snapshot.Years[0]
+				for _, step := range snapshot.StepResults {
+					if step.StepNum == 8 {
+						if yd, ok := step.YearlyData[latest]; ok && yd != nil {
+							if v, ok2 := yd["AScore"].(float64); ok2 {
+								result.AScore = v
+							}
+						}
+						break
+					}
+				}
+			}
+		}
+
+		// 4. 财报数据是否存在
+		stockDir := filepath.Join(a.storage.DataDir(), "data", item.Code)
+		if _, err := os.Stat(stockDir); err == nil {
+			// 检查是否有 balance_sheet.json
+			if _, err := os.Stat(filepath.Join(stockDir, "balance_sheet.json")); err == nil {
+				result.HasFinancialData = true
+			}
+		}
+
+		// 5. 最后分析时间（从历史报告文件名推断）
+		if files, err := a.storage.ListReports(item.Code); err == nil && len(files) > 0 {
+			// 报告文件名格式通常为 "report_YYYYMMDD_HHMMSS.md"
+			result.LastAnalyzedAt = files[len(files)-1]
+		}
+
+		results = append(results, result)
+	}
+	return results, nil
+}
+
+// FinancialTrendItem 单一年度的财务指标
+type FinancialTrendItem struct {
+	Year          string   `json:"year"`
+	ROE           *float64 `json:"roe"`
+	GrossMargin   *float64 `json:"grossMargin"`
+	RevenueGrowth *float64 `json:"revenueGrowth"`
+	CashContent   *float64 `json:"cashContent"`
+	DebtRatio     *float64 `json:"debtRatio"`
+}
+
+// FinancialTrendsData 财务指标趋势数据
+type FinancialTrendsData struct {
+	Symbol string               `json:"symbol"`
+	Items  []FinancialTrendItem `json:"items"`
+}
+
+// GetFinancialTrends 获取股票近5年核心财务指标趋势
+func (a *App) GetFinancialTrends(symbol string) (*FinancialTrendsData, error) {
+	if a.storage == nil {
+		return nil, fmt.Errorf("存储未初始化")
+	}
+	data, err := analyzer.LoadFinancialData(a.storage.DataDir(), symbol)
+	if err != nil {
+		return nil, fmt.Errorf("加载财务数据失败: %w", err)
+	}
+	if len(data.Years) == 0 {
+		return &FinancialTrendsData{Symbol: symbol, Items: []FinancialTrendItem{}}, nil
+	}
+
+	maxYears := 5
+	if len(data.Years) < maxYears {
+		maxYears = len(data.Years)
+	}
+
+	items := make([]FinancialTrendItem, 0, maxYears)
+	for i := 0; i < maxYears; i++ {
+		year := data.Years[i]
+		item := FinancialTrendItem{Year: year}
+
+		// 1. ROE = 净利润 / 加权平均所有者权益 * 100
+		profit := data.GetValueOrZero(data.IncomeStatement, "净利润", year)
+		equity := data.GetValueOrZero(data.BalanceSheet, "所有者权益合计", year)
+		var prevEquity float64
+		if i+1 < len(data.Years) {
+			prevEquity = data.GetValueOrZero(data.BalanceSheet, "所有者权益合计", data.Years[i+1])
+		}
+		weightedEquity := equity
+		if prevEquity > 0 {
+			weightedEquity = (prevEquity + equity) / 2
+		}
+		if weightedEquity > 0 {
+			roe := profit / weightedEquity * 100
+			item.ROE = &roe
+		}
+
+		// 2. 毛利率 = (营业收入 - 营业成本) / 营业收入 * 100
+		revenue := data.GetValueOrZero(data.IncomeStatement, "营业收入", year)
+		cost := data.GetValueOrZero(data.IncomeStatement, "营业成本", year)
+		if revenue != 0 {
+			gm := (revenue - cost) / revenue * 100
+			item.GrossMargin = &gm
+		}
+
+		// 3. 营收增长率 = (本年营收 - 上年营收) / 上年营收 * 100
+		if i+1 < len(data.Years) {
+			prevRevenue := data.GetValueOrZero(data.IncomeStatement, "营业收入", data.Years[i+1])
+			if prevRevenue != 0 {
+				growth := (revenue - prevRevenue) / prevRevenue * 100
+				item.RevenueGrowth = &growth
+			}
+		}
+
+		// 4. 现金含量 = 经营现金流净额 / 净利润 * 100
+		opCash := data.GetValueOrZero(data.CashFlow, "经营活动产生的现金流量净额", year)
+		if profit != 0 {
+			cc := opCash / profit * 100
+			item.CashContent = &cc
+		}
+
+		// 5. 资产负债率 = 负债合计 / 资产合计 * 100
+		asset := data.GetValueOrZero(data.BalanceSheet, "资产合计", year)
+		liability := data.GetValueOrZero(data.BalanceSheet, "负债合计", year)
+		if asset != 0 {
+			dr := liability / asset * 100
+			item.DebtRatio = &dr
+		}
+
+		items = append(items, item)
+	}
+
+	return &FinancialTrendsData{Symbol: symbol, Items: items}, nil
+}
+
 // GetWatchlistActivity 批量获取自选股的活跃度（带缓存）
 func (a *App) GetWatchlistActivity() ([]WatchlistActivitySummary, error) {
 	if a.storage == nil {

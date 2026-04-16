@@ -30,6 +30,8 @@ export function ExportHistoricalFinancialData(arg1:string,arg2:string):Promise<v
 
 export function GetComparables(arg1:string):Promise<Array<string>>;
 
+export function GetFinancialTrends(arg1:string):Promise<main.FinancialTrendsData>;
+
 export function GetIndustryDBMeta():Promise<Record<string, any>>;
 
 export function GetIndustryMetrics(arg1:string):Promise<analyzer.IndustryMetrics|boolean>;
@@ -55,6 +57,8 @@ export function GetStockQuote(arg1:string):Promise<downloader.StockQuote>;
 export function GetWatchlist():Promise<Array<main.WatchlistItem>>;
 
 export function GetWatchlistActivity():Promise<Array<main.WatchlistActivitySummary>>;
+
+export function GetWatchlistFilterData():Promise<Array<main.WatchlistFilterItem>>;
 
 export function ImportFinancialReports(arg1:string):Promise<main.ImportResult>;
 

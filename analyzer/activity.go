@@ -11,7 +11,8 @@ type ActivityData struct {
 	Score            float64 `json:"score"`
 	Grade            string  `json:"grade"`
 	Stars            int     `json:"stars"`            // 1-5星
-	TurnoverDensity  float64 `json:"turnoverDensity"`  // 换手密度
+	TurnoverDensity  float64 `json:"turnoverDensity"`  // 换手密度（近5日平均换手率）
+	AvgAmplitude5    float64 `json:"avgAmplitude5"`    // 近5日平均振幅
 	AmountScore      float64 `json:"amountScore"`      // 金额分
 	SustainedScore   float64 `json:"sustainedScore"`   // 持续性分
 	VolatilityScore  float64 `json:"volatilityScore"`  // 波动分
@@ -224,6 +225,7 @@ func CalculateActivity(klines []ActivityKline, quote *StockQuoteLite, industry s
 		Grade:            activityGrade(finalScore),
 		Stars:            stars,
 		TurnoverDensity:  avgTurnover5,
+		AvgAmplitude5:    avgAmplitude5,
 		AmountScore:      amountScore,
 		SustainedScore:   sustainedScore,
 		VolatilityScore:  volatilityScore,

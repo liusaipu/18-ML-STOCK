@@ -904,11 +904,22 @@ func writeModule8(b *strings.Builder, quote *QuoteData, technical *TechnicalData
 	b.WriteString("\n")
 
 	b.WriteString("## 9.2 量价关系简评\n\n")
-	if tr >= 3 && amp >= 3 {
+	// 优先使用近5日平均换手/振幅判断，避免单日异常导致误判
+	avgTr := tr
+	avgAmp := amp
+	if activity != nil {
+		if activity.TurnoverDensity > 0 {
+			avgTr = activity.TurnoverDensity
+		}
+		if activity.AvgAmplitude5 > 0 {
+			avgAmp = activity.AvgAmplitude5
+		}
+	}
+	if avgTr >= 3 && avgAmp >= 3 {
 		b.WriteString("- **高换手高振幅**：交投活跃，资金博弈激烈，短期趋势可能延续。\n")
-	} else if tr >= 3 && amp < 3 {
+	} else if avgTr >= 3 && avgAmp < 3 {
 		b.WriteString("- **高换手低振幅**：筹码交换充分但价格波动有限，可能是蓄势或出货信号。\n")
-	} else if tr < 1 && amp >= 3 {
+	} else if avgTr < 1 && avgAmp >= 3 {
 		b.WriteString("- **低换手高振幅**：流动性不足导致价格易受大单影响，波动具有偶然性。\n")
 	} else {
 		b.WriteString("- **低换手低振幅**：交投清淡，趋势惯性较强，突破需放量确认。\n")

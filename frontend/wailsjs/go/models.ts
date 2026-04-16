@@ -623,6 +623,60 @@ export namespace main {
 		    return a;
 		}
 	}
+	export class FinancialTrendItem {
+	    year: string;
+	    roe?: number;
+	    grossMargin?: number;
+	    revenueGrowth?: number;
+	    cashContent?: number;
+	    debtRatio?: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new FinancialTrendItem(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.year = source["year"];
+	        this.roe = source["roe"];
+	        this.grossMargin = source["grossMargin"];
+	        this.revenueGrowth = source["revenueGrowth"];
+	        this.cashContent = source["cashContent"];
+	        this.debtRatio = source["debtRatio"];
+	    }
+	}
+	export class FinancialTrendsData {
+	    symbol: string;
+	    items: FinancialTrendItem[];
+	
+	    static createFrom(source: any = {}) {
+	        return new FinancialTrendsData(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.symbol = source["symbol"];
+	        this.items = this.convertValues(source["items"], FinancialTrendItem);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class HistoryMeta {
 	    timestamp: string;
 	    source: string;
@@ -733,6 +787,30 @@ export namespace main {
 	        this.score = source["score"];
 	        this.stars = source["stars"];
 	        this.grade = source["grade"];
+	    }
+	}
+	export class WatchlistFilterItem {
+	    code: string;
+	    industry: string;
+	    shareholderReturnRate: number;
+	    aScore: number;
+	    hasFinancialData: boolean;
+	    hasSnapshot: boolean;
+	    lastAnalyzedAt: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new WatchlistFilterItem(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.code = source["code"];
+	        this.industry = source["industry"];
+	        this.shareholderReturnRate = source["shareholderReturnRate"];
+	        this.aScore = source["aScore"];
+	        this.hasFinancialData = source["hasFinancialData"];
+	        this.hasSnapshot = source["hasSnapshot"];
+	        this.lastAnalyzedAt = source["lastAnalyzedAt"];
 	    }
 	}
 	export class WatchlistItem {

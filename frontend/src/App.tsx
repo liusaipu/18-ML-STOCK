@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useRef, useCallback, Children, cloneEleme
 import './App.css'
 import { STOCKS } from './stocks'
 import { UnifiedChart } from './UnifiedChart'
+import { FinancialTrendDrawer } from './FinancialTrendDrawer'
 import { Settings, loadSettings, AppSettings } from './Settings'
 import { ModuleCopyButton, setGlobalMarkdownContent } from './ModuleCopyButton'
 import ReactMarkdown from 'react-markdown'
@@ -68,6 +69,7 @@ function Collapsible({ title, children, defaultExpanded = false }: { title: Reac
 import {
   GetWatchlist,
   GetWatchlistActivity,
+  GetWatchlistFilterData,
   AddToWatchlist,
   RemoveFromWatchlist,
   ReorderWatchlist,
@@ -111,6 +113,7 @@ type DownloadResult = main.DownloadResult
 type HistoryMeta = main.HistoryMeta
 type StockProfile = main.StockProfile
 type StockQuote = downloader.StockQuote
+type WatchlistFilterItem = main.WatchlistFilterItem
 // type KlineData = downloader.KlineData
 
 function getStepValue(steps: StepResult[], stepNum: number, year: string, key: string): number {
@@ -223,6 +226,11 @@ function App() {
   const [activityMap, setActivityMap] = useState<Record<string, main.WatchlistActivitySummary>>({})
   const [activitySort, setActivitySort] = useState<'none' | 'desc' | 'asc'>('none')
   const [flashCode, setFlashCode] = useState<string | null>(null)
+  const [filterData, setFilterData] = useState<Record<string, WatchlistFilterItem>>({})
+  const [watchlistFilter, setWatchlistFilter] = useState<
+    'none' | 'highReturn' | 'lowRisk' | 'hasData' | 'noData' | 'analyzed' | 'unanalyzed'
+  >('none')
+  const [watchlistIndustryFilter, setWatchlistIndustryFilter] = useState<string>('全部')
   const flashTimeoutRef = useRef<number | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const reportContentRef = useRef<HTMLDivElement>(null)
@@ -236,6 +244,7 @@ function App() {
   const [traceList, setTraceList] = useState<analyzer.CalcTrace[]>([])
   const [forceAnalyzeOpen, setForceAnalyzeOpen] = useState(false)
   const [lastAnalysisAt, setLastAnalysisAt] = useState('')
+  const [trendDrawerCode, setTrendDrawerCode] = useState<string | null>(null)
 
   // RIM 参数弹窗状态
   const [showRIMModal, setShowRIMModal] = useState(false)
@@ -420,6 +429,15 @@ function App() {
       })
       setActivityMap(map)
     })
+    GetWatchlistFilterData().then((list) => {
+      const map: Record<string, WatchlistFilterItem> = {}
+      ;(list || []).forEach((item) => {
+        map[item.code] = item
+      })
+      setFilterData(map)
+    }).catch((err) => {
+      console.error('[GetWatchlistFilterData] error', err)
+    })
     // 加载政策库元信息
     loadPolicyLibMeta()
     // 加载行业数据库元信息，并根据设置决定是否自动更新
@@ -528,8 +546,38 @@ function App() {
   )
 
   const displayWatchlist = useMemo(() => {
-    if (activitySort === 'none') return watchlist
-    const list = [...watchlist]
+    let list = [...watchlist]
+
+    // 应用筛选条件
+    if (watchlistFilter !== 'none' || watchlistIndustryFilter !== '全部') {
+      list = list.filter((s) => {
+        const fd = filterData[s.code]
+        if (!fd) return false
+
+        if (watchlistIndustryFilter !== '全部' && fd.industry !== watchlistIndustryFilter) {
+          return false
+        }
+
+        switch (watchlistFilter) {
+          case 'highReturn':
+            return fd.shareholderReturnRate > 0.10
+          case 'lowRisk':
+            return fd.aScore > 0 && fd.aScore < 60
+          case 'hasData':
+            return fd.hasFinancialData
+          case 'noData':
+            return !fd.hasFinancialData
+          case 'analyzed':
+            return fd.hasSnapshot
+          case 'unanalyzed':
+            return !fd.hasSnapshot
+          default:
+            return true
+        }
+      })
+    }
+
+    if (activitySort === 'none') return list
     list.sort((a, b) => {
       const scoreA = activityMap[a.code]?.score ?? -1
       const scoreB = activityMap[b.code]?.score ?? -1
@@ -537,7 +585,7 @@ function App() {
       return scoreA - scoreB
     })
     return list
-  }, [watchlist, activityMap, activitySort])
+  }, [watchlist, activityMap, activitySort, filterData, watchlistFilter, watchlistIndustryFilter])
 
   // 当切换股票时，若内存中没有快照，尝试从磁盘加载
   useEffect(() => {
@@ -732,6 +780,12 @@ function App() {
       await AddToWatchlist(stock.code)
       const list = await GetWatchlist()
       setWatchlist(list || [])
+      // 刷新筛选数据
+      GetWatchlistFilterData().then((fd) => {
+        const map: Record<string, WatchlistFilterItem> = {}
+        ;(fd || []).forEach((item) => { map[item.code] = item })
+        setFilterData(map)
+      })
       setSelectedCode(stock.code)
       setProfile(null)
       setQuote(null)
@@ -764,6 +818,12 @@ function App() {
       await RemoveFromWatchlist(code)
       const list = await GetWatchlist()
       setWatchlist(list || [])
+      // 刷新筛选数据
+      GetWatchlistFilterData().then((fd) => {
+        const map: Record<string, WatchlistFilterItem> = {}
+        ;(fd || []).forEach((item) => { map[item.code] = item })
+        setFilterData(map)
+      })
       if (selectedCode === code) {
         setSelectedCode(null)
         setProfile(null)
@@ -839,6 +899,12 @@ function App() {
         console.log('[handleDownload] Reloading data history for:', selectedStock.code)
         await loadDataHistory(selectedStock.code)
         console.log('[handleDownload] Data history reloaded, count:', dataHistory.length)
+        // 刷新筛选数据
+        GetWatchlistFilterData().then((fd) => {
+          const map: Record<string, WatchlistFilterItem> = {}
+          ;(fd || []).forEach((item) => { map[item.code] = item })
+          setFilterData(map)
+        })
         // 3秒后清除成功消息
         setTimeout(() => setDownloadStatus({type: null, message: ''}), 3000)
       } else {
@@ -906,6 +972,12 @@ function App() {
       }
       setAppliedComparables(comparables)
       await loadReportHistory(selectedStock.code)
+      // 刷新筛选数据
+      GetWatchlistFilterData().then((fd) => {
+        const map: Record<string, WatchlistFilterItem> = {}
+        ;(fd || []).forEach((item) => { map[item.code] = item })
+        setFilterData(map)
+      })
     } catch (err: any) {
       console.error('分析失败:', err)
       const errorMsg = err?.message || String(err) || '未知错误'
@@ -1352,6 +1424,84 @@ function App() {
           </div>
         </div>
 
+        {(() => {
+          const industries = Array.from(
+            new Set(Object.values(filterData).map((d) => d.industry).filter(Boolean))
+          ).sort()
+          const filterButtons: { key: typeof watchlistFilter; label: string }[] = [
+            { key: 'none', label: '全部' },
+            { key: 'highReturn', label: '高回报' },
+            { key: 'lowRisk', label: '低风险' },
+            { key: 'hasData', label: '有财报' },
+            { key: 'noData', label: '未下载' },
+            { key: 'analyzed', label: '已分析' },
+            { key: 'unanalyzed', label: '未分析' },
+          ]
+          return (
+            <div className="watchlist-filters" style={{ padding: '8px 12px', borderBottom: '1px solid rgba(148,163,184,0.15)' }}>
+              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center', marginBottom: '6px' }}>
+                {filterButtons.map((btn) => (
+                  <button
+                    key={btn.key}
+                    onClick={() => setWatchlistFilter(btn.key)}
+                    style={{
+                      padding: '3px 8px',
+                      fontSize: '12px',
+                      borderRadius: '4px',
+                      border: '1px solid ' + (watchlistFilter === btn.key ? '#3b82f6' : 'rgba(148,163,184,0.3)'),
+                      background: watchlistFilter === btn.key ? '#3b82f6' : 'transparent',
+                      color: watchlistFilter === btn.key ? '#fff' : '#94a3b8',
+                      cursor: 'pointer',
+                      lineHeight: 1.4,
+                    }}
+                  >
+                    {btn.label}
+                  </button>
+                ))}
+                {industries.length > 0 && (
+                  <select
+                    value={watchlistIndustryFilter}
+                    onChange={(e) => setWatchlistIndustryFilter(e.target.value)}
+                    style={{
+                      padding: '3px 6px',
+                      fontSize: '12px',
+                      borderRadius: '4px',
+                      border: '1px solid rgba(148,163,184,0.3)',
+                      background: 'transparent',
+                      color: '#94a3b8',
+                      marginLeft: '4px',
+                    }}
+                  >
+                    <option value="全部">全部行业</option>
+                    {industries.map((ind) => (
+                      <option key={ind} value={ind}>{ind}</option>
+                    ))}
+                  </select>
+                )}
+              </div>
+              <div style={{ fontSize: '11px', color: '#64748b' }}>
+                显示 {displayWatchlist.length} / {watchlist.length} 只
+                {(watchlistFilter !== 'none' || watchlistIndustryFilter !== '全部') && (
+                  <button
+                    onClick={() => { setWatchlistFilter('none'); setWatchlistIndustryFilter('全部') }}
+                    style={{
+                      marginLeft: '8px',
+                      fontSize: '11px',
+                      color: '#3b82f6',
+                      background: 'none',
+                      border: 'none',
+                      cursor: 'pointer',
+                      padding: 0,
+                    }}
+                  >
+                    清除筛选
+                  </button>
+                )}
+              </div>
+            </div>
+          )
+        })()}
+
         <div className="watchlist-header">
           <span className="watch-header-name">股票名称</span>
           <span
@@ -1380,17 +1530,17 @@ function App() {
               <li
                 key={s.code}
                 data-code={s.code}
-                draggable={activitySort === 'none'}
+                draggable={activitySort === 'none' && watchlistFilter === 'none' && watchlistIndustryFilter === '全部'}
                 className={`${selectedCode === s.code ? 'active' : ''}${flashCode === s.code ? ' flash-match' : ''}`}
                 onDragStart={() => {
                   dragIndexRef.current = idx
                 }}
                 onDragOver={(e) => {
-                  if (activitySort !== 'none') return
+                  if (activitySort !== 'none' || watchlistFilter !== 'none' || watchlistIndustryFilter !== '全部') return
                   e.preventDefault()
                 }}
                 onDrop={(e) => {
-                  if (activitySort !== 'none') return
+                  if (activitySort !== 'none' || watchlistFilter !== 'none' || watchlistIndustryFilter !== '全部') return
                   e.preventDefault()
                   const fromIdx = dragIndexRef.current
                   dragIndexRef.current = null
@@ -1446,7 +1596,9 @@ function App() {
         </ul>
 
         <div className="watchlist-footer">
-          共 {watchlist.length} / 100 只
+          {(watchlistFilter !== 'none' || watchlistIndustryFilter !== '全部')
+            ? `显示 ${displayWatchlist.length} 只（全部 ${watchlist.length} / 100）`
+            : `共 ${watchlist.length} / 100 只`}
         </div>
         <div
           className="sidebar-resizer"
@@ -1566,9 +1718,19 @@ function App() {
                     ? `更新于: ${new Date(profile.updatedAt).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}`
                     : '暂无数据'}
                 </span>
-                <button className="stock-info-refresh" onClick={handleRefreshProfile} title="强制刷新">
-                  刷新
-                </button>
+                <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                  <button
+                    className="stock-info-refresh"
+                    onClick={() => setTrendDrawerCode(selectedStock!.code)}
+                    title="查看财务指标趋势"
+                    style={{ color: '#10b981' }}
+                  >
+                    财务趋势
+                  </button>
+                  <button className="stock-info-refresh" onClick={handleRefreshProfile} title="强制刷新">
+                    刷新
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -2231,6 +2393,15 @@ function App() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* 财务指标趋势图弹窗 */}
+      {trendDrawerCode && (
+        <FinancialTrendDrawer
+          code={trendDrawerCode}
+          name={selectedStock?.name}
+          onClose={() => setTrendDrawerCode(null)}
+        />
       )}
     </div>
   )

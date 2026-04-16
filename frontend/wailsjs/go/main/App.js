@@ -54,6 +54,10 @@ export function GetComparables(arg1) {
   return window['go']['main']['App']['GetComparables'](arg1);
 }
 
+export function GetFinancialTrends(arg1) {
+  return window['go']['main']['App']['GetFinancialTrends'](arg1);
+}
+
 export function GetIndustryDBMeta() {
   return window['go']['main']['App']['GetIndustryDBMeta']();
 }
@@ -104,6 +108,10 @@ export function GetWatchlist() {
 
 export function GetWatchlistActivity() {
   return window['go']['main']['App']['GetWatchlistActivity']();
+}
+
+export function GetWatchlistFilterData() {
+  return window['go']['main']['App']['GetWatchlistFilterData']();
 }
 
 export function ImportFinancialReports(arg1) {
