@@ -1,6 +1,9 @@
 package analyzer
 
-import "fmt"
+import (
+	"fmt"
+	"math"
+)
 
 // RiskRadarItem 单条风险雷达项
 type RiskRadarItem struct {
@@ -11,8 +14,8 @@ type RiskRadarItem struct {
 	Icon    string `json:"icon"`    // 🔴 / 🟡 / 🟢
 }
 
-// BuildRiskRadar 从18步分析结果中提取最近一年的关键风险信号
-func BuildRiskRadar(steps []StepResult, extras map[string]float64, years []string) []RiskRadarItem {
+// BuildRiskRadar 从18步分析结果中提取最近一年的关键风险信号，并与行业均值对比
+func BuildRiskRadar(steps []StepResult, extras map[string]float64, years []string, industry string) []RiskRadarItem {
 	if len(years) == 0 {
 		return nil
 	}
@@ -21,6 +24,9 @@ func BuildRiskRadar(steps []StepResult, extras map[string]float64, years []strin
 	if len(years) > 1 {
 		prev = years[1]
 	}
+
+	// 获取行业均值（如果可用）
+	ind, hasIndustry := GetIndustryMetrics(industry)
 
 	var items []RiskRadarItem
 
@@ -51,6 +57,14 @@ func BuildRiskRadar(steps []StepResult, extras map[string]float64, years []strin
 			return vf
 		}
 		return 0
+	}
+
+	// Helper: 格式化行业均值后缀
+	formatIndustry := func(val float64, unit string) string {
+		if !hasIndustry || math.IsNaN(val) {
+			return ""
+		}
+		return fmt.Sprintf("(行业均值 %.1f%s)", val, unit)
 	}
 
 	// 1. 应收账款异常 (step5)
@@ -111,12 +125,13 @@ func BuildRiskRadar(steps []StepResult, extras map[string]float64, years []strin
 	if s := findStep(15); s != nil {
 		cashContent := getFloat(s, latest, "cashContent")
 		prevCash := getFloat(s, prev, "cashContent")
+		msg := fmt.Sprintf("%.1f%% %s", cashContent, formatIndustry(ind.CashRatio, "%"))
 		if cashContent < 100 {
 			items = append(items, RiskRadarItem{
 				Name:    "净利润现金含量",
 				Level:   "medium",
 				Status:  "警告",
-				Message: fmt.Sprintf("%.1f%%(低于100%%)", cashContent),
+				Message: msg,
 				Icon:    "🟡",
 			})
 		} else if prev != "" && prevCash > 0 && cashContent < prevCash*0.9 {
@@ -124,7 +139,7 @@ func BuildRiskRadar(steps []StepResult, extras map[string]float64, years []strin
 				Name:    "净利润现金含量",
 				Level:   "medium",
 				Status:  "警告",
-				Message: fmt.Sprintf("%.1f%%(上期%.1f%%)", cashContent, prevCash),
+				Message: fmt.Sprintf("%.1f%%(上期%.1f%%) %s", cashContent, prevCash, formatIndustry(ind.CashRatio, "%")),
 				Icon:    "🟡",
 			})
 		} else {
@@ -132,7 +147,7 @@ func BuildRiskRadar(steps []StepResult, extras map[string]float64, years []strin
 				Name:    "净利润现金含量",
 				Level:   "low",
 				Status:  "正常",
-				Message: fmt.Sprintf("%.1f%%", cashContent),
+				Message: msg,
 				Icon:    "🟢",
 			})
 		}
@@ -142,28 +157,37 @@ func BuildRiskRadar(steps []StepResult, extras map[string]float64, years []strin
 	if s := findStep(16); s != nil {
 		roe := getFloat(s, latest, "roe")
 		prevRoe := getFloat(s, prev, "roe")
+		msg := fmt.Sprintf("%.1f%% %s", roe, formatIndustry(ind.ROE, "%"))
+		level := "low"
 		if roe < 10 {
-			items = append(items, RiskRadarItem{
-				Name:    "ROE",
-				Level:   "medium",
-				Status:  "警告",
-				Message: fmt.Sprintf("%.1f%%(低于10%%)", roe),
-				Icon:    "🟡",
-			})
+			level = "medium"
 		} else if prev != "" && prevRoe > 0 && roe < prevRoe*0.85 {
+			level = "medium"
+		} else if hasIndustry && roe < ind.ROE*0.7 {
+			level = "medium"
+		}
+		if level == "medium" {
+			var detail string
+			if roe < 10 {
+				detail = "(低于10%)"
+			} else if prev != "" && prevRoe > 0 && roe < prevRoe*0.85 {
+				detail = fmt.Sprintf("(上期%.1f%%)", prevRoe)
+			} else {
+				detail = "(低于行业均值)"
+			}
 			items = append(items, RiskRadarItem{
 				Name:    "ROE",
-				Level:   "medium",
+				Level:   level,
 				Status:  "警告",
-				Message: fmt.Sprintf("%.1f%%(上期%.1f%%)", roe, prevRoe),
+				Message: fmt.Sprintf("%.1f%% %s %s", roe, detail, formatIndustry(ind.ROE, "%")),
 				Icon:    "🟡",
 			})
 		} else {
 			items = append(items, RiskRadarItem{
 				Name:    "ROE",
-				Level:   "low",
+				Level:   level,
 				Status:  "正常",
-				Message: fmt.Sprintf("%.1f%%", roe),
+				Message: msg,
 				Icon:    "🟢",
 			})
 		}
@@ -173,12 +197,13 @@ func BuildRiskRadar(steps []StepResult, extras map[string]float64, years []strin
 	if s := findStep(3); s != nil {
 		debtRatio := getFloat(s, latest, "debtRatio")
 		cashDebtDiff := getFloat(s, latest, "cashDebtDiff")
+		msg := fmt.Sprintf("%.1f%% %s", debtRatio, formatIndustry(ind.DebtRatio, "%"))
 		if debtRatio > 60 || cashDebtDiff < 0 {
 			items = append(items, RiskRadarItem{
 				Name:    "资产负债率",
 				Level:   "high",
 				Status:  "异常",
-				Message: fmt.Sprintf("%.1f%%(现金负债缺口)", debtRatio),
+				Message: fmt.Sprintf("%.1f%%(现金负债缺口) %s", debtRatio, formatIndustry(ind.DebtRatio, "%")),
 				Icon:    "🔴",
 			})
 		} else if debtRatio > 50 {
@@ -186,7 +211,7 @@ func BuildRiskRadar(steps []StepResult, extras map[string]float64, years []strin
 				Name:    "资产负债率",
 				Level:   "medium",
 				Status:  "警告",
-				Message: fmt.Sprintf("%.1f%%", debtRatio),
+				Message: msg,
 				Icon:    "🟡",
 			})
 		} else {
@@ -194,7 +219,7 @@ func BuildRiskRadar(steps []StepResult, extras map[string]float64, years []strin
 				Name:    "资产负债率",
 				Level:   "low",
 				Status:  "正常",
-				Message: fmt.Sprintf("%.1f%%", debtRatio),
+				Message: msg,
 				Icon:    "🟢",
 			})
 		}
@@ -203,12 +228,13 @@ func BuildRiskRadar(steps []StepResult, extras map[string]float64, years []strin
 	// 6. A-Score 风险 (step8)
 	if s := findStep(8); s != nil {
 		ascore := getFloat(s, latest, "AScore")
+		msg := fmt.Sprintf("%.0f分 %s", ascore, formatIndustry(ind.MScore, "分"))
 		if ascore >= 60 {
 			items = append(items, RiskRadarItem{
 				Name:    "A-Score风险",
 				Level:   "high",
 				Status:  "异常",
-				Message: fmt.Sprintf("%.0f分(高风险)", ascore),
+				Message: fmt.Sprintf("%.0f分(高风险) %s", ascore, formatIndustry(ind.MScore, "分")),
 				Icon:    "🔴",
 			})
 		} else if ascore >= 40 {
@@ -216,7 +242,7 @@ func BuildRiskRadar(steps []StepResult, extras map[string]float64, years []strin
 				Name:    "A-Score风险",
 				Level:   "medium",
 				Status:  "警告",
-				Message: fmt.Sprintf("%.0f分", ascore),
+				Message: msg,
 				Icon:    "🟡",
 			})
 		} else {
@@ -224,7 +250,7 @@ func BuildRiskRadar(steps []StepResult, extras map[string]float64, years []strin
 				Name:    "A-Score风险",
 				Level:   "low",
 				Status:  "正常",
-				Message: fmt.Sprintf("%.0f分", ascore),
+				Message: msg,
 				Icon:    "🟢",
 			})
 		}

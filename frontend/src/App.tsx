@@ -647,8 +647,10 @@ function App() {
     try {
       const p = await GetStockProfile(code)
       setProfile(p || null)
+      return p || null
     } catch {
       setProfile(null)
+      return null
     }
   }, [])
 
@@ -767,9 +769,9 @@ function App() {
     }
   }, [])
 
-  const loadRiskRadar = useCallback(async (code: string) => {
+  const loadRiskRadar = useCallback(async (code: string, industry: string) => {
     try {
-      const items = await GetRiskRadar(code)
+      const items = await GetRiskRadar(code, industry)
       setRiskRadar(items || [])
     } catch (err: any) {
       setRiskRadar(null)
@@ -817,11 +819,11 @@ function App() {
       setCompReportsDownloaded(false)
       await loadReportHistory(stock.code, true)
       await loadDataHistory(stock.code)
-      await loadProfile(stock.code)
+      const p = await loadProfile(stock.code)
       await loadConcepts(stock.code)
       await loadComparables(stock.code)
       await loadQuote(stock.code)
-      await loadRiskRadar(stock.code)
+      await loadRiskRadar(stock.code, p?.industry || '')
       // await loadKlines(stock.code)
     } catch (e) {
       alert(String(e))
@@ -1639,11 +1641,10 @@ function App() {
                   setComparables([])
                   loadReportHistory(s.code, true)
                   loadDataHistory(s.code)
-                  loadProfile(s.code)
+                  loadProfile(s.code).then((p) => loadRiskRadar(s.code, p?.industry || ''))
                   loadConcepts(s.code)
                   loadComparables(s.code)
                   loadQuote(s.code)
-                  loadRiskRadar(s.code)
                   // loadKlines(s.code)
                 }}
               >
@@ -1966,26 +1967,6 @@ function App() {
               </Collapsible>
             )}
 
-            {selectedStock && (
-              <Collapsible title="📊 财报雷达">
-                <div className="risk-radar-collapsible-body" style={{ marginTop: 0, marginBottom: 0 }}>
-                  {riskRadar ? (
-                    <div className="risk-radar-list">
-                      {riskRadar.map((item, idx) => (
-                        <div key={idx} className={`risk-radar-row risk-radar-${item.level}`} title={item.message}>
-                          <span className="risk-radar-icon">{item.icon}</span>
-                          <span className="risk-radar-name">{item.name}</span>
-                          <span className="risk-radar-msg">{item.message}</span>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="risk-radar-empty">请先下载财报以查看财报雷达</div>
-                  )}
-                </div>
-              </Collapsible>
-            )}
-
             <Collapsible title="🚀 概念 & 风口">
               <div className="concept-panel" style={{ marginTop: 0, marginBottom: 0 }}>
                 <div className="concept-wind">{concepts?.wind || '--'}</div>
@@ -2125,6 +2106,26 @@ function App() {
                         </div>
                       ))}
                     </div>
+                  )}
+                </div>
+              </Collapsible>
+            )}
+
+            {selectedStock && (
+              <Collapsible title="📊 行业对比雷达">
+                <div className="risk-radar-collapsible-body" style={{ marginTop: 0, marginBottom: 0 }}>
+                  {riskRadar ? (
+                    <div className="risk-radar-list">
+                      {riskRadar.map((item, idx) => (
+                        <div key={idx} className={`risk-radar-row risk-radar-${item.level}`} title={item.message}>
+                          <span className="risk-radar-icon">{item.icon}</span>
+                          <span className="risk-radar-name">{item.name}</span>
+                          <span className="risk-radar-msg">{item.message}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="risk-radar-empty">请先下载财报以查看行业对比雷达</div>
                   )}
                 </div>
               </Collapsible>

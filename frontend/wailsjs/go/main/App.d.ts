@@ -46,7 +46,7 @@ export function GetReport(arg1:string,arg2:string):Promise<string>;
 
 export function GetReportHistory(arg1:string):Promise<Array<string>>;
 
-export function GetRiskRadar(arg1:string):Promise<Array<analyzer.RiskRadarItem>>;
+export function GetRiskRadar(arg1:string,arg2:string):Promise<Array<analyzer.RiskRadarItem>>;
 
 export function GetStockConcepts(arg1:string):Promise<downloader.StockConcepts>;
 

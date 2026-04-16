@@ -86,8 +86,8 @@ export function GetReportHistory(arg1) {
   return window['go']['main']['App']['GetReportHistory'](arg1);
 }
 
-export function GetRiskRadar(arg1) {
-  return window['go']['main']['App']['GetRiskRadar'](arg1);
+export function GetRiskRadar(arg1, arg2) {
+  return window['go']['main']['App']['GetRiskRadar'](arg1, arg2);
 }
 
 export function GetStockConcepts(arg1) {

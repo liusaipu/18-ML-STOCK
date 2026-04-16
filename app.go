@@ -1541,22 +1541,22 @@ func (a *App) LoadAnalysisSnapshot(symbol string) (*analyzer.AnalysisReport, err
 	return a.storage.LoadSnapshot(symbol)
 }
 
-// GetRiskRadar 获取股票财报异常雷达
-func (a *App) GetRiskRadar(symbol string) ([]analyzer.RiskRadarItem, error) {
+// GetRiskRadar 获取股票行业对比雷达
+func (a *App) GetRiskRadar(symbol string, industry string) ([]analyzer.RiskRadarItem, error) {
 	if a.storage == nil {
 		return nil, fmt.Errorf("存储未初始化")
 	}
 	// 优先读取快照，避免重复计算
 	snapshot, err := a.storage.LoadSnapshot(symbol)
 	if err == nil && snapshot != nil && len(snapshot.StepResults) > 0 {
-		return analyzer.BuildRiskRadar(snapshot.StepResults, nil, snapshot.Years), nil
+		return analyzer.BuildRiskRadar(snapshot.StepResults, nil, snapshot.Years, industry), nil
 	}
 	// 无快照则重新执行分析
 	report, err := analyzer.RunAnalysis(a.storage.DataDir(), symbol)
 	if err != nil {
 		return nil, err
 	}
-	return analyzer.BuildRiskRadar(report.StepResults, nil, report.Years), nil
+	return analyzer.BuildRiskRadar(report.StepResults, nil, report.Years, industry), nil
 }
 
 // GetStockDataHistory 获取某只股票的财务数据历史归档
