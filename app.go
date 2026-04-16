@@ -17,6 +17,7 @@ import (
 	"github.com/stock-analyzer/downloader"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
+	"github.com/xuri/excelize/v2"
 	toast "git.sr.ht/~jackmordaunt/go-toast/v2"
 )
 
@@ -1540,6 +1541,24 @@ func (a *App) LoadAnalysisSnapshot(symbol string) (*analyzer.AnalysisReport, err
 	return a.storage.LoadSnapshot(symbol)
 }
 
+// GetRiskRadar 获取股票财报异常雷达
+func (a *App) GetRiskRadar(symbol string) ([]analyzer.RiskRadarItem, error) {
+	if a.storage == nil {
+		return nil, fmt.Errorf("存储未初始化")
+	}
+	// 优先读取快照，避免重复计算
+	snapshot, err := a.storage.LoadSnapshot(symbol)
+	if err == nil && snapshot != nil && len(snapshot.StepResults) > 0 {
+		return analyzer.BuildRiskRadar(snapshot.StepResults, nil, snapshot.Years), nil
+	}
+	// 无快照则重新执行分析
+	report, err := analyzer.RunAnalysis(a.storage.DataDir(), symbol)
+	if err != nil {
+		return nil, err
+	}
+	return analyzer.BuildRiskRadar(report.StepResults, nil, report.Years), nil
+}
+
 // GetStockDataHistory 获取某只股票的财务数据历史归档
 func (a *App) GetStockDataHistory(symbol string) ([]HistoryMeta, error) {
 	if a.storage == nil {
@@ -1792,6 +1811,135 @@ func (a *App) ExportHistoricalFinancialData(symbol string, timestamp string) err
 		return fmt.Errorf("用户取消保存")
 	}
 	return copyFile(tmpZip, savePath)
+}
+
+// ExportFinancialDataToExcel 将当前股票财务数据及18步分析结果导出为 Excel
+func (a *App) ExportFinancialDataToExcel(symbol string) error {
+	if a.storage == nil {
+		return fmt.Errorf("存储未初始化")
+	}
+	data, err := analyzer.LoadFinancialData(a.storage.DataDir(), symbol)
+	if err != nil {
+		return fmt.Errorf("加载财务数据失败: %w", err)
+	}
+	if len(data.Years) == 0 {
+		return fmt.Errorf("没有可用的财务数据")
+	}
+
+	// 尝试读取快照获取18步分析结果
+	var steps []analyzer.StepResult
+	snapshot, _ := a.storage.LoadSnapshot(symbol)
+	if snapshot != nil && len(snapshot.StepResults) > 0 {
+		steps = snapshot.StepResults
+	}
+
+	f := excelize.NewFile()
+	defer f.Close()
+
+	// 辅助函数：写入财务报表 sheet
+	writeSheet := func(sheetName string, statement map[string]map[string]float64) {
+		f.NewSheet(sheetName)
+		// 表头：科目 | 年份1 | 年份2 | ...
+		f.SetCellValue(sheetName, "A1", "科目")
+		for i, year := range data.Years {
+			col, _ := excelize.ColumnNumberToName(i + 2)
+			f.SetCellValue(sheetName, col+"1", year)
+		}
+		// 收集所有科目并按字母排序
+		var accounts []string
+		for acc := range statement {
+			accounts = append(accounts, acc)
+		}
+		sort.Strings(accounts)
+		for r, acc := range accounts {
+			row := r + 2
+			f.SetCellValue(sheetName, fmt.Sprintf("A%d", row), acc)
+			for i, year := range data.Years {
+				col, _ := excelize.ColumnNumberToName(i + 2)
+				val := statement[acc][year]
+				f.SetCellValue(sheetName, fmt.Sprintf("%s%d", col, row), val)
+			}
+		}
+		// 设置列宽
+		f.SetColWidth(sheetName, "A", "A", 40)
+		for i := 0; i < len(data.Years); i++ {
+			col, _ := excelize.ColumnNumberToName(i + 2)
+			f.SetColWidth(sheetName, col, col, 16)
+		}
+	}
+
+	writeSheet("资产负债表", data.BalanceSheet)
+	writeSheet("利润表", data.IncomeStatement)
+	writeSheet("现金流量表", data.CashFlow)
+
+	// Sheet4: 18步分析汇总
+	analysisSheet := "18步分析汇总"
+	f.NewSheet(analysisSheet)
+	f.SetCellValue(analysisSheet, "A1", "步骤")
+	f.SetCellValue(analysisSheet, "B1", "分析维度")
+	for i, year := range data.Years {
+		col, _ := excelize.ColumnNumberToName(i + 3)
+		f.SetCellValue(analysisSheet, col+"1", year)
+	}
+	if len(steps) > 0 {
+		for r, step := range steps {
+			row := r + 2
+			f.SetCellValue(analysisSheet, fmt.Sprintf("A%d", row), step.StepNum)
+			f.SetCellValue(analysisSheet, fmt.Sprintf("B%d", row), step.StepName)
+			for i, year := range data.Years {
+				col, _ := excelize.ColumnNumberToName(i + 3)
+				passed := step.Pass[year]
+				status := "未达标"
+				if passed {
+					status = "达标"
+				}
+				// 如果有数值型展示值，附加在状态后
+				if yd, ok := step.YearlyData[year]; ok && len(yd) > 0 {
+					for k, v := range yd {
+						if k != "status" && k != "competitiveness" && k != "risk" && k != "companyType" && k != "focus" && k != "control" && k != "innovation" && k != "salesDifficulty" && k != "profitability" && k != "quality" && k != "assessment" && k != "sustainability" && k != "note" && k != "fraudRisk" {
+							status += fmt.Sprintf(" (%v: %v)", k, v)
+							break
+						}
+					}
+				}
+				f.SetCellValue(analysisSheet, fmt.Sprintf("%s%d", col, row), status)
+			}
+		}
+	} else {
+		f.SetCellValue(analysisSheet, "A2", "暂无分析数据（请先执行18步分析）")
+	}
+	f.SetColWidth(analysisSheet, "A", "A", 8)
+	f.SetColWidth(analysisSheet, "B", "B", 45)
+	for i := 0; i < len(data.Years); i++ {
+		col, _ := excelize.ColumnNumberToName(i + 3)
+		f.SetColWidth(analysisSheet, col, col, 25)
+	}
+
+	// 删除默认 Sheet1
+	f.DeleteSheet("Sheet1")
+
+	tmpDir := os.TempDir()
+	fileName := fmt.Sprintf("%s_财务数据_%s.xlsx", symbol, time.Now().Format("20060102_150405"))
+	tmpPath := filepath.Join(tmpDir, fileName)
+	if err := f.SaveAs(tmpPath); err != nil {
+		return fmt.Errorf("保存Excel失败: %w", err)
+	}
+	defer os.Remove(tmpPath)
+
+	savePath, err := runtime.SaveFileDialog(a.ctx, runtime.SaveDialogOptions{
+		Title:           "导出财务数据 Excel",
+		DefaultFilename: fileName,
+		Filters: []runtime.FileFilter{
+			{DisplayName: "Excel 文件", Pattern: "*.xlsx"},
+		},
+	})
+	if err != nil {
+		return err
+	}
+	if savePath == "" {
+		return fmt.Errorf("用户取消保存")
+	}
+	return copyFile(tmpPath, savePath)
 }
 
 func createZipFromFiles(dst string, srcDir string, files []string) error {

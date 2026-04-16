@@ -26,6 +26,8 @@ export function DownloadReports(arg1:string,arg2:number):Promise<main.DownloadRe
 
 export function ExportCurrentFinancialData(arg1:string):Promise<void>;
 
+export function ExportFinancialDataToExcel(arg1:string):Promise<void>;
+
 export function ExportHistoricalFinancialData(arg1:string,arg2:string):Promise<void>;
 
 export function GetComparables(arg1:string):Promise<Array<string>>;
@@ -43,6 +45,8 @@ export function GetPolicyLibraryMeta():Promise<Record<string, string>>;
 export function GetReport(arg1:string,arg2:string):Promise<string>;
 
 export function GetReportHistory(arg1:string):Promise<Array<string>>;
+
+export function GetRiskRadar(arg1:string):Promise<Array<analyzer.RiskRadarItem>>;
 
 export function GetStockConcepts(arg1:string):Promise<downloader.StockConcepts>;
 

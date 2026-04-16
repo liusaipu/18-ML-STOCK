@@ -46,6 +46,10 @@ export function ExportCurrentFinancialData(arg1) {
   return window['go']['main']['App']['ExportCurrentFinancialData'](arg1);
 }
 
+export function ExportFinancialDataToExcel(arg1) {
+  return window['go']['main']['App']['ExportFinancialDataToExcel'](arg1);
+}
+
 export function ExportHistoricalFinancialData(arg1, arg2) {
   return window['go']['main']['App']['ExportHistoricalFinancialData'](arg1, arg2);
 }
@@ -80,6 +84,10 @@ export function GetReport(arg1, arg2) {
 
 export function GetReportHistory(arg1) {
   return window['go']['main']['App']['GetReportHistory'](arg1);
+}
+
+export function GetRiskRadar(arg1) {
+  return window['go']['main']['App']['GetRiskRadar'](arg1);
 }
 
 export function GetStockConcepts(arg1) {

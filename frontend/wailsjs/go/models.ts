@@ -403,6 +403,26 @@ export namespace analyzer {
 	
 	
 	
+	export class RiskRadarItem {
+	    name: string;
+	    level: string;
+	    status: string;
+	    message: string;
+	    icon: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new RiskRadarItem(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.level = source["level"];
+	        this.status = source["status"];
+	        this.message = source["message"];
+	        this.icon = source["icon"];
+	    }
+	}
 
 }
 

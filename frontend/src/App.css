@@ -2334,3 +2334,110 @@ body.light .rim-eps-item input {
   z-index: 1000;
   pointer-events: auto !important;
 }
+
+/* 财报异常雷达 */
+.risk-radar-card {
+  background: rgba(20, 27, 36, 0.6);
+  border: 1px solid #2a3a4a;
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 10px;
+}
+body.light .risk-radar-card {
+  background: rgba(255, 255, 255, 0.8);
+  border-color: #e5e7eb;
+}
+.risk-radar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.risk-radar-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #e6e6e6;
+}
+body.light .risk-radar-title {
+  color: #1f2937;
+}
+.risk-radar-sub {
+  font-size: 11px;
+  color: #94a3b8;
+}
+body.light .risk-radar-sub {
+  color: #6b7280;
+}
+.risk-radar-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px;
+}
+.risk-radar-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  background: rgba(30, 41, 54, 0.5);
+  border: 1px solid transparent;
+  cursor: default;
+}
+body.light .risk-radar-item {
+  background: rgba(243, 244, 246, 0.6);
+}
+.risk-radar-icon {
+  font-size: 13px;
+  line-height: 1;
+}
+.risk-radar-name {
+  flex: 1;
+  color: #e6e6e6;
+}
+body.light .risk-radar-name {
+  color: #374151;
+}
+.risk-radar-status {
+  font-weight: 500;
+  font-size: 11px;
+}
+.risk-radar-high {
+  border-color: rgba(239, 68, 68, 0.35);
+  background: rgba(239, 68, 68, 0.08);
+}
+.risk-radar-high .risk-radar-status {
+  color: #ef4444;
+}
+.risk-radar-medium {
+  border-color: rgba(234, 179, 8, 0.35);
+  background: rgba(234, 179, 8, 0.08);
+}
+.risk-radar-medium .risk-radar-status {
+  color: #eab308;
+}
+.risk-radar-low {
+  border-color: rgba(34, 197, 94, 0.25);
+  background: rgba(34, 197, 94, 0.06);
+}
+.risk-radar-low .risk-radar-status {
+  color: #22c55e;
+}
+body.light .risk-radar-high .risk-radar-status {
+  color: #dc2626;
+}
+body.light .risk-radar-medium .risk-radar-status {
+  color: #ca8a04;
+}
+body.light .risk-radar-low .risk-radar-status {
+  color: #16a34a;
+}
+.risk-radar-empty {
+  font-size: 12px;
+  color: #94a3b8;
+  padding: 8px 0;
+  text-align: center;
+}
+body.light .risk-radar-empty {
+  color: #9ca3af;
+}

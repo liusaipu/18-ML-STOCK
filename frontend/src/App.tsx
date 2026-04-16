@@ -95,6 +95,8 @@ import {
   GetStockConcepts,
   ExportCurrentFinancialData,
   ExportHistoricalFinancialData,
+  ExportFinancialDataToExcel,
+  GetRiskRadar,
   UpdatePolicyLibrary,
   UpdateIndustryDatabase,
   GetIndustryDBMeta,
@@ -114,6 +116,7 @@ type HistoryMeta = main.HistoryMeta
 type StockProfile = main.StockProfile
 type StockQuote = downloader.StockQuote
 type WatchlistFilterItem = main.WatchlistFilterItem
+type RiskRadarItem = analyzer.RiskRadarItem
 // type KlineData = downloader.KlineData
 
 function getStepValue(steps: StepResult[], stepNum: number, year: string, key: string): number {
@@ -245,6 +248,7 @@ function App() {
   const [forceAnalyzeOpen, setForceAnalyzeOpen] = useState(false)
   const [lastAnalysisAt, setLastAnalysisAt] = useState('')
   const [trendDrawerCode, setTrendDrawerCode] = useState<string | null>(null)
+  const [riskRadar, setRiskRadar] = useState<RiskRadarItem[] | null>(null)
 
   // RIM 参数弹窗状态
   const [showRIMModal, setShowRIMModal] = useState(false)
@@ -759,6 +763,16 @@ function App() {
     }
   }, [])
 
+  const loadRiskRadar = useCallback(async (code: string) => {
+    try {
+      const items = await GetRiskRadar(code)
+      setRiskRadar(items || [])
+    } catch (err: any) {
+      setRiskRadar(null)
+      console.error('风险雷达加载失败:', err)
+    }
+  }, [])
+
   // K线数据由 UnifiedChart 组件内部管理
   // const loadKlines = useCallback(async (code: string) => {
   //   try {
@@ -803,6 +817,7 @@ function App() {
       await loadConcepts(stock.code)
       await loadComparables(stock.code)
       await loadQuote(stock.code)
+      await loadRiskRadar(stock.code)
       // await loadKlines(stock.code)
     } catch (e) {
       alert(String(e))
@@ -1121,6 +1136,15 @@ function App() {
       await DownloadReport(selectedStock.code, content)
     } catch (err: any) {
       alert('下载报告失败: ' + String(err))
+    }
+  }
+
+  const handleExportExcel = async () => {
+    if (!selectedStock) return
+    try {
+      await ExportFinancialDataToExcel(selectedStock.code)
+    } catch (err: any) {
+      alert('导出Excel失败: ' + String(err))
     }
   }
 
@@ -1572,6 +1596,7 @@ function App() {
                   loadConcepts(s.code)
                   loadComparables(s.code)
                   loadQuote(s.code)
+                  loadRiskRadar(s.code)
                   // loadKlines(s.code)
                 }}
               >
@@ -1750,6 +1775,29 @@ function App() {
                 </div>
               </div>
             </div>
+
+            {/* 财报异常雷达 */}
+            {selectedStock && (
+              <div className="risk-radar-card">
+                <div className="risk-radar-header">
+                  <span className="risk-radar-title">📊 财报异常雷达</span>
+                  <span className="risk-radar-sub">最近一年关键风险信号</span>
+                </div>
+                {riskRadar ? (
+                  <div className="risk-radar-grid">
+                    {riskRadar.map((item, idx) => (
+                      <div key={idx} className={`risk-radar-item risk-radar-${item.level}`} title={item.message}>
+                        <span className="risk-radar-icon">{item.icon}</span>
+                        <span className="risk-radar-name">{item.name}</span>
+                        <span className="risk-radar-status">{item.status}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="risk-radar-empty">请先下载财报以查看风险雷达</div>
+                )}
+              </div>
+            )}
 
             {/* 导入按钮放在最上方 */}
             <div className="actions-sub" style={{ marginBottom: 8, justifyContent: 'flex-start' }}>
@@ -2191,6 +2239,14 @@ function App() {
               title={!displayContent ? '请先执行分析' : '下载当前显示的报告'}
             >
               下载报告
+            </button>
+            <button
+              className="btn-download"
+              onClick={handleExportExcel}
+              disabled={!selectedStock}
+              title={!selectedStock ? '请先选择股票' : '导出当前股票财务数据Excel'}
+            >
+              导出Excel
             </button>
           </div>
         </div>
