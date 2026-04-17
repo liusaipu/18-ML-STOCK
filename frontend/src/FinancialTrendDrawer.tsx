@@ -162,9 +162,6 @@ export function FinancialTrendDrawer({ code, name, onClose }: Props) {
           <h4 style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>
             {name || code} 财务指标趋势
           </h4>
-          <button className="btn-icon" onClick={onClose} title="关闭" style={{ fontSize: 18, lineHeight: 1 }}>
-            ×
-          </button>
         </div>
 
         <div style={{ padding: '12px 16px 4px' }}>

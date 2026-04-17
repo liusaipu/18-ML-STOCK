@@ -67,6 +67,7 @@ function Collapsible({ title, children, defaultExpanded = false }: { title: Reac
   )
 }
 import { toPng } from 'html-to-image'
+import html2pdf from 'html2pdf.js'
 import {
   GetWatchlist,
   GetWatchlistActivity,
@@ -96,7 +97,6 @@ import {
   GetStockConcepts,
   ExportCurrentFinancialData,
   ExportHistoricalFinancialData,
-  ExportFinancialDataToExcel,
   GetRiskRadar,
   UpdatePolicyLibrary,
   UpdateIndustryDatabase,
@@ -1145,12 +1145,24 @@ function App() {
     }
   }
 
-  const handleExportExcel = async () => {
-    if (!selectedStock) return
+  const handleExportPDF = async () => {
+    if (!selectedStock || !reportContentRef.current) return
+    const markdownBody = reportContentRef.current.querySelector('.markdown-body') as HTMLElement | null
+    if (!markdownBody) {
+      alert('未找到报告内容')
+      return
+    }
     try {
-      await ExportFinancialDataToExcel(selectedStock.code)
+      const opt: any = {
+        margin: [10, 10, 10, 10],
+        filename: `${selectedStock.code}_投资分析报告.pdf`,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2, useCORS: true },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+      }
+      await html2pdf().set(opt).from(markdownBody).save()
     } catch (err: any) {
-      alert('导出Excel失败: ' + String(err))
+      alert('导出PDF失败: ' + String(err))
     }
   }
 
@@ -1666,6 +1678,23 @@ function App() {
               </li>
             )
           })}
+          {displayWatchlist.length === 0 && (
+            <li className="watchlist-empty" style={{ padding: '24px 12px', textAlign: 'center', color: '#64748b', fontSize: '13px', listStyle: 'none' }}>
+              {watchlist.length === 0 ? (
+                <>
+                  <div style={{ marginBottom: '8px', fontSize: '16px' }}>🔍</div>
+                  <div>自选列表为空</div>
+                  <div style={{ marginTop: '4px', fontSize: '12px', opacity: 0.8 }}>在上方搜索框输入代码或名称添加股票</div>
+                </>
+              ) : (
+                <>
+                  <div style={{ marginBottom: '8px', fontSize: '16px' }}>🍃</div>
+                  <div>没有符合条件的股票</div>
+                  <div style={{ marginTop: '4px', fontSize: '12px', opacity: 0.8 }}>尝试调整筛选条件</div>
+                </>
+              )}
+            </li>
+          )}
         </ul>
 
         <div className="watchlist-footer">
@@ -1987,7 +2016,6 @@ function App() {
                 <div className="highlights-risks" style={{ marginTop: 0, marginBottom: 0 }}>
                   {highlights.length > 0 && (
                     <div className="hr-section">
-                      <div className="hr-title">✅ 亮点</div>
                       {highlights.map((h, idx) => (
                         <div key={`h-${idx}`} className="highlight-item">
                           {h}
@@ -1997,7 +2025,6 @@ function App() {
                   )}
                   {risks.length > 0 && (
                     <div className="hr-section">
-                      <div className="hr-title">⚠️ 风险</div>
                       {risks.map((r, idx) => (
                         <div key={`r-${idx}`} className="risk-item">
                           {r}
@@ -2302,10 +2329,10 @@ function App() {
                     className="download-dropdown-item"
                     onClick={() => {
                       setDownloadMenuOpen(false)
-                      handleExportExcel()
+                      handleExportPDF()
                     }}
                   >
-                    <span>📊</span> Excel 格式
+                    <span>📄</span> PDF 格式
                   </div>
                   <div
                     className="download-dropdown-item"
