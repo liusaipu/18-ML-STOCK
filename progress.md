@@ -1025,6 +1025,59 @@
 
 ---
 
+### Session 2026-04-17 (Part 4) - v1.3.19 后台全市场行业数据采集
+
+**本次会话目标**:
+- [x] 开发后台全市场行业数据采集脚本（fallback 数据源）
+- [x] 实现本地数据与 fallback 数据的智能合并
+- [x] Settings 面板显示后台采集状态和进度
+- [x] 发布 v1.3.19
+
+**已完成工作**:
+1. **新增 `scripts/fetch_all_industry_data.py`**
+   - 使用 `akshare.stock_yjbb_em` 获取 A 股业绩快报（约 3000~5000 只）
+   - 提取 ROE、毛利率、营收增长率并按行业聚合
+   - 数据写入 `industry_database_fallback.json`
+   - 进度实时写入 `industry_task.json`
+
+2. **本地 + fallback 合并逻辑**
+   - `analyzer/industry.go` 加载时同时读取本地数据库和 fallback
+   - 本地样本 `< 3` 的行业，自动 fallback 补充核心指标
+   - 解决京北方等股票"当前值与行业均值相同"的问题
+
+3. **前端状态联动**
+   - `App.tsx` 每 3 秒轮询 `GetIndustryTaskStatus()`
+   - `Settings` 面板按钮动态显示进度百分比
+   - 完成后显示采集股票总数和行业覆盖数
+
+4. **版本发布 v1.3.19**
+   - Bump 版本号，更新 CHANGELOG 和 progress.md
+   - 推送、打 tag、构建 Windows Release
+
+**测试结果汇总**:
+| 功能模块 | 状态 | 备注 |
+|---------|------|------|
+| Python 脚本 | ✅ 通过 | 成功获取 3446 只股票，覆盖 123 个行业 |
+| Go 编译 | ✅ 通过 | `go build ./...` 成功 |
+| 前端编译 | ✅ 通过 | `tsc && vite build` 成功 |
+| 合并逻辑 | ✅ 通过 | 本地不足时 fallback 正确补充 |
+
+**改动详情**:
+- 新增: `scripts/fetch_all_industry_data.py` (~180行)
+- 修改: `analyzer/industry.go` (+fallback 加载与合并逻辑)
+- 修改: `app.go` (+后台 goroutine 调度 + `GetIndustryTaskStatus`)
+- 修改: `frontend/src/App.tsx` / `Settings.tsx` (+状态轮询与显示)
+
+**版本发布**: v1.3.19
+
+**待办事项**:
+- 无
+
+**下次会话计划**:
+- 按需继续优化
+
+---
+
 ### Session 2026-04-17 (Part 3) - v1.3.18 问题修复与体验优化
 
 **本次会话目标**:
