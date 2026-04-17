@@ -108,7 +108,7 @@ func BuildRiskRadar(steps []StepResult, extras map[string]float64, years []strin
 
 	// 1. 应收账款异常 (step5) — 与行业均值对比
 	if s := findStep(5); s != nil {
-		receivableRatio := getFloat(s, latest, "receivableRatio")
+		receivableRatio := getFloat(s, latest, "ratio")
 		indReceivable := getIndVal("receivableRatio")
 		valStr := fmt.Sprintf("%.1f%%", receivableRatio)
 		indStr := formatIndustry(indReceivable, "%")
@@ -148,8 +148,8 @@ func BuildRiskRadar(steps []StepResult, extras map[string]float64, years []strin
 
 	// 3. 现金流质量 (step15)
 	if s := findStep(15); s != nil {
-		cashContent := getFloat(s, latest, "cashContent")
-		prevCash := getFloat(s, prev, "cashContent")
+		cashContent := getFloat(s, latest, "cashRatio")
+		prevCash := getFloat(s, prev, "cashRatio")
 		valStr := fmt.Sprintf("%.1f%%", cashContent)
 		indStr := formatIndustry(getIndVal("cashRatio"), "%")
 		if cashContent < 100 {
@@ -206,21 +206,7 @@ func BuildRiskRadar(steps []StepResult, extras map[string]float64, years []strin
 		}
 	}
 
-	// 6. A-Score 风险 (step8)
-	if s := findStep(8); s != nil {
-		ascore := getFloat(s, latest, "AScore")
-		valStr := fmt.Sprintf("%.0f分", ascore)
-		indStr := formatIndustry(getIndVal("mScore"), "分")
-		if ascore >= 60 {
-			addItem("A-Score风险", "high", "异常", "🔴", valStr, indStr, fmt.Sprintf("%.0f分(高风险)", ascore), "综合财务操纵与爆雷风险评分，越低越安全")
-		} else if ascore >= 40 {
-			addItem("A-Score风险", "medium", "警告", "🟡", valStr, indStr, valStr, "综合财务操纵与爆雷风险评分，越低越安全")
-		} else {
-			addItem("A-Score风险", "low", "正常", "🟢", valStr, indStr, valStr, "综合财务操纵与爆雷风险评分，越低越安全")
-		}
-	}
-
-	// 7. 非财务风险 (extras)
+	// 6. 非财务风险 (extras)
 	if len(extras) > 0 {
 		pledgeRatio := extras["pledgeRatio"]
 		enquiryCount := extras["enquiryCount"]
