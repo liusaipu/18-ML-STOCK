@@ -1025,13 +1025,14 @@ func parseAnyFloat(v any) float64 {
 
 // KlineData 单根K线数据
 type KlineData struct {
-	Time   string  `json:"time"`
-	Open   float64 `json:"open"`
-	Close  float64 `json:"close"`
-	Low    float64 `json:"low"`
-	High   float64 `json:"high"`
-	Volume float64 `json:"volume"`
-	Amount float64 `json:"amount"` // 成交额（元）
+	Time         string  `json:"time"`
+	Open         float64 `json:"open"`
+	Close        float64 `json:"close"`
+	Low          float64 `json:"low"`
+	High         float64 `json:"high"`
+	Volume       float64 `json:"volume"`
+	Amount       float64 `json:"amount"`       // 成交额（元）
+	TurnoverRate float64 `json:"turnoverRate"` // 换手率（%）
 }
 
 // FetchStockKlines 获取股票历史K线数据（日K），先尝试东方财富，再腾讯财经，再网易财经
@@ -1049,7 +1050,7 @@ func FetchStockKlines(market, code string, limit int) ([]KlineData, error) {
 	}
 
 	// 1. 东方财富 HTTPS
-	url := fmt.Sprintf("https://push2.eastmoney.com/api/qt/stock/kline/get?ut=fa5fd1943c7b386f172d6893dbfba10b&secid=%s&fields1=f1&fields2=f51,f52,f53,f54,f55,f56,f57,f58&klt=101&fqt=0&end=20500101&lmt=%d", secid, limit)
+	url := fmt.Sprintf("https://push2.eastmoney.com/api/qt/stock/kline/get?ut=fa5fd1943c7b386f172d6893dbfba10b&secid=%s&fields1=f1&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f61&klt=101&fqt=0&end=20500101&lmt=%d", secid, limit)
 	body, err := httpGetWithReferer(url, "https://quote.eastmoney.com/")
 	if err == nil {
 		var resp struct {
@@ -1083,14 +1084,19 @@ func parseEastMoneyKlines(lines []string) []KlineData {
 		if len(parts) > 6 {
 			amount = parseStrFloat(parts[6])
 		}
+		turnoverRate := 0.0
+		if len(parts) > 8 {
+			turnoverRate = parseStrFloat(parts[8])
+		}
 		result = append(result, KlineData{
-			Time:   parts[0],
-			Open:   parseStrFloat(parts[1]),
-			Close:  parseStrFloat(parts[2]),
-			Low:    parseStrFloat(parts[3]),
-			High:   parseStrFloat(parts[4]),
-			Volume: parseStrFloat(parts[5]),
-			Amount: amount,
+			Time:         parts[0],
+			Open:         parseStrFloat(parts[1]),
+			Close:        parseStrFloat(parts[2]),
+			Low:          parseStrFloat(parts[3]),
+			High:         parseStrFloat(parts[4]),
+			Volume:       parseStrFloat(parts[5]),
+			Amount:       amount,
+			TurnoverRate: turnoverRate,
 		})
 	}
 	return result

@@ -470,6 +470,7 @@ export namespace downloader {
 	    high: number;
 	    volume: number;
 	    amount: number;
+	    turnoverRate: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new KlineData(source);
@@ -484,6 +485,7 @@ export namespace downloader {
 	        this.high = source["high"];
 	        this.volume = source["volume"];
 	        this.amount = source["amount"];
+	        this.turnoverRate = source["turnoverRate"];
 	    }
 	}
 	export class PolicyUpdateResult {
