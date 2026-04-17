@@ -15,6 +15,51 @@ body.light {
   color: #1f2937;
 }
 
+/* 现代风格滚动条 - 全局 */
+* {
+  scrollbar-width: thin;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.22);
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* 浅色主题滚动条 */
+body.light ::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.18);
+}
+
+body.light ::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.28);
+}
+
+/* Firefox 滚动条颜色 */
+html {
+  scrollbar-color: rgba(255, 255, 255, 0.12) transparent;
+}
+
+body.light {
+  scrollbar-color: rgba(0, 0, 0, 0.18) transparent;
+}
+
 .app {
   display: flex;
   height: 100vh;
