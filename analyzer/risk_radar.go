@@ -83,7 +83,7 @@ func BuildRiskRadar(steps []StepResult, extras map[string]float64, years []strin
 
 	// Helper: 格式化行业均值后缀
 	formatIndustry := func(val float64, unit string) string {
-		if math.IsNaN(val) || val == 0 {
+		if math.IsNaN(val) {
 			return ""
 		}
 		return fmt.Sprintf("(行业均值 %.1f%s)", val, unit)
