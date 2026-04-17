@@ -1015,13 +1015,70 @@
 - 修改: `scripts/update_industry_database.py` (+120行，新增指标计算)
 - 修改: `CHANGELOG.md`、`progress.md`
 
-**版本发布**: v1.3.18（仅代码推送，未打 tag 和构建 Release）
+**版本发布**: v1.3.18（已打 tag 并构建 Release）
 
 **待办事项**:
 - 无
 
 **下次会话计划**:
 - 按需继续优化
+
+---
+
+### Session 2026-04-17 (Part 3) - v1.3.18 问题修复与体验优化
+
+**本次会话目标**:
+- [x] 修复行业对比雷达数据读取异常（行业均值全部为 0）
+- [x] 将行业对比雷达改为表格化展示并优化 hover 提示
+- [x] 移除 A-Score（与 M-Score 不可比）
+- [x] 全局滚动条改为现代细线隐形风格
+- [x] 发布 v1.3.18
+
+**已完成工作**:
+1. **行业对比雷达核心 bug 修复**
+   - 发现 `IndustryMetrics` JSON tag 使用 camelCase，而 Python 脚本输出 snake_case，导致 Go 解析时除 `roe` 外所有字段读为 0
+   - 统一 JSON tag 为 snake_case：`debt_ratio`、`cash_ratio`、`inventory_turnover`、`receivable_ratio`、`m_score`
+   - 修复 step5/15 key 名错误：`receivableRatio` → `ratio`，`cashContent` → `cashRatio`
+
+2. **行业对比雷达 UI 优化**
+   - 改为 4 列表格展示（状态 | 指标 | 当前值 | 行业均值）
+   - 底部提示简化为单行：`基于本地数据计算 · 设置中可更新`
+   - 鼠标 hover 显示固定指标科普说明（如"周转越慢可能存在库存积压或减值风险"）
+
+3. **移除 A-Score 风险项**
+   - A-Score（0~100 风险分）与 M-Score（Beneish 操纵模型，正常值 <-2.22）是不同维度指标，不可互相作为行业均值对比
+   - 目前数据库中无 A-Score 行业均值数据，暂时从雷达中移除
+
+4. **全局滚动条现代化**
+   - 宽度仅 6px，轨道透明，滑块半隐，hover 时轻微显色
+   - 适配深色/浅色双主题
+
+5. **版本发布 v1.3.18**
+   - 同步 `CHANGELOG.md` 与 `progress.md`
+   - 打 tag `v1.3.18` 并构建 Windows Release
+
+**测试结果汇总**:
+| 功能模块 | 状态 | 备注 |
+|---------|------|------|
+| Go 编译 | ✅ 通过 | `go build ./...` 成功 |
+| 前端编译 | ✅ 通过 | `tsc && vite build` 成功 |
+| Wails 绑定 | ✅ 通过 | `wails generate module` 成功 |
+| 行业均值读取 | ✅ 通过 | 比亚迪、京北方等多只股票验证正常 |
+| 滚动条样式 | ✅ 通过 | 左/中/右栏统一细线风格 |
+
+**改动详情**:
+- 修改: `analyzer/industry.go`（JSON tag 统一 snake_case）
+- 修改: `analyzer/risk_radar.go`（key 修复、表格字段、移除 A-Score）
+- 修改: `frontend/src/App.tsx`（表格化雷达 UI）
+- 修改: `frontend/src/App.css`（雷达表格样式 + 全局滚动条样式）
+
+**版本发布**: v1.3.18
+
+**待办事项**:
+- 行业数据库增强：后台全市场采集（akshare 分页慢速获取）作为本地数据的 fallback
+
+**下次会话计划**:
+- 开发行业数据库全市场采集折中方案
 
 ---
 
