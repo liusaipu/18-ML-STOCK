@@ -397,7 +397,7 @@ function App() {
   }
 
   // 左栏宽度可拖动调整
-  const [sidebarWidth, setSidebarWidth] = useState(260)
+  const [sidebarWidth, setSidebarWidth] = useState(230)
   const [isResizing, setIsResizing] = useState(false)
 
   useEffect(() => {
@@ -1568,14 +1568,14 @@ function App() {
           return (
             <Collapsible title={title} defaultExpanded={false}>
               <div className="watchlist-filters" style={{ padding: '8px 0 4px' }}>
-                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center', marginBottom: '6px' }}>
+                <div style={{ display: 'flex', gap: '3px', flexWrap: 'wrap', alignItems: 'center', marginBottom: '6px' }}>
                   {filterButtons.map((btn) => (
                     <button
                       key={btn.key}
                       onClick={() => setWatchlistFilter(btn.key)}
                       style={{
-                        padding: '3px 8px',
-                        fontSize: '12px',
+                        padding: '2px 5px',
+                        fontSize: '11px',
                         borderRadius: '4px',
                         border: '1px solid ' + (watchlistFilter === btn.key ? '#3b82f6' : 'rgba(148,163,184,0.3)'),
                         background: watchlistFilter === btn.key ? '#3b82f6' : 'transparent',

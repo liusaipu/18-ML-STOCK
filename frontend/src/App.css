@@ -107,7 +107,7 @@ body.light .theme-toggle:hover {
 
 /* 左栏 */
 .sidebar {
-  width: 260px;
+  width: 230px;
   background: #141b24;
   border-right: 1px solid #1f2933;
   display: flex;
@@ -438,10 +438,10 @@ body.light .watch-drag-handle {
 
 /* 中栏 */
 .info-panel {
-  width: 340px;
+  width: 300px;
   background: #0f1419;
   border-right: 1px solid #1f2933;
-  padding: 20px;
+  padding: 16px;
   display: flex;
   flex-direction: column;
   overflow-y: auto;
@@ -2443,7 +2443,7 @@ body.light .risk-radar-hint {
   font-size: 12px;
 }
 .risk-radar-table th {
-  padding: 6px 4px;
+  padding: 5px 3px;
   color: #94a3b8;
   font-weight: 500;
   border-bottom: 1px solid rgba(148, 163, 184, 0.15);
@@ -2453,7 +2453,7 @@ body.light .risk-radar-table th {
   border-bottom-color: rgba(107, 114, 128, 0.2);
 }
 .risk-radar-table td {
-  padding: 6px 4px;
+  padding: 5px 3px;
   border-bottom: 1px solid rgba(148, 163, 184, 0.08);
 }
 body.light .risk-radar-table td {
