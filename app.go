@@ -1542,6 +1542,14 @@ func (a *App) LoadAnalysisSnapshot(symbol string) (*analyzer.AnalysisReport, err
 	return a.storage.LoadSnapshot(symbol)
 }
 
+// ReloadIndustryDatabase 重新加载行业均值数据库（供用户手动刷新）
+func (a *App) ReloadIndustryDatabase() error {
+	if a.storage == nil {
+		return fmt.Errorf("存储未初始化")
+	}
+	return analyzer.ReloadIndustryDatabase(a.storage.DataDir())
+}
+
 // GetRiskRadar 获取股票行业对比雷达
 func (a *App) GetRiskRadar(symbol string, industry string) ([]analyzer.RiskRadarItem, error) {
 	if a.storage == nil {

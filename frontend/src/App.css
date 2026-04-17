@@ -2381,50 +2381,50 @@ body.light .download-dropdown-item:hover {
 .risk-radar-collapsible-body {
   padding: 2px 0;
 }
-.risk-radar-list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+.risk-radar-hint {
+  font-size: 11px;
+  color: #64748b;
+  text-align: center;
+  padding: 6px 4px 2px;
+  line-height: 1.4;
 }
-.risk-radar-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 8px;
-  border-radius: 6px;
+body.light .risk-radar-hint {
+  color: #9ca3af;
+}
+.risk-radar-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
   font-size: 12px;
-  background: rgba(30, 41, 54, 0.5);
-  border: 1px solid transparent;
-  cursor: default;
-  min-width: 0;
 }
-body.light .risk-radar-row {
-  background: rgba(243, 244, 246, 0.6);
-}
-.risk-radar-row .risk-radar-icon {
-  font-size: 13px;
-  line-height: 1;
-  flex-shrink: 0;
-}
-.risk-radar-row .risk-radar-name {
-  flex-shrink: 0;
-  color: #e6e6e6;
-  min-width: 0;
-}
-body.light .risk-radar-row .risk-radar-name {
-  color: #374151;
-}
-.risk-radar-row .risk-radar-msg {
-  flex: 1;
-  min-width: 0;
+.risk-radar-table th {
+  padding: 6px 4px;
   color: #94a3b8;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  margin-left: 8px;
+  font-weight: 500;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.15);
 }
-body.light .risk-radar-row .risk-radar-msg {
+body.light .risk-radar-table th {
   color: #6b7280;
+  border-bottom-color: rgba(107, 114, 128, 0.2);
+}
+.risk-radar-table td {
+  padding: 6px 4px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.08);
+}
+body.light .risk-radar-table td {
+  border-bottom-color: rgba(107, 114, 128, 0.1);
+}
+.risk-radar-table tr:last-child td {
+  border-bottom: none;
+}
+.risk-radar-tr {
+  transition: background 0.1s;
+}
+.risk-radar-tr:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+body.light .risk-radar-tr:hover {
+  background: rgba(0, 0, 0, 0.02);
 }
 .risk-radar-high {
   border-color: rgba(239, 68, 68, 0.35);

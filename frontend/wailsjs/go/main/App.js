@@ -150,6 +150,10 @@ export function RefreshStockProfile(arg1) {
   return window['go']['main']['App']['RefreshStockProfile'](arg1);
 }
 
+export function ReloadIndustryDatabase() {
+  return window['go']['main']['App']['ReloadIndustryDatabase']();
+}
+
 export function ReloadPolicyLibrary() {
   return window['go']['main']['App']['ReloadPolicyLibrary']();
 }

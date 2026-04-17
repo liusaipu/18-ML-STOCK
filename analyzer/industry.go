@@ -14,17 +14,17 @@ import (
 // IndustryMetrics 行业均值指标
 type IndustryMetrics struct {
 	Industry      string  `json:"industry"`
-	Count         int     `json:"count"`         // 统计样本数
-	ROE           float64 `json:"roe"`           // 平均ROE
-	ROEMedian     float64 `json:"roe_median"`    // ROE中位数
-	GrossMargin   float64 `json:"grossMargin"`   // 平均毛利率
-	RevenueGrowth float64 `json:"revenueGrowth"` // 平均营收增长
-	DebtRatio         float64 `json:"debtRatio"`         // 平均负债率
-	CashRatio         float64 `json:"cashRatio"`         // 平均现金含量
-	MScore            float64 `json:"mScore"`            // 平均M-Score
-	InventoryTurnover float64 `json:"inventoryTurnover"` // 平均存货周转率
-	ReceivableRatio   float64 `json:"receivableRatio"`   // 平均应收账款占比
-	UpdatedAt         string  `json:"updated_at"`        // 更新时间
+	Count         int     `json:"count"`             // 统计样本数
+	ROE           float64 `json:"roe"`               // 平均ROE
+	ROEMedian     float64 `json:"roe_median"`        // ROE中位数
+	GrossMargin   float64 `json:"gross_margin"`      // 平均毛利率
+	RevenueGrowth float64 `json:"revenue_growth"`    // 平均营收增长
+	DebtRatio     float64 `json:"debt_ratio"`        // 平均负债率
+	CashRatio     float64 `json:"cash_ratio"`        // 平均现金含量
+	MScore        float64 `json:"m_score"`           // 平均M-Score
+	InventoryTurnover float64 `json:"inventory_turnover"` // 平均存货周转率
+	ReceivableRatio   float64 `json:"receivable_ratio"`   // 平均应收账款占比
+	UpdatedAt         string  `json:"updated_at"`         // 更新时间
 }
 
 // IndustryDatabase 行业均值数据库

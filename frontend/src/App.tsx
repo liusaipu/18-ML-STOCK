@@ -781,6 +781,7 @@ function App() {
     }
   }, [])
 
+
   // K线数据由 UnifiedChart 组件内部管理
   // const loadKlines = useCallback(async (code: string) => {
   //   try {
@@ -2053,16 +2054,30 @@ function App() {
             {selectedStock && (
               <Collapsible title="📊 行业对比雷达">
                 <div className="risk-radar-collapsible-body" style={{ marginTop: 0, marginBottom: 0 }}>
-                  {riskRadar ? (
-                    <div className="risk-radar-list">
-                      {riskRadar.map((item, idx) => (
-                        <div key={idx} className={`risk-radar-row risk-radar-${item.level}`} title={item.message}>
-                          <span className="risk-radar-icon">{item.icon}</span>
-                          <span className="risk-radar-name">{item.name}</span>
-                          <span className="risk-radar-msg">{item.message}</span>
-                        </div>
-                      ))}
-                    </div>
+                  {riskRadar && riskRadar.length > 0 ? (
+                    <>
+                      <table className="risk-radar-table">
+                        <thead>
+                          <tr>
+                            <th style={{ width: 40, textAlign: 'center' }}>状态</th>
+                            <th>指标</th>
+                            <th style={{ textAlign: 'right' }}>当前值</th>
+                            <th style={{ textAlign: 'right' }}>行业均值</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {riskRadar.map((item, idx) => (
+                            <tr key={idx} className={`risk-radar-tr risk-radar-${item.level}`} title={item.message}>
+                              <td style={{ textAlign: 'center' }}>{item.icon}</td>
+                              <td>{item.name}</td>
+                              <td style={{ textAlign: 'right', fontWeight: 500 }}>{item.value}</td>
+                              <td style={{ textAlign: 'right', color: '#94a3b8' }}>{item.industry || '-'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                      <div className="risk-radar-hint">行业均值基于本地已下载股票计算，可在「设置 → 数据」中更新</div>
+                    </>
                   ) : (
                     <div className="risk-radar-empty">暂无对比数据（请先执行18步分析）</div>
                   )}

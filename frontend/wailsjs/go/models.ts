@@ -355,13 +355,13 @@ export namespace analyzer {
 	    count: number;
 	    roe: number;
 	    roe_median: number;
-	    grossMargin: number;
-	    revenueGrowth: number;
-	    debtRatio: number;
-	    cashRatio: number;
-	    mScore: number;
-	    inventoryTurnover: number;
-	    receivableRatio: number;
+	    gross_margin: number;
+	    revenue_growth: number;
+	    debt_ratio: number;
+	    cash_ratio: number;
+	    m_score: number;
+	    inventory_turnover: number;
+	    receivable_ratio: number;
 	    updated_at: string;
 	
 	    static createFrom(source: any = {}) {
@@ -374,13 +374,13 @@ export namespace analyzer {
 	        this.count = source["count"];
 	        this.roe = source["roe"];
 	        this.roe_median = source["roe_median"];
-	        this.grossMargin = source["grossMargin"];
-	        this.revenueGrowth = source["revenueGrowth"];
-	        this.debtRatio = source["debtRatio"];
-	        this.cashRatio = source["cashRatio"];
-	        this.mScore = source["mScore"];
-	        this.inventoryTurnover = source["inventoryTurnover"];
-	        this.receivableRatio = source["receivableRatio"];
+	        this.gross_margin = source["gross_margin"];
+	        this.revenue_growth = source["revenue_growth"];
+	        this.debt_ratio = source["debt_ratio"];
+	        this.cash_ratio = source["cash_ratio"];
+	        this.m_score = source["m_score"];
+	        this.inventory_turnover = source["inventory_turnover"];
+	        this.receivable_ratio = source["receivable_ratio"];
 	        this.updated_at = source["updated_at"];
 	    }
 	}
@@ -413,6 +413,8 @@ export namespace analyzer {
 	    status: string;
 	    message: string;
 	    icon: string;
+	    value: string;
+	    industry: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new RiskRadarItem(source);
@@ -425,6 +427,8 @@ export namespace analyzer {
 	        this.status = source["status"];
 	        this.message = source["message"];
 	        this.icon = source["icon"];
+	        this.value = source["value"];
+	        this.industry = source["industry"];
 	    }
 	}
 

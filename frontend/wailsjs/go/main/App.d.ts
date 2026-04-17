@@ -78,6 +78,8 @@ export function RefreshIndustryBaselines():Promise<Record<string, analyzer.Indus
 
 export function RefreshStockProfile(arg1:string):Promise<main.StockProfile>;
 
+export function ReloadIndustryDatabase():Promise<void>;
+
 export function ReloadPolicyLibrary():Promise<void>;
 
 export function RemoveComparable(arg1:string,arg2:string):Promise<void>;
