@@ -54,6 +54,14 @@ export function ExportHistoricalFinancialData(arg1, arg2) {
   return window['go']['main']['App']['ExportHistoricalFinancialData'](arg1, arg2);
 }
 
+export function ExportReportImage(arg1, arg2) {
+  return window['go']['main']['App']['ExportReportImage'](arg1, arg2);
+}
+
+export function ExportReportPDF(arg1, arg2) {
+  return window['go']['main']['App']['ExportReportPDF'](arg1, arg2);
+}
+
 export function GetComparables(arg1) {
   return window['go']['main']['App']['GetComparables'](arg1);
 }

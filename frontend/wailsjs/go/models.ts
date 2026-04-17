@@ -360,6 +360,8 @@ export namespace analyzer {
 	    debtRatio: number;
 	    cashRatio: number;
 	    mScore: number;
+	    inventoryTurnover: number;
+	    receivableRatio: number;
 	    updated_at: string;
 	
 	    static createFrom(source: any = {}) {
@@ -377,6 +379,8 @@ export namespace analyzer {
 	        this.debtRatio = source["debtRatio"];
 	        this.cashRatio = source["cashRatio"];
 	        this.mScore = source["mScore"];
+	        this.inventoryTurnover = source["inventoryTurnover"];
+	        this.receivableRatio = source["receivableRatio"];
 	        this.updated_at = source["updated_at"];
 	    }
 	}

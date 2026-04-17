@@ -3,6 +3,7 @@ package main
 import (
 	"archive/zip"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -1740,9 +1741,58 @@ func (a *App) DownloadReport(symbol string, markdownContent string) error {
 		return err
 	}
 	if path == "" {
-		return fmt.Errorf("用户取消保存")
+		// 用户取消保存，不报错
+		return nil
 	}
 	return os.WriteFile(path, []byte(markdownContent), 0644)
+}
+
+// ExportReportPDF 将 PDF base64 数据保存为用户选择的文件
+func (a *App) ExportReportPDF(symbol string, base64Data string) error {
+	path, err := runtime.SaveFileDialog(a.ctx, runtime.SaveDialogOptions{
+		Title:           "保存 PDF 报告",
+		DefaultFilename: fmt.Sprintf("%s_投资分析报告.pdf", symbol),
+		Filters: []runtime.FileFilter{
+			{DisplayName: "PDF", Pattern: "*.pdf"},
+		},
+	})
+	if err != nil {
+		return err
+	}
+	if path == "" {
+		return nil
+	}
+	data, err := base64.StdEncoding.DecodeString(base64Data)
+	if err != nil {
+		return fmt.Errorf("解码 PDF 数据失败: %w", err)
+	}
+	return os.WriteFile(path, data, 0644)
+}
+
+// ExportReportImage 将图片 base64 DataURL 保存为用户选择的文件
+func (a *App) ExportReportImage(symbol string, dataURL string) error {
+	path, err := runtime.SaveFileDialog(a.ctx, runtime.SaveDialogOptions{
+		Title:           "保存图片",
+		DefaultFilename: fmt.Sprintf("%s_投资分析报告.png", symbol),
+		Filters: []runtime.FileFilter{
+			{DisplayName: "PNG", Pattern: "*.png"},
+		},
+	})
+	if err != nil {
+		return err
+	}
+	if path == "" {
+		return nil
+	}
+	parts := strings.SplitN(dataURL, ",", 2)
+	if len(parts) != 2 {
+		return fmt.Errorf("无效的图片数据")
+	}
+	data, err := base64.StdEncoding.DecodeString(parts[1])
+	if err != nil {
+		return fmt.Errorf("解码图片数据失败: %w", err)
+	}
+	return os.WriteFile(path, data, 0644)
 }
 
 // ExportCurrentFinancialData 将当前股票财务数据导出为 zip

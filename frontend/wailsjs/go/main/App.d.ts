@@ -30,6 +30,10 @@ export function ExportFinancialDataToExcel(arg1:string):Promise<void>;
 
 export function ExportHistoricalFinancialData(arg1:string,arg2:string):Promise<void>;
 
+export function ExportReportImage(arg1:string,arg2:string):Promise<void>;
+
+export function ExportReportPDF(arg1:string,arg2:string):Promise<void>;
+
 export function GetComparables(arg1:string):Promise<Array<string>>;
 
 export function GetFinancialTrends(arg1:string):Promise<main.FinancialTrendsData>;

@@ -73,36 +73,49 @@ func BuildRiskRadar(steps []StepResult, extras map[string]float64, years []strin
 			return ind.DebtRatio
 		case "mScore":
 			return ind.MScore
+		case "inventoryTurnover":
+			return ind.InventoryTurnover
+		case "receivableRatio":
+			return ind.ReceivableRatio
 		}
 		return math.NaN()
 	}
 
 	// Helper: 格式化行业均值后缀
 	formatIndustry := func(val float64, unit string) string {
-		if math.IsNaN(val) {
+		if math.IsNaN(val) || val == 0 {
 			return ""
 		}
 		return fmt.Sprintf("(行业均值 %.1f%s)", val, unit)
 	}
 
-	// 1. 应收账款异常 (step5)
+	// 1. 应收账款异常 (step5) — 与行业均值对比
 	if s := findStep(5); s != nil {
 		receivableRatio := getFloat(s, latest, "receivableRatio")
-		receivableYoY := getFloat(s, latest, "receivableYoY")
-		if receivableRatio > 20 || receivableYoY > 30 {
+		indReceivable := getIndVal("receivableRatio")
+		msg := fmt.Sprintf("%.1f%% %s", receivableRatio, formatIndustry(indReceivable, "%"))
+		level := "low"
+		if receivableRatio > 20 {
+			level = "high"
+		} else if receivableRatio > 15 {
+			level = "medium"
+		} else if !math.IsNaN(indReceivable) && indReceivable > 0 && receivableRatio > indReceivable*1.5 {
+			level = "medium"
+		}
+		if level == "high" {
 			items = append(items, RiskRadarItem{
 				Name:    "应收账款占比",
 				Level:   "high",
 				Status:  "异常",
-				Message: fmt.Sprintf("%.1f%%(同比+%.1f%%)", receivableRatio, receivableYoY),
+				Message: fmt.Sprintf("%.1f%%(高于20%%) %s", receivableRatio, formatIndustry(indReceivable, "%")),
 				Icon:    "🔴",
 			})
-		} else if receivableRatio > 15 || receivableYoY > 20 {
+		} else if level == "medium" {
 			items = append(items, RiskRadarItem{
 				Name:    "应收账款占比",
 				Level:   "medium",
 				Status:  "警告",
-				Message: fmt.Sprintf("%.1f%%(同比+%.1f%%)", receivableRatio, receivableYoY),
+				Message: msg,
 				Icon:    "🟡",
 			})
 		} else {
@@ -110,30 +123,35 @@ func BuildRiskRadar(steps []StepResult, extras map[string]float64, years []strin
 				Name:    "应收账款占比",
 				Level:   "low",
 				Status:  "正常",
-				Message: fmt.Sprintf("%.1f%%", receivableRatio),
+				Message: msg,
 				Icon:    "🟢",
 			})
 		}
 	}
 
-	// 2. 存货周转 (step11)
+	// 2. 存货周转 (step11) — 与行业均值对比
 	if s := findStep(11); s != nil {
 		turnover := getFloat(s, latest, "inventoryTurnover")
-		prevTurnover := getFloat(s, prev, "inventoryTurnover")
-		if prev != "" && prevTurnover > 0 && turnover < prevTurnover*0.9 {
+		indTurnover := getIndVal("inventoryTurnover")
+		msg := fmt.Sprintf("%.2f次 %s", turnover, formatIndustry(indTurnover, "次"))
+		level := "low"
+		if !math.IsNaN(indTurnover) && indTurnover > 0 && turnover < indTurnover*0.8 {
+			level = "medium"
+		}
+		if level == "medium" {
 			items = append(items, RiskRadarItem{
 				Name:    "存货周转率",
-				Level:   "medium",
+				Level:   level,
 				Status:  "警告",
-				Message: fmt.Sprintf("%.2f次(同比%.1f%%)", turnover, (1-turnover/prevTurnover)*100),
+				Message: msg,
 				Icon:    "🟡",
 			})
 		} else {
 			items = append(items, RiskRadarItem{
 				Name:    "存货周转率",
-				Level:   "low",
+				Level:   level,
 				Status:  "正常",
-				Message: fmt.Sprintf("%.2f次", turnover),
+				Message: msg,
 				Icon:    "🟢",
 			})
 		}

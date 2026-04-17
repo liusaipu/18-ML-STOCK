@@ -81,6 +81,8 @@ import {
   AnalyzeStockWithRIM,
   CheckAnalysisCache,
   DownloadReport,
+  ExportReportPDF,
+  ExportReportImage,
   DeleteReport,
   ConfirmDialog,
   GetReportHistory,
@@ -1141,7 +1143,11 @@ function App() {
     try {
       await DownloadReport(selectedStock.code, content)
     } catch (err: any) {
-      alert('下载报告失败: ' + String(err))
+      const msg = String(err)
+      if (msg.includes('取消保存') || msg.includes('用户取消')) {
+        return
+      }
+      alert('下载报告失败: ' + msg)
     }
   }
 
@@ -1160,9 +1166,16 @@ function App() {
         html2canvas: { scale: 2, useCORS: true },
         jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
       }
-      await html2pdf().set(opt).from(markdownBody).save()
+      const pdfDataUrl: string = await html2pdf().set(opt).from(markdownBody).outputPdf('datauristring')
+      // 去掉 data:application/pdf;base64, 前缀
+      const base64Data = pdfDataUrl.split(',')[1]
+      await ExportReportPDF(selectedStock.code, base64Data)
     } catch (err: any) {
-      alert('导出PDF失败: ' + String(err))
+      const msg = String(err)
+      if (msg.includes('取消保存') || msg.includes('用户取消')) {
+        return
+      }
+      alert('导出PDF失败: ' + msg)
     }
   }
 
@@ -1179,12 +1192,13 @@ function App() {
         backgroundColor: getComputedStyle(document.body).backgroundColor,
         pixelRatio: 2,
       })
-      const link = document.createElement('a')
-      link.download = `${selectedStock.code}_投资分析报告.png`
-      link.href = dataUrl
-      link.click()
+      await ExportReportImage(selectedStock.code, dataUrl)
     } catch (err: any) {
-      alert('生成图片失败: ' + String(err))
+      const msg = String(err)
+      if (msg.includes('取消保存') || msg.includes('用户取消')) {
+        return
+      }
+      alert('生成图片失败: ' + msg)
     }
   }
 

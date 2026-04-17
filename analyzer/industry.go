@@ -19,10 +19,12 @@ type IndustryMetrics struct {
 	ROEMedian     float64 `json:"roe_median"`    // ROE中位数
 	GrossMargin   float64 `json:"grossMargin"`   // 平均毛利率
 	RevenueGrowth float64 `json:"revenueGrowth"` // 平均营收增长
-	DebtRatio     float64 `json:"debtRatio"`     // 平均负债率
-	CashRatio     float64 `json:"cashRatio"`     // 平均现金含量
-	MScore        float64 `json:"mScore"`        // 平均M-Score
-	UpdatedAt     string  `json:"updated_at"`    // 更新时间
+	DebtRatio         float64 `json:"debtRatio"`         // 平均负债率
+	CashRatio         float64 `json:"cashRatio"`         // 平均现金含量
+	MScore            float64 `json:"mScore"`            // 平均M-Score
+	InventoryTurnover float64 `json:"inventoryTurnover"` // 平均存货周转率
+	ReceivableRatio   float64 `json:"receivableRatio"`   // 平均应收账款占比
+	UpdatedAt         string  `json:"updated_at"`        // 更新时间
 }
 
 // IndustryDatabase 行业均值数据库
