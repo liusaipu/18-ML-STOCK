@@ -79,32 +79,45 @@ def draw_logo():
                    cx + r_inner - i*4, cy + r_inner - i*4],
                   outline=(57, 208, 216, alpha), width=2)
 
-    # Chart line inside lens (candle/line hybrid)
+    # Chart line inside lens: 上涨 → 小波折 → 继续上涨创新高
     points = []
-    base_y = cy + 30
-    x_start = cx - 100
-    x_end = cx + 100
-    n = 25
+    base_y = cy + 55
+    x_start = cx - 95
+    x_end = cx + 95
+    n = 30
     for i in range(n):
         x = x_start + (x_end - x_start) * i / (n - 1)
-        trend = math.sin(i / n * math.pi) * 50
-        noise = (random.random() - 0.5) * 25
-        y = base_y - trend + noise
+        t = i / (n - 1)
+        # 大趋势：S型曲线整体向上，终点创新高
+        main_trend = (3 * t * t - 2 * t * t * t) * 85  # 0 -> 85
+        # 小波折：中间叠加震荡回调
+        wobble = 0
+        if 0.22 < t < 0.42:
+            wobble = math.sin((t - 0.22) / 0.2 * math.pi) * 20  # 回调
+        elif 0.50 < t < 0.72:
+            wobble = -math.sin((t - 0.50) / 0.22 * math.pi) * 14  # 二次震荡
+        noise = (random.random() - 0.5) * 10
+        y = base_y - main_trend + wobble + noise
         points.append((x, y))
 
     # Draw connecting line
     for i in range(len(points) - 1):
         d.line([points[i], points[i + 1]], fill=(57, 208, 216, 230), width=4)
 
-    # Draw candle bodies on key points
-    for i in [3, 7, 12, 17, 21]:
-        x, y = points[i]
-        is_up = i % 2 == 0
+    # Draw candle bodies on key points (对齐走势高低点)
+    candle_indices = [3, 8, 13, 18, 24]
+    for idx, ci in enumerate(candle_indices):
+        x, y = points[ci]
+        # 根据位置决定涨跌：前段涨、回调跌、再涨
+        if idx in [0, 2, 4]:
+            is_up = True
+        else:
+            is_up = False
         color_rgb = GREEN_RGB if is_up else RED_RGB
-        body_h = random.randint(12, 28)
-        wick_h = random.randint(6, 14)
+        body_h = random.randint(10, 22)
+        wick_h = random.randint(5, 12)
         # body
-        d.rectangle([x - 5, y - body_h // 2, x + 5, y + body_h // 2],
+        d.rectangle([x - 4, y - body_h // 2, x + 4, y + body_h // 2],
                     fill=(*color_rgb, 220), outline=(*color_rgb, 255), width=1)
         # wick
         d.line([x, y - body_h // 2 - wick_h, x, y - body_h // 2], fill=(*color_rgb, 180), width=2)
