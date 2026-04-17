@@ -42,6 +42,8 @@ export function GetIndustryDBMeta():Promise<Record<string, any>>;
 
 export function GetIndustryMetrics(arg1:string):Promise<analyzer.IndustryMetrics|boolean>;
 
+export function GetIndustryTaskStatus():Promise<Record<string, any>>;
+
 export function GetModule4Status(arg1:string):Promise<boolean>;
 
 export function GetPolicyLibraryMeta():Promise<Record<string, string>>;

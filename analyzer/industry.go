@@ -35,10 +35,25 @@ type IndustryDatabase struct {
 }
 
 var (
-	industryDB     IndustryDatabase
-	industryDBMu   sync.RWMutex
-	industryDBInit bool
+	industryDB         IndustryDatabase
+	industryFallbackDB IndustryDatabase
+	industryDBMu       sync.RWMutex
+	industryDBInit     bool
 )
+
+// loadFallbackDB 加载 fallback 行业数据库
+func loadFallbackDB(dataDir string) {
+	path := filepath.Join(dataDir, "industry_database_fallback.json")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		// fallback 不存在是正常的，静默忽略
+		industryFallbackDB = IndustryDatabase{Industries: make(map[string]*IndustryMetrics)}
+		return
+	}
+	if err := json.Unmarshal(data, &industryFallbackDB); err != nil {
+		industryFallbackDB = IndustryDatabase{Industries: make(map[string]*IndustryMetrics)}
+	}
+}
 
 // InitIndustryDatabase 初始化行业均值数据库
 func InitIndustryDatabase(dataDir string) error {
@@ -54,6 +69,8 @@ func InitIndustryDatabase(dataDir string) error {
 				UpdatedAt:  time.Now().Format(time.RFC3339),
 				Industries: make(map[string]*IndustryMetrics),
 			}
+			loadFallbackDB(dataDir)
+			industryDBInit = true
 			return nil
 		}
 		return fmt.Errorf("读取行业数据库失败: %w", err)
@@ -63,6 +80,7 @@ func InitIndustryDatabase(dataDir string) error {
 		return fmt.Errorf("解析行业数据库失败: %w", err)
 	}
 	
+	loadFallbackDB(dataDir)
 	industryDBInit = true
 	return nil
 }
@@ -73,7 +91,20 @@ func ReloadIndustryDatabase(dataDir string) error {
 	return InitIndustryDatabase(dataDir)
 }
 
-// GetIndustryMetrics 获取指定行业的均值指标
+// findIndustry 在行业数据库中查找行业（支持模糊匹配）
+func findIndustry(db IndustryDatabase, industry string) (*IndustryMetrics, bool) {
+	m, ok := db.Industries[industry]
+	if !ok {
+		for name, metrics := range db.Industries {
+			if contains(name, industry) || contains(industry, name) {
+				return metrics, true
+			}
+		}
+	}
+	return m, ok
+}
+
+// GetIndustryMetrics 获取指定行业的均值指标（本地 + fallback 合并）
 func GetIndustryMetrics(industry string) (*IndustryMetrics, bool) {
 	industryDBMu.RLock()
 	defer industryDBMu.RUnlock()
@@ -82,16 +113,43 @@ func GetIndustryMetrics(industry string) (*IndustryMetrics, bool) {
 		return nil, false
 	}
 	
-	m, ok := industryDB.Industries[industry]
-	if !ok {
-		// 尝试模糊匹配
-		for name, metrics := range industryDB.Industries {
-			if contains(name, industry) || contains(industry, name) {
-				return metrics, true
-			}
-		}
+	local, localOk := findIndustry(industryDB, industry)
+	fallback, fallbackOk := findIndustry(industryFallbackDB, industry)
+	
+	// 如果本地数据样本充足（>=3），直接返回本地
+	if localOk && local != nil && local.Count >= 3 {
+		return local, true
 	}
-	return m, ok
+	
+	// 如果本地样本不足或不存在，尝试用 fallback 补充 ROE/毛利率/营收增长
+	if localOk && fallbackOk && fallback != nil {
+		merged := *local
+		if fallback.ROE != 0 {
+			merged.ROE = fallback.ROE
+		}
+		if fallback.GrossMargin != 0 {
+			merged.GrossMargin = fallback.GrossMargin
+		}
+		if fallback.RevenueGrowth != 0 {
+			merged.RevenueGrowth = fallback.RevenueGrowth
+		}
+		// fallback 的 Count 用负数标记来源，或直接累加说明
+		// 这里简单把 count 标记为 fallback 的样本数，让用户知道是外部数据
+		merged.Count = fallback.Count
+		return &merged, true
+	}
+	
+	// 只有 fallback
+	if fallbackOk && fallback != nil {
+		return fallback, true
+	}
+	
+	// 只有本地（即使样本不足也返回）
+	if localOk {
+		return local, true
+	}
+	
+	return nil, false
 }
 
 // GetAllIndustries 获取所有行业列表

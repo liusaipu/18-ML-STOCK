@@ -71,6 +71,7 @@ interface SettingsProps {
   onUpdateIndustryDB?: () => void
   policyActionStatus?: { type: 'success' | 'error' | null; message: string }
   industryActionStatus?: { type: 'success' | 'error' | null; message: string }
+  industryTask?: any
 }
 
 export function Settings({ 
@@ -83,7 +84,8 @@ export function Settings({
   onUpdatePolicyLibrary,
   onUpdateIndustryDB,
   policyActionStatus,
-  industryActionStatus
+  industryActionStatus,
+  industryTask
 }: SettingsProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [activeTab, setActiveTab] = useState<'appearance' | 'chart' | 'data' | 'about'>('appearance')
@@ -242,10 +244,29 @@ export function Settings({
                     onClick={onUpdateIndustryDB}
                     disabled={industryUpdating}
                   >
-                    {industryUpdating ? '更新中(约2-3分钟)...' : '🔄 更新行业数据库'}
+                    {industryUpdating
+                      ? (industryTask?.status === 'running' && industryTask?.total
+                          ? `后台采集中 ${Math.round((industryTask.progress || 0) / industryTask.total * 100)}%...`
+                          : '后台采集中...')
+                      : '🔄 更新行业数据库'}
                   </button>
                 )}
-                {industryActionStatus?.type && !industryUpdating && (
+                {industryTask?.status === 'running' && (
+                  <div className="settings-action-status">
+                    <span style={{ color: '#94a3b8' }}>{industryTask.message || '正在采集全市场数据...'}</span>
+                  </div>
+                )}
+                {industryTask?.status === 'completed' && !industryUpdating && (
+                  <div className="settings-action-status">
+                    <span className="status-success">{industryTask.message || '后台采集完成'}</span>
+                  </div>
+                )}
+                {industryTask?.status === 'error' && !industryUpdating && (
+                  <div className="settings-action-status">
+                    <span className="status-error">{industryTask.message || '后台采集失败'}</span>
+                  </div>
+                )}
+                {industryActionStatus?.type && !industryUpdating && industryTask?.status !== 'running' && (
                   <div className="settings-action-status">
                     {industryActionStatus.type === 'success' ? (
                       <span className="status-success">{industryActionStatus.message}</span>

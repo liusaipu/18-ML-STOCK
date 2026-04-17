@@ -103,6 +103,7 @@ import {
   UpdatePolicyLibrary,
   UpdateIndustryDatabase,
   GetIndustryDBMeta,
+  GetIndustryTaskStatus,
   UpdateModule4Only,
   LoadAnalysisSnapshot,
   SendNotification,
@@ -222,6 +223,7 @@ function App() {
   const [policyUpdating, setPolicyUpdating] = useState(false)
   const [industryDBMeta, setIndustryDBMeta] = useState<{version: string, updatedAt: string, count: number} | null>(null)
   const [industryUpdating, setIndustryUpdating] = useState(false)
+  const [industryTask, setIndustryTask] = useState<any>(null)
   const [policyActionStatus, setPolicyActionStatus] = useState<{type: 'success' | 'error' | null, message: string}>({type: null, message: ''})
   const [industryActionStatus, setIndustryActionStatus] = useState<{type: 'success' | 'error' | null, message: string}>({type: null, message: ''})
   const [quote, setQuote] = useState<StockQuote | null>(null)
@@ -725,6 +727,33 @@ function App() {
       setIndustryDBMeta({ version: '1.0', updatedAt: '未更新', count: 0 })
     }
   }, [])
+
+  // 轮询后台行业数据采集任务状态
+  useEffect(() => {
+    let prevStatus = ''
+    const check = async () => {
+      try {
+        const task = await GetIndustryTaskStatus()
+        setIndustryTask(task)
+        const status = task?.status || 'idle'
+        if (status === 'running') {
+          setIndustryUpdating(true)
+        } else {
+          setIndustryUpdating(false)
+        }
+        // 如果刚从 running 变为 completed，刷新元信息
+        if (prevStatus === 'running' && status === 'completed') {
+          loadIndustryDBMeta()
+        }
+        prevStatus = status
+      } catch {
+        // ignore
+      }
+    }
+    check()
+    const id = setInterval(check, 3000)
+    return () => clearInterval(id)
+  }, [loadIndustryDBMeta])
 
   // 更新行业数据库
   const handleUpdateIndustryDB = useCallback(async () => {
@@ -1479,6 +1508,7 @@ function App() {
         onUpdateIndustryDB={handleUpdateIndustryDB}
         policyActionStatus={policyActionStatus}
         industryActionStatus={industryActionStatus}
+        industryTask={industryTask}
       />
 
       {/* 左栏：自选列表 */}

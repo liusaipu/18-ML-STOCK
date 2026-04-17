@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -117,6 +118,9 @@ func (a *App) startup(ctx context.Context) {
 	if err := analyzer.InitPolicyLibrary(a.storage.DataDir()); err != nil {
 		fmt.Printf("初始化政策库失败: %v\n", err)
 	}
+
+	// 启动后台行业数据采集（如果满足条件）
+	go a.startBackgroundIndustryUpdate()
 }
 
 // loadStockDB 从嵌入的资源或数据目录加载股票列表
@@ -126,6 +130,96 @@ func (a *App) loadStockDB() error {
 		return err
 	}
 	return json.Unmarshal(bytes, &a.stocks)
+}
+
+// fallbackIndustryScriptPath 返回 fetch_all_industry_data.py 绝对路径
+func fallbackIndustryScriptPath() string {
+	if exe, err := os.Executable(); err == nil {
+		exeDir := filepath.Dir(exe)
+		p := filepath.Join(exeDir, "scripts", "fetch_all_industry_data.py")
+		if _, err := os.Stat(p); err == nil {
+			return p
+		}
+	}
+	// 开发模式：从项目根目录查找
+	base := filepath.Join(".", "scripts", "fetch_all_industry_data.py")
+	if _, err := os.Stat(base); err == nil {
+		return base
+	}
+	return ""
+}
+
+// shouldStartBackgroundIndustryUpdate 判断是否需要启动后台行业数据采集
+func (a *App) shouldStartBackgroundIndustryUpdate() bool {
+	dataDir := a.storage.DataDir()
+	taskPath := filepath.Join(dataDir, "industry_task.json")
+	
+	// 如果任务文件不存在，直接启动
+	data, err := os.ReadFile(taskPath)
+	if err != nil {
+		return true
+	}
+	
+	var task struct {
+		Status    string `json:"status"`
+		UpdatedAt string `json:"updatedAt"`
+	}
+	if err := json.Unmarshal(data, &task); err != nil {
+		return true
+	}
+	
+	// 如果正在运行，不要重复启动
+	if task.Status == "running" {
+		return false
+	}
+	
+	// 如果已完成，检查是否超过 7 天
+	if task.Status == "completed" && task.UpdatedAt != "" {
+		t, err := time.Parse("2006-01-02T15:04:05", task.UpdatedAt)
+		if err == nil && time.Since(t) < 7*24*time.Hour {
+			return false
+		}
+	}
+	
+	return true
+}
+
+// startBackgroundIndustryUpdate 启动后台行业数据采集
+func (a *App) startBackgroundIndustryUpdate() {
+	if a.storage == nil {
+		return
+	}
+	if !a.shouldStartBackgroundIndustryUpdate() {
+		return
+	}
+	
+	script := fallbackIndustryScriptPath()
+	if script == "" {
+		fmt.Println("未找到 fetch_all_industry_data.py，跳过后台行业数据采集")
+		return
+	}
+	
+	python := "python"
+	if _, err := exec.LookPath("python"); err != nil {
+		python = "python3"
+	}
+	
+	fmt.Printf("启动后台行业数据采集: %s\n", script)
+	cmd := exec.Command(python, script, a.storage.DataDir())
+	cmd.Env = append(os.Environ(), "PYTHONIOENCODING=utf-8")
+	
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		fmt.Printf("后台行业数据采集失败: %v, output: %s\n", err, string(output))
+		return
+	}
+	
+	fmt.Printf("后台行业数据采集完成: %s\n", string(output))
+	
+	// 完成后重新加载行业数据库
+	if reloadErr := analyzer.ReloadIndustryDatabase(a.storage.DataDir()); reloadErr != nil {
+		fmt.Printf("后台行业数据热重载失败: %v\n", reloadErr)
+	}
 }
 
 // SearchStocks 根据关键词搜索股票，返回前10条
@@ -2113,6 +2207,23 @@ func (a *App) GetIndustryDBMeta() map[string]interface{} {
 		"updatedAt":  updatedAt,
 		"count":      count,
 	}
+}
+
+// GetIndustryTaskStatus 获取后台行业数据采集任务状态
+func (a *App) GetIndustryTaskStatus() map[string]interface{} {
+	if a.storage == nil {
+		return map[string]interface{}{"status": "idle"}
+	}
+	taskPath := filepath.Join(a.storage.DataDir(), "industry_task.json")
+	data, err := os.ReadFile(taskPath)
+	if err != nil {
+		return map[string]interface{}{"status": "idle"}
+	}
+	var result map[string]interface{}
+	if err := json.Unmarshal(data, &result); err != nil {
+		return map[string]interface{}{"status": "idle"}
+	}
+	return result
 }
 
 // GetIndustryMetrics 获取指定行业的均值指标

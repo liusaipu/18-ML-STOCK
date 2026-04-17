@@ -78,6 +78,10 @@ export function GetIndustryMetrics(arg1) {
   return window['go']['main']['App']['GetIndustryMetrics'](arg1);
 }
 
+export function GetIndustryTaskStatus() {
+  return window['go']['main']['App']['GetIndustryTaskStatus']();
+}
+
 export function GetModule4Status(arg1) {
   return window['go']['main']['App']['GetModule4Status'](arg1);
 }
