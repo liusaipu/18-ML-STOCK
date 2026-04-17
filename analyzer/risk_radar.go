@@ -30,6 +30,12 @@ func BuildRiskRadar(steps []StepResult, extras map[string]float64, years []strin
 
 	// 获取行业均值（如果可用）
 	ind, _ := GetIndustryMetrics(industry)
+	// 获取本地行业指标（用于判断样本是否充足）
+	localInd, _ := GetLocalIndustryMetrics(industry)
+	localCount := 0
+	if localInd != nil {
+		localCount = localInd.Count
+	}
 
 	var items []RiskRadarItem
 
@@ -74,12 +80,10 @@ func BuildRiskRadar(steps []StepResult, extras map[string]float64, years []strin
 			return ind.CashRatio
 		case "debtRatio":
 			return ind.DebtRatio
-		case "mScore":
-			return ind.MScore
-		case "inventoryTurnover":
-			return ind.InventoryTurnover
-		case "receivableRatio":
-			return ind.ReceivableRatio
+		case "grossMargin":
+			return ind.GrossMargin
+		case "revenueGrowth":
+			return ind.RevenueGrowth
 		}
 		return math.NaN()
 	}
@@ -106,62 +110,7 @@ func BuildRiskRadar(steps []StepResult, extras map[string]float64, years []strin
 		})
 	}
 
-	// 1. 应收账款异常 (step5) — 与行业均值对比
-	if s := findStep(5); s != nil {
-		receivableRatio := getFloat(s, latest, "ratio")
-		indReceivable := getIndVal("receivableRatio")
-		valStr := fmt.Sprintf("%.1f%%", receivableRatio)
-		indStr := formatIndustry(indReceivable, "%")
-		level := "low"
-		if receivableRatio > 20 {
-			level = "high"
-		} else if receivableRatio > 15 {
-			level = "medium"
-		} else if !math.IsNaN(indReceivable) && indReceivable > 0 && receivableRatio > indReceivable*1.5 {
-			level = "medium"
-		}
-		if level == "high" {
-			addItem("应收账款占比", "high", "异常", "🔴", valStr, indStr, fmt.Sprintf("%.1f%%(高于20%%)", receivableRatio), "占比过高意味着回款压力大，话语权较弱")
-		} else if level == "medium" {
-			addItem("应收账款占比", "medium", "警告", "🟡", valStr, indStr, valStr, "占比过高意味着回款压力大，话语权较弱")
-		} else {
-			addItem("应收账款占比", "low", "正常", "🟢", valStr, indStr, valStr, "占比过高意味着回款压力大，话语权较弱")
-		}
-	}
-
-	// 2. 存货周转 (step11) — 与行业均值对比
-	if s := findStep(11); s != nil {
-		turnover := getFloat(s, latest, "inventoryTurnover")
-		indTurnover := getIndVal("inventoryTurnover")
-		valStr := fmt.Sprintf("%.2f次", turnover)
-		indStr := formatIndustry(indTurnover, "次")
-		level := "low"
-		if !math.IsNaN(indTurnover) && indTurnover > 0 && turnover < indTurnover*0.8 {
-			level = "medium"
-		}
-		if level == "medium" {
-			addItem("存货周转率", level, "警告", "🟡", valStr, indStr, valStr, "周转越慢可能存在库存积压或减值风险")
-		} else {
-			addItem("存货周转率", level, "正常", "🟢", valStr, indStr, valStr, "周转越慢可能存在库存积压或减值风险")
-		}
-	}
-
-	// 3. 现金流质量 (step15)
-	if s := findStep(15); s != nil {
-		cashContent := getFloat(s, latest, "cashRatio")
-		prevCash := getFloat(s, prev, "cashRatio")
-		valStr := fmt.Sprintf("%.1f%%", cashContent)
-		indStr := formatIndustry(getIndVal("cashRatio"), "%")
-		if cashContent < 100 {
-			addItem("净利润现金含量", "medium", "警告", "🟡", valStr, indStr, valStr, "利润中真金白银的比例，低于100%需警惕")
-		} else if prev != "" && prevCash > 0 && cashContent < prevCash*0.9 {
-			addItem("净利润现金含量", "medium", "警告", "🟡", valStr, indStr, fmt.Sprintf("%.1f%%(上期%.1f%%)", cashContent, prevCash), "利润中真金白银的比例，低于100%需警惕")
-		} else {
-			addItem("净利润现金含量", "low", "正常", "🟢", valStr, indStr, valStr, "利润中真金白银的比例，低于100%需警惕")
-		}
-	}
-
-	// 4. ROE (step16)
+	// 1. ROE (step16)
 	if s := findStep(16); s != nil {
 		roe := getFloat(s, latest, "roe")
 		prevRoe := getFloat(s, prev, "roe")
@@ -191,12 +140,85 @@ func BuildRiskRadar(steps []StepResult, extras map[string]float64, years []strin
 		}
 	}
 
+	// 2. 毛利率 (step10)
+	if s := findStep(10); s != nil {
+		margin := getFloat(s, latest, "grossMargin")
+		indMargin := getIndVal("grossMargin")
+		valStr := fmt.Sprintf("%.1f%%", margin)
+		indStr := formatIndustry(indMargin, "%")
+		level := "low"
+		if margin < 20 {
+			level = "medium"
+		} else if !math.IsNaN(indMargin) && margin < indMargin*0.7 {
+			level = "medium"
+		}
+		if level == "medium" {
+			var detail string
+			if margin < 20 {
+				detail = "(低于20%)"
+			} else {
+				detail = "(低于行业均值)"
+			}
+			addItem("毛利率", level, "警告", "🟡", valStr, indStr, fmt.Sprintf("%.1f%% %s", margin, detail), "产品盈利能力，越高说明定价权和成本控制能力越强")
+		} else {
+			addItem("毛利率", level, "正常", "🟢", valStr, indStr, valStr, "产品盈利能力，越高说明定价权和成本控制能力越强")
+		}
+	}
+
+	// 3. 营收增长率 (step9)
+	if s := findStep(9); s != nil {
+		growth := getFloat(s, latest, "growthRate")
+		indGrowth := getIndVal("revenueGrowth")
+		valStr := fmt.Sprintf("%.1f%%", growth)
+		indStr := formatIndustry(indGrowth, "%")
+		level := "low"
+		if growth < 0 {
+			level = "medium"
+		} else if !math.IsNaN(indGrowth) && indGrowth > 0 && growth < indGrowth*0.5 {
+			level = "medium"
+		}
+		if level == "medium" {
+			var detail string
+			if growth < 0 {
+				detail = "(负增长)"
+			} else {
+				detail = "(低于行业均值)"
+			}
+			addItem("营收增长率", level, "警告", "🟡", valStr, indStr, fmt.Sprintf("%.1f%% %s", growth, detail), "营业收入同比增速，反映公司成长性和市场扩张能力")
+		} else {
+			addItem("营收增长率", level, "正常", "🟢", valStr, indStr, valStr, "营业收入同比增速，反映公司成长性和市场扩张能力")
+		}
+	}
+
+	// 4. 现金流质量 (step15)
+	if s := findStep(15); s != nil {
+		cashContent := getFloat(s, latest, "cashRatio")
+		prevCash := getFloat(s, prev, "cashRatio")
+		valStr := fmt.Sprintf("%.1f%%", cashContent)
+		// 只有本地样本充足时才显示行业均值
+		var indStr string
+		if localCount >= 3 {
+			indStr = formatIndustry(getIndVal("cashRatio"), "%")
+		}
+		if cashContent < 100 {
+			addItem("净利润现金含量", "medium", "警告", "🟡", valStr, indStr, valStr, "利润中真金白银的比例，低于100%需警惕")
+		} else if prev != "" && prevCash > 0 && cashContent < prevCash*0.9 {
+			addItem("净利润现金含量", "medium", "警告", "🟡", valStr, indStr, fmt.Sprintf("%.1f%%(上期%.1f%%)", cashContent, prevCash), "利润中真金白银的比例，低于100%需警惕")
+		} else {
+			addItem("净利润现金含量", "low", "正常", "🟢", valStr, indStr, valStr, "利润中真金白银的比例，低于100%需警惕")
+		}
+	}
+
 	// 5. 负债率 (step3)
 	if s := findStep(3); s != nil {
 		debtRatio := getFloat(s, latest, "debtRatio")
 		cashDebtDiff := getFloat(s, latest, "cashDebtDiff")
 		valStr := fmt.Sprintf("%.1f%%", debtRatio)
-		indStr := formatIndustry(getIndVal("debtRatio"), "%")
+		// 只有本地样本充足时才显示行业均值
+		var indStr string
+		if localCount >= 3 {
+			indStr = formatIndustry(getIndVal("debtRatio"), "%")
+		}
 		if debtRatio > 60 || cashDebtDiff < 0 {
 			addItem("资产负债率", "high", "异常", "🔴", valStr, indStr, fmt.Sprintf("%.1f%%(现金负债缺口)", debtRatio), "负债占总资产比例，过高意味着偿债压力大")
 		} else if debtRatio > 50 {

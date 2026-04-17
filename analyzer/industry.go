@@ -104,6 +104,17 @@ func findIndustry(db IndustryDatabase, industry string) (*IndustryMetrics, bool)
 	return m, ok
 }
 
+// GetLocalIndustryMetrics 仅获取本地行业均值指标（不合并 fallback）
+func GetLocalIndustryMetrics(industry string) (*IndustryMetrics, bool) {
+	industryDBMu.RLock()
+	defer industryDBMu.RUnlock()
+	
+	if !industryDBInit {
+		return nil, false
+	}
+	return findIndustry(industryDB, industry)
+}
+
 // GetIndustryMetrics 获取指定行业的均值指标（本地 + fallback 合并）
 func GetIndustryMetrics(industry string) (*IndustryMetrics, bool) {
 	industryDBMu.RLock()
