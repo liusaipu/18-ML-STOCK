@@ -359,18 +359,40 @@ func step9RevenueGrowth(data *FinancialData) StepResult {
 	return result
 }
 
+// getFirstAvailable 尝试多个候选键名，返回第一个非零值
+func getFirstAvailable(data *FinancialData, stmt map[string]map[string]float64, year string, candidates ...string) float64 {
+	for _, key := range candidates {
+		val := data.GetValueOrZero(stmt, key, year)
+		if val != 0 {
+			return val
+		}
+	}
+	return 0
+}
+
 // ==================== Step 10: 毛利率 ====================
 func step10GrossMargin(data *FinancialData) StepResult {
 	result := StepResult{StepNum: 10, StepName: "毛利率与产品竞争力分析", YearlyData: make(map[string]map[string]any), Pass: make(map[string]bool)}
 	prevMargin := 0.0
 	for i := len(data.Years) - 1; i >= 0; i-- {
 		year := data.Years[i]
-		revenue := data.GetValueOrZero(data.IncomeStatement, "营业收入", year)
-		cost := data.GetValueOrZero(data.IncomeStatement, "营业成本", year)
+
+		// 收入字段：港股常用"营运收入"，A股用"营业收入"；部分报表也会直接提供"营业额""收益"
+		revenue := getFirstAvailable(data, data.IncomeStatement, year, "营运收入", "营业收入", "营业额", "收益")
+		// 成本字段：港股常用"销售成本"，A股用"营业成本"
+		cost := getFirstAvailable(data, data.IncomeStatement, year, "销售成本", "营业成本")
+
 		margin := 0.0
 		if revenue != 0 {
 			margin = (revenue - cost) / revenue * 100
 		}
+
+		// 交叉验证：若计算结果异常（负值或>100%）但报表已提供正毛利，用报表毛利复核
+		reportedGrossProfit := getFirstAvailable(data, data.IncomeStatement, year, "毛利")
+		if (margin < 0 || margin > 100) && reportedGrossProfit > 0 && revenue > 0 {
+			margin = reportedGrossProfit / revenue * 100
+		}
+
 		volatility := 0.0
 		if prevMargin != 0 {
 			volatility = math.Abs(margin-prevMargin) / prevMargin * 100
