@@ -415,6 +415,7 @@ export namespace analyzer {
 	    icon: string;
 	    value: string;
 	    industry: string;
+	    desc: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new RiskRadarItem(source);
@@ -429,6 +430,7 @@ export namespace analyzer {
 	        this.icon = source["icon"];
 	        this.value = source["value"];
 	        this.industry = source["industry"];
+	        this.desc = source["desc"];
 	    }
 	}
 

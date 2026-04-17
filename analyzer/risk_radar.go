@@ -14,6 +14,7 @@ type RiskRadarItem struct {
 	Icon     string `json:"icon"`    // 🔴 / 🟡 / 🟢
 	Value    string `json:"value"`   // 当前值（如 "18.5%"）
 	Industry string `json:"industry"` // 行业均值（如 "7.8%"）
+	Desc     string `json:"desc"`    // 指标说明
 }
 
 // BuildRiskRadar 从18步分析结果中提取最近一年的关键风险信号，并与行业均值对比
@@ -92,7 +93,7 @@ func BuildRiskRadar(steps []StepResult, extras map[string]float64, years []strin
 	}
 
 	// Helper: 添加雷达项
-	addItem := func(name, level, status, icon, value, indVal, msg string) {
+	addItem := func(name, level, status, icon, value, indVal, msg, desc string) {
 		items = append(items, RiskRadarItem{
 			Name:     name,
 			Level:    level,
@@ -101,6 +102,7 @@ func BuildRiskRadar(steps []StepResult, extras map[string]float64, years []strin
 			Value:    value,
 			Industry: indVal,
 			Message:  msg,
+			Desc:     desc,
 		})
 	}
 
@@ -119,11 +121,11 @@ func BuildRiskRadar(steps []StepResult, extras map[string]float64, years []strin
 			level = "medium"
 		}
 		if level == "high" {
-			addItem("应收账款占比", "high", "异常", "🔴", valStr, indStr, fmt.Sprintf("%.1f%%(高于20%%)", receivableRatio))
+			addItem("应收账款占比", "high", "异常", "🔴", valStr, indStr, fmt.Sprintf("%.1f%%(高于20%%)", receivableRatio), "占比过高意味着回款压力大，话语权较弱")
 		} else if level == "medium" {
-			addItem("应收账款占比", "medium", "警告", "🟡", valStr, indStr, valStr)
+			addItem("应收账款占比", "medium", "警告", "🟡", valStr, indStr, valStr, "占比过高意味着回款压力大，话语权较弱")
 		} else {
-			addItem("应收账款占比", "low", "正常", "🟢", valStr, indStr, valStr)
+			addItem("应收账款占比", "low", "正常", "🟢", valStr, indStr, valStr, "占比过高意味着回款压力大，话语权较弱")
 		}
 	}
 
@@ -138,9 +140,9 @@ func BuildRiskRadar(steps []StepResult, extras map[string]float64, years []strin
 			level = "medium"
 		}
 		if level == "medium" {
-			addItem("存货周转率", level, "警告", "🟡", valStr, indStr, valStr)
+			addItem("存货周转率", level, "警告", "🟡", valStr, indStr, valStr, "周转越慢可能存在库存积压或减值风险")
 		} else {
-			addItem("存货周转率", level, "正常", "🟢", valStr, indStr, valStr)
+			addItem("存货周转率", level, "正常", "🟢", valStr, indStr, valStr, "周转越慢可能存在库存积压或减值风险")
 		}
 	}
 
@@ -151,11 +153,11 @@ func BuildRiskRadar(steps []StepResult, extras map[string]float64, years []strin
 		valStr := fmt.Sprintf("%.1f%%", cashContent)
 		indStr := formatIndustry(getIndVal("cashRatio"), "%")
 		if cashContent < 100 {
-			addItem("净利润现金含量", "medium", "警告", "🟡", valStr, indStr, valStr)
+			addItem("净利润现金含量", "medium", "警告", "🟡", valStr, indStr, valStr, "利润中真金白银的比例，低于100%需警惕")
 		} else if prev != "" && prevCash > 0 && cashContent < prevCash*0.9 {
-			addItem("净利润现金含量", "medium", "警告", "🟡", valStr, indStr, fmt.Sprintf("%.1f%%(上期%.1f%%)", cashContent, prevCash))
+			addItem("净利润现金含量", "medium", "警告", "🟡", valStr, indStr, fmt.Sprintf("%.1f%%(上期%.1f%%)", cashContent, prevCash), "利润中真金白银的比例，低于100%需警惕")
 		} else {
-			addItem("净利润现金含量", "low", "正常", "🟢", valStr, indStr, valStr)
+			addItem("净利润现金含量", "low", "正常", "🟢", valStr, indStr, valStr, "利润中真金白银的比例，低于100%需警惕")
 		}
 	}
 
@@ -183,9 +185,9 @@ func BuildRiskRadar(steps []StepResult, extras map[string]float64, years []strin
 			} else {
 				detail = "(低于行业均值)"
 			}
-			addItem("ROE", level, "警告", "🟡", valStr, indStr, fmt.Sprintf("%.1f%% %s", roe, detail))
+			addItem("ROE", level, "警告", "🟡", valStr, indStr, fmt.Sprintf("%.1f%% %s", roe, detail), "净资产收益率，衡量股东回报能力的核心指标")
 		} else {
-			addItem("ROE", level, "正常", "🟢", valStr, indStr, valStr)
+			addItem("ROE", level, "正常", "🟢", valStr, indStr, valStr, "净资产收益率，衡量股东回报能力的核心指标")
 		}
 	}
 
@@ -196,11 +198,11 @@ func BuildRiskRadar(steps []StepResult, extras map[string]float64, years []strin
 		valStr := fmt.Sprintf("%.1f%%", debtRatio)
 		indStr := formatIndustry(getIndVal("debtRatio"), "%")
 		if debtRatio > 60 || cashDebtDiff < 0 {
-			addItem("资产负债率", "high", "异常", "🔴", valStr, indStr, fmt.Sprintf("%.1f%%(现金负债缺口)", debtRatio))
+			addItem("资产负债率", "high", "异常", "🔴", valStr, indStr, fmt.Sprintf("%.1f%%(现金负债缺口)", debtRatio), "负债占总资产比例，过高意味着偿债压力大")
 		} else if debtRatio > 50 {
-			addItem("资产负债率", "medium", "警告", "🟡", valStr, indStr, valStr)
+			addItem("资产负债率", "medium", "警告", "🟡", valStr, indStr, valStr, "负债占总资产比例，过高意味着偿债压力大")
 		} else {
-			addItem("资产负债率", "low", "正常", "🟢", valStr, indStr, valStr)
+			addItem("资产负债率", "low", "正常", "🟢", valStr, indStr, valStr, "负债占总资产比例，过高意味着偿债压力大")
 		}
 	}
 
@@ -210,11 +212,11 @@ func BuildRiskRadar(steps []StepResult, extras map[string]float64, years []strin
 		valStr := fmt.Sprintf("%.0f分", ascore)
 		indStr := formatIndustry(getIndVal("mScore"), "分")
 		if ascore >= 60 {
-			addItem("A-Score风险", "high", "异常", "🔴", valStr, indStr, fmt.Sprintf("%.0f分(高风险)", ascore))
+			addItem("A-Score风险", "high", "异常", "🔴", valStr, indStr, fmt.Sprintf("%.0f分(高风险)", ascore), "综合财务操纵与爆雷风险评分，越低越安全")
 		} else if ascore >= 40 {
-			addItem("A-Score风险", "medium", "警告", "🟡", valStr, indStr, valStr)
+			addItem("A-Score风险", "medium", "警告", "🟡", valStr, indStr, valStr, "综合财务操纵与爆雷风险评分，越低越安全")
 		} else {
-			addItem("A-Score风险", "low", "正常", "🟢", valStr, indStr, valStr)
+			addItem("A-Score风险", "low", "正常", "🟢", valStr, indStr, valStr, "综合财务操纵与爆雷风险评分，越低越安全")
 		}
 	}
 
@@ -238,9 +240,9 @@ func BuildRiskRadar(steps []StepResult, extras map[string]float64, years []strin
 			for i := 1; i < len(parts); i++ {
 				msg += "/" + parts[i]
 			}
-			addItem("非财务风险", "medium", "警告", "🟡", msg, "", msg)
+			addItem("非财务风险", "medium", "警告", "🟡", msg, "", msg, "股权质押、监管问询、大股东减持等特有风险")
 		} else {
-			addItem("非财务风险", "low", "正常", "🟢", "无异常", "", "无异常")
+			addItem("非财务风险", "low", "正常", "🟢", "无异常", "", "无异常", "股权质押、监管问询、大股东减持等特有风险")
 		}
 	}
 

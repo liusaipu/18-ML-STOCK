@@ -2067,7 +2067,7 @@ function App() {
                         </thead>
                         <tbody>
                           {riskRadar.map((item, idx) => (
-                            <tr key={idx} className={`risk-radar-tr risk-radar-${item.level}`} title={item.message}>
+                            <tr key={idx} className={`risk-radar-tr risk-radar-${item.level}`} title={item.desc}>
                               <td style={{ textAlign: 'center' }}>{item.icon}</td>
                               <td>{item.name}</td>
                               <td style={{ textAlign: 'right', fontWeight: 500 }}>{item.value}</td>
@@ -2076,7 +2076,7 @@ function App() {
                           ))}
                         </tbody>
                       </table>
-                      <div className="risk-radar-hint">行业均值基于本地已下载股票计算，可在「设置 → 数据」中更新</div>
+                      <div className="risk-radar-hint">基于本地数据计算 · 设置中可更新</div>
                     </>
                   ) : (
                     <div className="risk-radar-empty">暂无对比数据（请先执行18步分析）</div>
