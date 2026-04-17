@@ -1,5 +1,23 @@
 # Changelog
 
+## [Unreleased]
+
+### 新增 (Features)
+- **报告导出体验优化**
+  - PDF 导出与长图片导出从纯前端下载改为通过后端系统保存对话框，支持用户自定义保存路径
+  - 后端新增 `ExportReportPDF(symbol, base64Data)` 和 `ExportReportImage(symbol, dataURL)` 绑定方法
+  - 用户取消保存时不再弹出错误提示
+
+- **行业数据库指标扩展**
+  - 行业均值数据库新增 `inventoryTurnover`（存货周转率）、`receivableRatio`（应收账款占比）、`mScore` 三个字段
+  - `scripts/update_industry_database.py` 重写指标提取逻辑，支持基于本地财务数据直接计算 Beneish M-Score、存货周转率及应收账款占比
+
+### 优化 (Improvements)
+- **行业对比雷达增强**
+  - 应收账款占比指标增加与行业均值的定量对比：超过行业均值 1.5 倍时标黄，超过 20% 时标红
+  - 存货周转率指标增加与行业均值的对比：低于行业均值 80% 时标黄
+  - 去除对同比变化的过度依赖，改为以行业基准为核心的异常判定逻辑
+
 ## [v1.3.17] - 2026-04-17
 
 ### 新增 (Features)

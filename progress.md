@@ -4,7 +4,7 @@
 
 ## 项目状态概览
 
-- **当前版本**: v1.3.17
+- **当前版本**: v1.3.18
 - **最后更新时间**: 2026-04-17
 - **Git分支**: main
 - **未提交更改**: 已提交
@@ -959,6 +959,63 @@
 - 依赖: `frontend/package.json` (+`html2pdf.js`)
 
 **版本发布**: v1.3.17
+
+**待办事项**:
+- 无
+
+**下次会话计划**:
+- 按需继续优化
+
+---
+
+### Session 2026-04-17 (Part 2) - v1.3.18 功能增强
+
+**本次会话目标**:
+- [x] 将报告导出（PDF/长图）改为后端系统保存对话框
+- [x] 扩展行业数据库指标（存货周转率、应收账款占比、M-Score）
+- [x] 增强行业对比雷达的行业均值对比逻辑
+- [x] 补完文档并 bump 版本号
+
+**已完成工作**:
+1. **报告导出后端化**
+   - 新增 `ExportReportPDF(symbol, base64Data)` 和 `ExportReportImage(symbol, dataURL)` 后端绑定方法
+   - PDF 与长图片导出从浏览器自动下载改为调用系统保存对话框，支持自定义路径
+   - 用户取消保存时静默返回，不再弹错误提示
+
+2. **行业数据库指标扩展**
+   - `IndustryMetrics` 新增 `InventoryTurnover`、`ReceivableRatio`、`MScore` 字段
+   - `scripts/update_industry_database.py` 增加基于本地财务数据的指标计算逻辑：
+     - Beneish M-Score（完整 8 指标模型）
+     - 存货周转率（营业成本 / 平均存货）
+     - 应收账款占比（应收票据及应收账款 + 合同资产）/ 总资产
+
+3. **行业对比雷达增强**
+   - 应收账款占比：>20% 标红，>15% 或超过行业均值 1.5 倍标黄
+   - 存货周转率：低于行业均值 80% 标黄
+   - 去除过度依赖同比变化的逻辑，改为以行业基准为核心的异常判定
+
+4. **文档与版本**
+   - 更新 `CHANGELOG.md` 新增 Unreleased 变更记录
+   - 版本号 bump 至 `1.3.18`（`wails.json` 与 `Settings.tsx` 同步）
+   - 推送代码到 `origin/main`
+
+**测试结果汇总**:
+| 功能模块 | 状态 | 备注 |
+|---------|------|------|
+| Go 编译 | ✅ 通过 | `go build ./...` 成功 |
+| 前端编译 | ✅ 通过 | `tsc && vite build` 成功 |
+| Wails 绑定 | ✅ 通过 | `wails generate module` 成功 |
+| analyzer 测试 | ✅ 通过 | 除网络依赖的 AScoreValidation 外全部通过 |
+
+**改动详情**:
+- 修改: `app.go` (+52行，新增 `ExportReportPDF` / `ExportReportImage`)
+- 修改: `frontend/src/App.tsx` (+30行，调用后端导出方法)
+- 修改: `analyzer/industry.go` (+4行，新增 3 个指标字段)
+- 修改: `analyzer/risk_radar.go` (+48行，行业均值对比逻辑增强)
+- 修改: `scripts/update_industry_database.py` (+120行，新增指标计算)
+- 修改: `CHANGELOG.md`、`progress.md`
+
+**版本发布**: v1.3.18（仅代码推送，未打 tag 和构建 Release）
 
 **待办事项**:
 - 无
