@@ -236,49 +236,33 @@ func (s *Storage) cleanupOldHistory(symbol string) error {
 	return nil
 }
 
-// SaveReport 将 Markdown 报告保存到 reports/{symbol}/ 目录，返回文件名
+// SaveReport 将 Markdown 报告保存到 reports/{symbol}/latest.md
 func (s *Storage) SaveReport(symbol string, content string, overwriteLatest bool) (string, error) {
 	dir := filepath.Join(s.dataDir, "reports", symbol)
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return "", fmt.Errorf("创建报告目录失败: %w", err)
 	}
-	if overwriteLatest {
-		reports, _ := s.ListReports(symbol)
-		if len(reports) > 0 {
-			_ = os.Remove(filepath.Join(dir, reports[0]))
-		}
-	}
-	filename := time.Now().Format("2006-01-02_15-04-05") + "_分析报告.md"
+	// 清理所有旧报告文件，只保留 latest.md
+	_ = s.cleanupOldReports(symbol)
+	filename := "latest.md"
 	path := filepath.Join(dir, filename)
 	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
 		return "", fmt.Errorf("保存报告失败: %w", err)
 	}
-	_ = s.cleanupOldReports(symbol)
 	return filename, nil
 }
 
-// ListReports 列出某只股票的所有历史报告文件名，从新到旧排序
+// ListReports 列出某只股票的历史报告文件名（始终只返回 latest.md）
 func (s *Storage) ListReports(symbol string) ([]string, error) {
 	dir := filepath.Join(s.dataDir, "reports", symbol)
-	entries, err := os.ReadDir(dir)
-	if err != nil {
+	path := filepath.Join(dir, "latest.md")
+	if _, err := os.Stat(path); err != nil {
 		if os.IsNotExist(err) {
 			return nil, nil
 		}
 		return nil, err
 	}
-	var files []string
-	for _, entry := range entries {
-		if entry.IsDir() {
-			continue
-		}
-		if strings.HasSuffix(entry.Name(), ".md") {
-			files = append(files, entry.Name())
-		}
-	}
-	// 按文件名（时间戳）从新到旧排序
-	sort.Sort(sort.Reverse(sort.StringSlice(files)))
-	return files, nil
+	return []string{"latest.md"}, nil
 }
 
 // LoadReport 读取指定历史报告的 Markdown 内容
@@ -373,7 +357,7 @@ func (s *Storage) ComputeComparablesHash(symbol string) (string, error) {
 	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
-// cleanupOldReports 清理旧报告，只保留最近5个
+// cleanupOldReports 清理旧报告文件，保留 latest.md
 func (s *Storage) cleanupOldReports(symbol string) error {
 	dir := filepath.Join(s.dataDir, "reports", symbol)
 	entries, err := os.ReadDir(dir)
@@ -383,23 +367,15 @@ func (s *Storage) cleanupOldReports(symbol string) error {
 		}
 		return err
 	}
-	var files []string
 	for _, entry := range entries {
 		if entry.IsDir() {
 			continue
 		}
-		if strings.HasSuffix(entry.Name(), ".md") {
-			files = append(files, entry.Name())
-		}
-	}
-	if len(files) <= 5 {
-		return nil
-	}
-	// 按文件名（时间戳）从新到旧排序
-	sort.Sort(sort.Reverse(sort.StringSlice(files)))
-	for i := 5; i < len(files); i++ {
-		if err := os.Remove(filepath.Join(dir, files[i])); err != nil {
-			return err
+		name := entry.Name()
+		if strings.HasSuffix(name, ".md") && name != "latest.md" {
+			if err := os.Remove(filepath.Join(dir, name)); err != nil {
+				return err
+			}
 		}
 	}
 	return nil

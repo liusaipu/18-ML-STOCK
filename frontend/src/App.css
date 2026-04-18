@@ -441,7 +441,7 @@ body.light .watch-drag-handle {
   width: 300px;
   background: #0f1419;
   border-right: 1px solid #1f2933;
-  padding: 16px;
+  padding: 10px 16px 16px;
   display: flex;
   flex-direction: column;
   overflow-y: auto;
@@ -457,7 +457,7 @@ body.light .info-panel {
 }
 
 .stock-header {
-  margin-bottom: 12px;
+  margin-bottom: 8px;
 }
 
 .stock-header h1 {
@@ -489,8 +489,8 @@ body.light .stock-sub {
   background: #141b24;
   border: 1px solid #1f2933;
   border-radius: 8px;
-  padding: 12px;
-  margin-bottom: 12px;
+  padding: 10px;
+  margin-bottom: 8px;
 }
 
 body.light .stock-info-card {
@@ -533,8 +533,8 @@ body.light .stock-info-value {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-top: 10px;
-  padding-top: 8px;
+  margin-top: 8px;
+  padding-top: 6px;
   border-top: 1px solid #1f2933;
 }
 
@@ -568,15 +568,15 @@ body.light .stock-info-time {
 .actions {
   display: flex;
   justify-content: center;
-  gap: 12px;
-  padding: 0 8px;
-  margin-bottom: 8px;
+  gap: 16px;
+  padding: 0 16px;
+  margin-bottom: 4px;
 }
 
 .actions .btn {
-  flex: 0 1 auto;
-  min-width: 100px;
-  padding: 10px 12px;
+  flex: 1 1 0;
+  min-width: 80px;
+  padding: 5px 10px;
 }
 
 /* 按钮下方状态显示 - 单行，固定高度避免布局跳动 */
@@ -584,7 +584,7 @@ body.light .stock-info-time {
   height: 20px;
   line-height: 20px;
   margin-top: 2px;
-  margin-bottom: 4px;
+  margin-bottom: 2px;
   font-size: 11px;
   text-align: left;
   padding-left: 16px;
@@ -634,7 +634,7 @@ body.light .action-status-line .status-analyzing {
 }
 
 .btn-text {
-  padding: 4px 8px;
+  padding: 2px 6px;
   border: none;
   background: transparent;
   color: #64748b;
@@ -1131,22 +1131,15 @@ body.light .placeholder {
   gap: 8px;
 }
 
-/* 历史报告选择器 */
-.history-select {
-  padding: 5px 8px;
-  border: 1px solid #2a3a4a;
-  border-radius: 4px;
-  background: #141b24;
-  color: #e6e6e6;
+/* 分析报告时间戳 */
+.report-timestamp {
   font-size: 12px;
-  outline: none;
-  cursor: pointer;
+  color: #8899aa;
+  white-space: nowrap;
 }
 
-body.light .history-select {
-  background: #f9fafb;
-  border-color: #d1d5db;
-  color: #374151;
+body.light .report-timestamp {
+  color: #6b7280;
 }
 
 /* 报告标签栏右侧 */

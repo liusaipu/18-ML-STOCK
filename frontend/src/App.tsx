@@ -85,7 +85,6 @@ import {
   ExportReportImage,
   DeleteReport,
   ConfirmDialog,
-  GetReportHistory,
   GetReport,
   GetStockDataHistory,
   GetStockProfile,
@@ -173,15 +172,6 @@ function extractHighlightsAndRisks(report: AnalysisReport) {
   return { highlights, risks }
 }
 
-function formatFilename(dateStr: string) {
-  // 2006-01-02_15-04-05_分析报告.md -> 2006-01-02 15:04
-  const parts = dateStr.split('_')
-  if (parts.length >= 2) {
-    return `${parts[0]} ${parts[1].replace(/-/g, ':')}`
-  }
-  return dateStr
-}
-
 function formatTimestamp(iso: string) {
   try {
     const d = new Date(iso)
@@ -206,7 +196,6 @@ function App() {
   const [snapshots, setSnapshots] = useState<Record<string, AnalysisReport>>({})
   const [analyzing, setAnalyzing] = useState(false)
   const [analyzeProgress, setAnalyzeProgress] = useState(0)
-  const [historyFiles, setHistoryFiles] = useState<string[]>([])
   const [viewingHistory, setViewingHistory] = useState<string | null>(null)
   const [historyContent, setHistoryContent] = useState<string>('')
   const [dataHistory, setDataHistory] = useState<HistoryMeta[]>([])
@@ -249,6 +238,7 @@ function App() {
   const reportLastQueryRef = useRef('')
   const downloadMenuRef = useRef<HTMLDivElement>(null)
   const downloadMenuBtnRef = useRef<HTMLButtonElement>(null)
+  const tocSelectRef = useRef<HTMLSelectElement>(null)
   const [traceDrawerOpen, setTraceDrawerOpen] = useState(false)
   const [currentTrace, setCurrentTrace] = useState<analyzer.CalcTrace | null>(null)
   const [traceList, setTraceList] = useState<analyzer.CalcTrace[]>([])
@@ -622,16 +612,21 @@ function App() {
 
   const loadReportHistory = useCallback(async (code: string, autoLoadLatest = false) => {
     try {
-      const files = await GetReportHistory(code)
-      setHistoryFiles(files || [])
-      if (autoLoadLatest && files && files.length > 0) {
-        const latest = files[0]
-        const content = await GetReport(code, latest)
-        setHistoryContent(content)
-        setViewingHistory(latest)
+      // 获取分析缓存时间
+      const cache = await CheckAnalysisCache(code)
+      setLastAnalysisAt(cache?.lastAnalysisAt || '')
+      if (autoLoadLatest) {
+        const content = await GetReport(code, 'latest.md')
+        if (content) {
+          setHistoryContent(content)
+          setViewingHistory('latest.md')
+        } else {
+          setHistoryContent('')
+          setViewingHistory(null)
+        }
       }
     } catch {
-      setHistoryFiles([])
+      setLastAnalysisAt('')
     }
   }, [])
 
@@ -889,7 +884,6 @@ function App() {
         setReport(null)
         setViewingHistory(null)
         setHistoryContent('')
-        setHistoryFiles([])
         setDataHistory([])
         setComparables([])
         setConcepts(null)
@@ -1253,15 +1247,7 @@ function App() {
     if (!selectedStock || !displayContent) {
       return
     }
-    let filename = viewingHistory
-    if (!filename) {
-      const files = await GetReportHistory(selectedStock.code)
-      if (files.length === 0) {
-        alert('没有可删除的报告')
-        return
-      }
-      filename = files[0]
-    }
+    const filename = viewingHistory || 'latest.md'
     const confirmed = await ConfirmDialog('确认删除', `确定删除报告 ${filename} 吗？`)
     if (!confirmed) {
       return
@@ -1269,13 +1255,9 @@ function App() {
     try {
       await DeleteReport(selectedStock.code, filename)
       await loadReportHistory(selectedStock.code)
-      if (viewingHistory === filename) {
-        setViewingHistory(null)
-        setHistoryContent('')
-      }
-      if (!viewingHistory) {
-        setReport(null)
-      }
+      setViewingHistory(null)
+      setHistoryContent('')
+      setReport(null)
     } catch (err: any) {
       alert('删除报告失败: ' + String(err))
     }
@@ -1382,25 +1364,6 @@ function App() {
     }
   }
 
-  const handleHistoryChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const filename = e.target.value
-    if (!filename || filename === '__latest__' || !selectedStock) {
-      setViewingHistory(null)
-      setHistoryContent('')
-      setTimeout(() => {
-        handleTocJump('核心指标一览')
-      }, 150)
-      return
-    }
-    try {
-      const content = await GetReport(selectedStock.code, filename)
-      setHistoryContent(content)
-      setViewingHistory(filename)
-    } catch (err: any) {
-      alert('加载历史报告失败: ' + String(err))
-    }
-  }
-
   const displayContent = viewingHistory ? historyContent : report?.markdownContent
 
   function formatTraceValue(v: number): string {
@@ -1429,6 +1392,51 @@ function App() {
     setTraceList([])
     // 设置全局 Markdown 内容供模块复制功能使用
     setGlobalMarkdownContent(displayContent || '')
+  }, [displayContent])
+
+  // 报告内容滚动时联动更新"跳转章节"下拉框显示
+  useEffect(() => {
+    const container = reportContentRef.current
+    if (!container || !displayContent) return
+
+    let rafId: number | null = null
+    const handleScroll = () => {
+      if (rafId) return
+      rafId = requestAnimationFrame(() => {
+        rafId = null
+        const headings = container.querySelectorAll('h1')
+        if (headings.length === 0 || !tocSelectRef.current) return
+        const containerTop = container.getBoundingClientRect().top
+        let closest: Element | null = null
+        let closestOffset = Infinity
+        for (const h of headings) {
+          const offset = h.getBoundingClientRect().top - containerTop
+          if (offset >= -40 && offset < closestOffset) {
+            closest = h
+            closestOffset = offset
+          }
+        }
+        // 如果所有标题都在上方，取最后一个
+        if (!closest && headings.length > 0) {
+          closest = headings[headings.length - 1]
+        }
+        if (closest) {
+          const id = closest.id
+          const label = tocSections.find((s) => s.id === id)?.label || '📑 跳转章节'
+          const firstOpt = tocSelectRef.current.querySelector('option:first-child') as HTMLOptionElement | null
+          if (firstOpt) {
+            firstOpt.textContent = '⬅ ' + label
+          }
+        }
+      })
+    }
+    container.addEventListener('scroll', handleScroll)
+    // 初始触发一次
+    handleScroll()
+    return () => {
+      container.removeEventListener('scroll', handleScroll)
+      if (rafId) cancelAnimationFrame(rafId)
+    }
   }, [displayContent])
 
   const markdownComponents = useMemo(() => ({
@@ -1563,8 +1571,15 @@ function App() {
             { key: 'analyzed', label: '已分析' },
             { key: 'unanalyzed', label: '未分析' },
           ]
+          const activeFilterLabel = filterButtons.find((b) => b.key === watchlistFilter)?.label
           const hasFilter = watchlistFilter !== 'none' || watchlistIndustryFilter !== '全部'
-          const title = `🔍 筛选器${hasFilter ? ' (' + displayWatchlist.length + '/' + watchlist.length + '只)' : ''}`
+          let title = '🔍 筛选器'
+          if (hasFilter) {
+            const parts: string[] = []
+            if (watchlistFilter !== 'none') parts.push(activeFilterLabel!)
+            if (watchlistIndustryFilter !== '全部') parts.push(watchlistIndustryFilter)
+            title += ` · ${parts.join(' · ')} (${displayWatchlist.length}/${watchlist.length}只)`
+          }
           return (
             <Collapsible title={title} defaultExpanded={false}>
               <div className="watchlist-filters" style={{ padding: '8px 0 4px' }}>
@@ -1899,7 +1914,7 @@ function App() {
             </div>
 
             {/* 导入按钮放在最上方 */}
-            <div className="actions-sub" style={{ marginBottom: 8, justifyContent: 'flex-start' }}>
+            <div className="actions-sub" style={{ marginBottom: 2, justifyContent: 'flex-start' }}>
               <button className="btn-text" onClick={handleImport} disabled={loading}>
                 {loading ? '处理中...' : '导入本地csv/excel财报'}
               </button>
@@ -2299,22 +2314,16 @@ function App() {
       <section className="report-panel">
         <div className="report-tabs">
           <div className="report-tabs-left">
-            {historyFiles.length > 0 && (
-              <select
-                className="history-select"
-                value={viewingHistory || '__latest__'}
-                onChange={handleHistoryChange}
-              >
-                <option value="__latest__">最新报告</option>
-                {historyFiles.map((f) => (
-                  <option key={f} value={f}>
-                    {formatFilename(f)}
-                  </option>
-                ))}
-              </select>
+            {selectedStock && (
+              <span className="report-timestamp">
+                {lastAnalysisAt
+                  ? `上次分析: ${lastAnalysisAt}`
+                  : '请先执行18步分析'}
+              </span>
             )}
             {displayContent && (
               <select
+                ref={tocSelectRef}
                 className="toc-select"
                 value=""
                 onChange={(e) => {
@@ -2323,7 +2332,6 @@ function App() {
                     handleTocJump(id)
                     const select = e.target
                     const label = tocSections.find((s) => s.id === id)?.label || '📑 跳转章节'
-                    // 临时改写第一个 option 文本来模拟显示选中项
                     const firstOpt = select.querySelector('option:first-child') as HTMLOptionElement | null
                     if (firstOpt) {
                       firstOpt.textContent = '⬅ ' + label
