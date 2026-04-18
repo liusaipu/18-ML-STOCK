@@ -1031,7 +1031,7 @@ func (a *App) GetStockKlines(symbol string) ([]downloader.KlineData, error) {
 	}
 	code := parts[0]
 	market := strings.ToUpper(parts[1])
-	return downloader.FetchStockKlines(market, code, 120)
+	return downloader.FetchStockKlines(market, code, 250)
 }
 
 // GetStockQuote 获取股票实时行情（带15分钟本地缓存）

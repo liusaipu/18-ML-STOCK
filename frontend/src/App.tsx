@@ -1469,7 +1469,7 @@ function App() {
     div({ className, children, ...props }: any) {
       const code = selectedStock?.code || ''
       if (className === 'chart-unified' && code) {
-        return <UnifiedChart code={code} />
+        return <UnifiedChart code={code} quote={quote || undefined} />
       }
       return (
         <div className={className} {...props}>

@@ -1,21 +1,23 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import * as echarts from 'echarts'
 import type { downloader } from '../wailsjs/go/models'
 import { GetStockKlines } from '../wailsjs/go/main/App'
 
 type KlineData = downloader.KlineData
+type StockQuote = downloader.StockQuote
 
 interface Props {
   code: string
+  quote?: StockQuote
 }
 
 const colors = {
   up: '#ef4444',
   down: '#22c55e',
   ma5: '#fbbf24',
-  ma30: '#60a5fa',
-  ma180: '#a78bfa',
-  ma250: '#f87171',
+  ma10: '#60a5fa',
+  ma30: '#a78bfa',
+  ma60: '#f87171',
   macd: '#f59e0b',
   signal: '#3b82f6',
   histPositive: '#ef4444',
@@ -26,7 +28,7 @@ const colors = {
   bbLower: '#10b981',
 }
 
-const WINDOW_SIZE = 120
+const DISPLAY_SIZE = 120
 
 function calcEMA(arr: number[], period: number): (number | null)[] {
   const k = 2 / (period + 1)
@@ -58,14 +60,13 @@ function padArray<T>(arr: T[], size: number): (T | null)[] {
 function calculateIndicators(data: KlineData[]) {
   const closes = data.map(d => d.close)
   const ma5 = calcMA(closes, 5)
+  const ma10 = calcMA(closes, 10)
   const ma30 = calcMA(closes, 30)
-  const ma180 = calcMA(closes, 180)
-  const ma250 = calcMA(closes, 250)
+  const ma60 = calcMA(closes, 60)
 
   const ema12 = calcEMA(closes, 12)
   const ema26 = calcEMA(closes, 26)
   const dif: (number | null)[] = ema12.map((v, i) => (v == null || ema26[i] == null) ? null : v - ema26[i]!)
-  // DEA needs non-null dif values; for early nulls push null
   const validDif = dif.filter((v): v is number => v != null)
   const validDea = calcEMA(validDif, 9)
   const dea: (number | null)[] = []
@@ -101,7 +102,7 @@ function calculateIndicators(data: KlineData[]) {
     bbLower.push(mean - 2 * std)
   }
 
-  return { dif, dea, hist, rsi, bbUpper, bbMid, bbLower, ma5, ma30, ma180, ma250 }
+  return { dif, dea, hist, rsi, bbUpper, bbMid, bbLower, ma5, ma10, ma30, ma60 }
 }
 
 function fmt2(v: any): string {
@@ -123,20 +124,34 @@ function fmt1(v: any): string {
   return n.toFixed(1)
 }
 
-export function UnifiedChart({ code }: Props) {
+export function UnifiedChart({ code, quote }: Props) {
   const chartRef = useRef<HTMLDivElement>(null)
   const chartInstanceRef = useRef<echarts.ECharts | null>(null)
-  const [data, setData] = useState<KlineData[]>([])
+  const [rawData, setRawData] = useState<KlineData[]>([])
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
     if (!code) return
     setLoading(true)
     GetStockKlines(code)
-      .then((list) => setData(list || []))
-      .catch(() => setData([]))
+      .then((list) => setRawData(list || []))
+      .catch(() => setRawData([]))
       .finally(() => setLoading(false))
   }, [code])
+
+  const data = useMemo(() => {
+    if (rawData.length === 0) return []
+    // 如果K线没有换手率且quote有流通市值，计算近似换手率
+    const hasTurnover = rawData.some(d => d.turnoverRate > 0)
+    if (hasTurnover || !quote || quote.circulatingMarketCap <= 0 || quote.currentPrice <= 0) {
+      return rawData
+    }
+    const circulatingShares = quote.circulatingMarketCap / quote.currentPrice
+    return rawData.map(d => ({
+      ...d,
+      turnoverRate: (d.volume * 100 / circulatingShares) * 100,
+    }))
+  }, [rawData, quote])
 
   useEffect(() => {
     if (!chartRef.current || data.length === 0) return
@@ -148,26 +163,30 @@ export function UnifiedChart({ code }: Props) {
     const chart = echarts.init(chartRef.current, 'dark', { renderer: 'canvas' })
     chartInstanceRef.current = chart
 
-    const recentData = data.slice(-WINDOW_SIZE)
-    const padCount = WINDOW_SIZE - recentData.length
-    const dates = [...Array(padCount).fill(''), ...recentData.map(d => d.time)]
+    // 用全部数据计算指标，但只显示最近120条
+    const { dif, dea, hist, rsi, bbUpper, bbMid, bbLower, ma5, ma10, ma30, ma60 } = calculateIndicators(data)
 
-    const { dif, dea, hist, rsi, bbUpper, bbMid, bbLower, ma5, ma30, ma180, ma250 } = calculateIndicators(recentData)
+    const displayData = data.slice(-DISPLAY_SIZE)
+    const padCount = DISPLAY_SIZE - displayData.length
+    const dates = [...Array(padCount).fill(''), ...displayData.map(d => d.time)]
 
     const nullPad = Array(padCount).fill(null)
-    const candleData = [...nullPad, ...recentData.map(d => [d.open, d.close, d.low, d.high])]
-    const turnoverData = [...nullPad, ...recentData.map(d => ({
+    const candleData = [...nullPad, ...displayData.map(d => [d.open, d.close, d.low, d.high])]
+    const turnoverData = [...nullPad, ...displayData.map((d: KlineData) => ({
       value: d.turnoverRate,
       itemStyle: { color: d.close >= d.open ? 'rgba(239,68,68,0.35)' : 'rgba(34,197,94,0.35)' },
     }))]
 
-    const pad = (arr: (number | null)[]) => padArray(arr, WINDOW_SIZE)
+    const sliceDisplay = (arr: (number | null)[]) => {
+      const sliced = arr.slice(-DISPLAY_SIZE)
+      return padArray(sliced, DISPLAY_SIZE)
+    }
 
     const option: echarts.EChartsOption = {
       backgroundColor: 'transparent',
       animation: false,
       legend: {
-        data: ['K线', 'MA5', 'MA30', 'MA180', 'MA250'],
+        data: ['K线', 'MA5', 'MA10', 'MA30', 'MA60'],
         top: 8,
         right: 10,
         textStyle: { color: '#94a3b8', fontSize: 11 },
@@ -191,7 +210,6 @@ export function UnifiedChart({ code }: Props) {
           const date = params[0].axisValue || ''
           if (!date) return ''
 
-          // ---- 左栏：K线数据 ----
           const leftItems: string[] = []
           const candle = params.find((p: any) => p.seriesName === 'K线')
           if (candle && candle.data) {
@@ -201,7 +219,7 @@ export function UnifiedChart({ code }: Props) {
             leftItems.push(`<div style="display:flex;justify-content:space-between;gap:18px"><span style="color:#94a3b8">最低</span><span>${fmt2(l)}</span></div>`)
             leftItems.push(`<div style="display:flex;justify-content:space-between;gap:18px"><span style="color:#94a3b8">最高</span><span>${fmt2(h)}</span></div>`)
           }
-          params.filter((p: any) => ['MA5', 'MA30', 'MA180', 'MA250'].includes(p.seriesName)).forEach((p: any) => {
+          params.filter((p: any) => ['MA5', 'MA10', 'MA30', 'MA60'].includes(p.seriesName)).forEach((p: any) => {
             const color = p.color || '#94a3b8'
             leftItems.push(`<div style="display:flex;justify-content:space-between;gap:18px"><span style="color:${color}">● ${p.seriesName}</span><span>${fmt2(p.value)}</span></div>`)
           })
@@ -210,7 +228,6 @@ export function UnifiedChart({ code }: Props) {
             leftItems.push(`<div style="display:flex;justify-content:space-between;gap:18px;margin-top:4px;border-top:1px solid rgba(148,163,184,0.12);padding-top:4px"><span style="color:#94a3b8">换手率</span><span>${turnover.value != null ? fmt2(turnover.value) + '%' : '-'}</span></div>`)
           }
 
-          // ---- 右栏：指标数据 ----
           const rightItems: string[] = []
           const macdParams = params.filter((p: any) => ['DIF', 'DEA', 'MACD'].includes(p.seriesName))
           if (macdParams.length) {
@@ -226,8 +243,7 @@ export function UnifiedChart({ code }: Props) {
           }
           const bbParams = params.filter((p: any) => ['上轨', '中轨', '下轨'].includes(p.seriesName))
           if (bbParams.length) {
-            if (rightItems.length && !rsiP) rightItems.push('<div style="border-top:1px solid rgba(148,163,184,0.12);margin:4px 0"></div>')
-            else if (rightItems.length && rsiP) rightItems.push('<div style="border-top:1px solid rgba(148,163,184,0.12);margin:4px 0"></div>')
+            if (rightItems.length) rightItems.push('<div style="border-top:1px solid rgba(148,163,184,0.12);margin:4px 0"></div>')
             bbParams.forEach((p: any) => {
               const color = p.color || '#94a3b8'
               rightItems.push(`<div style="display:flex;justify-content:space-between;gap:18px"><span style="color:${color}">● ${p.seriesName}</span><span>${fmt2(p.value)}</span></div>`)
@@ -250,16 +266,10 @@ export function UnifiedChart({ code }: Props) {
         label: { show: false },
       },
       grid: [
-        { left: 52, right: 16, top: 38, height: '260' },
-        { left: 52, right: 16, top: '320', height: '50' },
-        { left: 52, right: 16, top: '390', height: '42' },
-        { left: 52, right: 16, top: '448', height: '65' },
-      ],
-      graphic: [
-        { type: 'text', left: 4, top: 18, style: { text: 'K线', fill: '#94a3b8', fontSize: 11 } },
-        { type: 'text', left: 4, top: 314, style: { text: 'MACD', fill: '#94a3b8', fontSize: 11 } },
-        { type: 'text', left: 4, top: 384, style: { text: 'RSI', fill: '#94a3b8', fontSize: 11 } },
-        { type: 'text', left: 4, top: 442, style: { text: '布林带', fill: '#94a3b8', fontSize: 11 } },
+        { left: 62, right: 16, top: 38, height: '260' },
+        { left: 62, right: 16, top: '320', height: '50' },
+        { left: 62, right: 16, top: '390', height: '42' },
+        { left: 62, right: 16, top: '448', height: '65' },
       ],
       xAxis: [
         { type: 'category', data: dates, boundaryGap: true, axisLine: { onZero: false, lineStyle: { color: 'rgba(148,163,184,0.2)' } }, axisLabel: { color: '#94a3b8', fontSize: 10 }, splitLine: { show: false }, gridIndex: 0, axisPointer: { label: { show: false } } },
@@ -268,11 +278,11 @@ export function UnifiedChart({ code }: Props) {
         { type: 'category', data: dates, boundaryGap: true, axisLine: { onZero: false, lineStyle: { color: 'rgba(148,163,184,0.2)' } }, axisLabel: { color: '#94a3b8', fontSize: 10 }, splitLine: { show: false }, gridIndex: 3, axisPointer: { label: { show: true, backgroundColor: '#3b82f6' } } },
       ],
       yAxis: [
-        { scale: true, splitArea: { show: false }, splitLine: { lineStyle: { color: 'rgba(148, 163, 184, 0.08)' } }, gridIndex: 0, position: 'left', axisLabel: { fontSize: 10, color: '#94a3b8' }, splitNumber: 5 },
+        { scale: true, splitArea: { show: false }, splitLine: { lineStyle: { color: 'rgba(148, 163, 184, 0.08)' } }, gridIndex: 0, position: 'left', axisLabel: { fontSize: 10, color: '#94a3b8' }, splitNumber: 5, name: 'K线', nameLocation: 'middle', nameGap: 40, nameTextStyle: { color: '#94a3b8', fontSize: 11, align: 'right' } },
         { scale: true, splitLine: { show: false }, gridIndex: 0, position: 'right', axisLabel: { show: false }, axisLine: { show: false }, axisTick: { show: false }, max: (value: any) => value.max * 4 },
-        { scale: true, splitArea: { show: false }, splitLine: { lineStyle: { color: 'rgba(148, 163, 184, 0.08)' } }, gridIndex: 1, position: 'left', axisLabel: { fontSize: 10, color: '#94a3b8' }, splitNumber: 3 },
-        { scale: true, splitArea: { show: false }, splitLine: { lineStyle: { color: 'rgba(148, 163, 184, 0.08)' } }, min: 0, max: 100, gridIndex: 2, position: 'left', axisLabel: { fontSize: 10, color: '#94a3b8' }, splitNumber: 2 },
-        { scale: true, splitArea: { show: false }, splitLine: { lineStyle: { color: 'rgba(148, 163, 184, 0.08)' } }, gridIndex: 3, position: 'left', axisLabel: { fontSize: 10, color: '#94a3b8' }, splitNumber: 4 },
+        { scale: true, splitArea: { show: false }, splitLine: { lineStyle: { color: 'rgba(148, 163, 184, 0.08)' } }, gridIndex: 1, position: 'left', axisLabel: { fontSize: 10, color: '#94a3b8' }, splitNumber: 3, name: 'MACD', nameLocation: 'middle', nameGap: 40, nameTextStyle: { color: '#94a3b8', fontSize: 11, align: 'right' } },
+        { scale: true, splitArea: { show: false }, splitLine: { lineStyle: { color: 'rgba(148, 163, 184, 0.08)' } }, min: 0, max: 100, gridIndex: 2, position: 'left', axisLabel: { fontSize: 10, color: '#94a3b8' }, splitNumber: 2, name: 'RSI', nameLocation: 'middle', nameGap: 40, nameTextStyle: { color: '#94a3b8', fontSize: 11, align: 'right' } },
+        { scale: true, splitArea: { show: false }, splitLine: { lineStyle: { color: 'rgba(148, 163, 184, 0.08)' } }, gridIndex: 3, position: 'left', axisLabel: { fontSize: 10, color: '#94a3b8' }, splitNumber: 4, name: '布林带', nameLocation: 'middle', nameGap: 40, nameTextStyle: { color: '#94a3b8', fontSize: 11, align: 'right' } },
       ],
       dataZoom: [
         { type: 'inside', xAxisIndex: [0, 1, 2, 3], start: 0, end: 100, zoomLock: true },
@@ -298,23 +308,23 @@ export function UnifiedChart({ code }: Props) {
           xAxisIndex: 0,
           yAxisIndex: 1,
         },
-        { name: 'MA5', type: 'line', data: pad(ma5), smooth: false, lineStyle: { color: colors.ma5, width: 1.5 }, symbol: 'none', xAxisIndex: 0, yAxisIndex: 0 },
-        { name: 'MA30', type: 'line', data: pad(ma30), smooth: false, lineStyle: { color: colors.ma30, width: 1.5 }, symbol: 'none', xAxisIndex: 0, yAxisIndex: 0 },
-        { name: 'MA180', type: 'line', data: pad(ma180), smooth: false, lineStyle: { color: colors.ma180, width: 1.5 }, symbol: 'none', xAxisIndex: 0, yAxisIndex: 0 },
-        { name: 'MA250', type: 'line', data: pad(ma250), smooth: false, lineStyle: { color: colors.ma250, width: 1.5 }, symbol: 'none', xAxisIndex: 0, yAxisIndex: 0 },
-        { name: 'DIF', type: 'line', data: pad(dif), smooth: true, lineStyle: { color: colors.macd }, symbol: 'none', xAxisIndex: 1, yAxisIndex: 2 },
-        { name: 'DEA', type: 'line', data: pad(dea), smooth: true, lineStyle: { color: colors.signal }, symbol: 'none', xAxisIndex: 1, yAxisIndex: 2 },
+        { name: 'MA5', type: 'line', data: sliceDisplay(ma5), smooth: false, lineStyle: { color: colors.ma5, width: 1.5 }, symbol: 'none', xAxisIndex: 0, yAxisIndex: 0 },
+        { name: 'MA10', type: 'line', data: sliceDisplay(ma10), smooth: false, lineStyle: { color: colors.ma10, width: 1.5 }, symbol: 'none', xAxisIndex: 0, yAxisIndex: 0 },
+        { name: 'MA30', type: 'line', data: sliceDisplay(ma30), smooth: false, lineStyle: { color: colors.ma30, width: 1.5 }, symbol: 'none', xAxisIndex: 0, yAxisIndex: 0 },
+        { name: 'MA60', type: 'line', data: sliceDisplay(ma60), smooth: false, lineStyle: { color: colors.ma60, width: 1.5 }, symbol: 'none', xAxisIndex: 0, yAxisIndex: 0 },
+        { name: 'DIF', type: 'line', data: sliceDisplay(dif), smooth: true, lineStyle: { color: colors.macd }, symbol: 'none', xAxisIndex: 1, yAxisIndex: 2 },
+        { name: 'DEA', type: 'line', data: sliceDisplay(dea), smooth: true, lineStyle: { color: colors.signal }, symbol: 'none', xAxisIndex: 1, yAxisIndex: 2 },
         {
-          name: 'MACD', type: 'bar', data: pad(hist).map(v => ({
+          name: 'MACD', type: 'bar', data: sliceDisplay(hist).map(v => ({
             value: v,
             itemStyle: { color: v != null && v >= 0 ? colors.histPositive : colors.histNegative },
           })),
           xAxisIndex: 1, yAxisIndex: 2,
         },
-        { name: 'RSI', type: 'line', data: pad(rsi), smooth: true, lineStyle: { color: colors.rsi, width: 2 }, symbol: 'none', xAxisIndex: 2, yAxisIndex: 3, connectNulls: false },
-        { name: '上轨', type: 'line', data: pad(bbUpper), smooth: true, lineStyle: { color: colors.bbUpper }, symbol: 'none', xAxisIndex: 3, yAxisIndex: 4, connectNulls: false },
-        { name: '中轨', type: 'line', data: pad(bbMid), smooth: true, lineStyle: { color: colors.bbMid, width: 2 }, symbol: 'none', xAxisIndex: 3, yAxisIndex: 4, connectNulls: false },
-        { name: '下轨', type: 'line', data: pad(bbLower), smooth: true, lineStyle: { color: colors.bbLower }, symbol: 'none', xAxisIndex: 3, yAxisIndex: 4, connectNulls: false },
+        { name: 'RSI', type: 'line', data: sliceDisplay(rsi), smooth: true, lineStyle: { color: colors.rsi, width: 2 }, symbol: 'none', xAxisIndex: 2, yAxisIndex: 3, connectNulls: false },
+        { name: '上轨', type: 'line', data: sliceDisplay(bbUpper), smooth: true, lineStyle: { color: colors.bbUpper }, symbol: 'none', xAxisIndex: 3, yAxisIndex: 4, connectNulls: false },
+        { name: '中轨', type: 'line', data: sliceDisplay(bbMid), smooth: true, lineStyle: { color: colors.bbMid, width: 2 }, symbol: 'none', xAxisIndex: 3, yAxisIndex: 4, connectNulls: false },
+        { name: '下轨', type: 'line', data: sliceDisplay(bbLower), smooth: true, lineStyle: { color: colors.bbLower }, symbol: 'none', xAxisIndex: 3, yAxisIndex: 4, connectNulls: false },
       ],
     }
 
