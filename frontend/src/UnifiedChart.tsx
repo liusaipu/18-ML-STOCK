@@ -26,22 +26,22 @@ const colors = {
   bbLower: '#10b981',
 }
 
-const WINDOW_SIZE = 120 // 约6个月交易日
+const WINDOW_SIZE = 120
 
-function calcEMA(arr: number[], period: number): number[] {
+function calcEMA(arr: number[], period: number): (number | null)[] {
   const k = 2 / (period + 1)
-  const ema: number[] = []
+  const ema: (number | null)[] = []
   for (let i = 0; i < arr.length; i++) {
     if (i === 0) ema.push(arr[0])
-    else ema.push(arr[i] * k + ema[i - 1] * (1 - k))
+    else ema.push(arr[i] * k + (ema[i - 1] as number) * (1 - k))
   }
   return ema
 }
 
-function calcMA(arr: number[], period: number): number[] {
-  const ma: number[] = []
+function calcMA(arr: number[], period: number): (number | null)[] {
+  const ma: (number | null)[] = []
   for (let i = 0; i < arr.length; i++) {
-    if (i < period - 1) { ma.push(arr[i]); continue }
+    if (i < period - 1) { ma.push(null); continue }
     let sum = 0
     for (let j = i - period + 1; j <= i; j++) sum += arr[j]
     ma.push(sum / period)
@@ -64,13 +64,21 @@ function calculateIndicators(data: KlineData[]) {
 
   const ema12 = calcEMA(closes, 12)
   const ema26 = calcEMA(closes, 26)
-  const dif = ema12.map((v, i) => v - ema26[i])
-  const dea = calcEMA(dif, 9)
-  const hist = dif.map((v, i) => v - dea[i])
+  const dif: (number | null)[] = ema12.map((v, i) => (v == null || ema26[i] == null) ? null : v - ema26[i]!)
+  // DEA needs non-null dif values; for early nulls push null
+  const validDif = dif.filter((v): v is number => v != null)
+  const validDea = calcEMA(validDif, 9)
+  const dea: (number | null)[] = []
+  let deaIdx = 0
+  for (let i = 0; i < dif.length; i++) {
+    if (dif[i] == null) dea.push(null)
+    else dea.push(validDea[deaIdx++] ?? null)
+  }
+  const hist: (number | null)[] = dif.map((v, i) => (v == null || dea[i] == null) ? null : v - dea[i]!)
 
-  const rsi: number[] = []
+  const rsi: (number | null)[] = []
   for (let i = 0; i < closes.length; i++) {
-    if (i < 14) { rsi.push(50); continue }
+    if (i < 14) { rsi.push(null); continue }
     let gains = 0, losses = 0
     for (let j = i - 13; j <= i; j++) {
       const diff = closes[j] - closes[j - 1]
@@ -82,9 +90,9 @@ function calculateIndicators(data: KlineData[]) {
     rsi.push(avgLoss === 0 ? 100 : 100 - 100 / (1 + avgGain / avgLoss))
   }
 
-  const bbUpper: number[] = [], bbMid: number[] = [], bbLower: number[] = []
+  const bbUpper: (number | null)[] = [], bbMid: (number | null)[] = [], bbLower: (number | null)[] = []
   for (let i = 0; i < closes.length; i++) {
-    if (i < 19) { bbUpper.push(closes[i]); bbMid.push(closes[i]); bbLower.push(closes[i]); continue }
+    if (i < 19) { bbUpper.push(null); bbMid.push(null); bbLower.push(null); continue }
     const slice = closes.slice(i - 19, i + 1)
     const mean = slice.reduce((a, b) => a + b, 0) / 20
     const std = Math.sqrt(slice.reduce((sq, n) => sq + Math.pow(n - mean, 2), 0) / 20)
@@ -96,14 +104,23 @@ function calculateIndicators(data: KlineData[]) {
   return { dif, dea, hist, rsi, bbUpper, bbMid, bbLower, ma5, ma30, ma180, ma250 }
 }
 
-function formatTooltipValue(name: string, value: number): string {
-  if (name.includes('MA')) return Number(value).toFixed(2)
-  if (name === 'RSI') return Number(value).toFixed(1)
-  if (['DIF', 'DEA', 'MACD'].includes(name)) return Number(value).toFixed(3)
-  if (['上轨', '中轨', '下轨'].includes(name)) return Number(value).toFixed(2)
-  if (name === '换手率') return Number(value).toFixed(2) + '%'
-  if (name === '成交量') return Number(value).toFixed(0)
-  return String(value)
+function fmt2(v: any): string {
+  if (v == null) return '-'
+  const n = Number(v)
+  if (isNaN(n)) return '-'
+  return n.toFixed(2)
+}
+function fmt3(v: any): string {
+  if (v == null) return '-'
+  const n = Number(v)
+  if (isNaN(n)) return '-'
+  return n.toFixed(3)
+}
+function fmt1(v: any): string {
+  if (v == null) return '-'
+  const n = Number(v)
+  if (isNaN(n)) return '-'
+  return n.toFixed(1)
 }
 
 export function UnifiedChart({ code }: Props) {
@@ -131,26 +148,20 @@ export function UnifiedChart({ code }: Props) {
     const chart = echarts.init(chartRef.current, 'dark', { renderer: 'canvas' })
     chartInstanceRef.current = chart
 
-    // 固定窗口：最近120个交易日
     const recentData = data.slice(-WINDOW_SIZE)
     const padCount = WINDOW_SIZE - recentData.length
     const dates = [...Array(padCount).fill(''), ...recentData.map(d => d.time)]
 
     const { dif, dea, hist, rsi, bbUpper, bbMid, bbLower, ma5, ma30, ma180, ma250 } = calculateIndicators(recentData)
 
-    // 判断是否有换手率数据
-    const hasTurnover = recentData.some(d => d.turnoverRate > 0)
-    const turnoverLabel = hasTurnover ? '换手率' : '成交量'
-
-    // 补null让数据右对齐
     const nullPad = Array(padCount).fill(null)
     const candleData = [...nullPad, ...recentData.map(d => [d.open, d.close, d.low, d.high])]
     const turnoverData = [...nullPad, ...recentData.map(d => ({
-      value: hasTurnover ? d.turnoverRate : d.volume,
+      value: d.turnoverRate,
       itemStyle: { color: d.close >= d.open ? 'rgba(239,68,68,0.35)' : 'rgba(34,197,94,0.35)' },
     }))]
 
-    const pad = (arr: number[]) => padArray(arr, WINDOW_SIZE)
+    const pad = (arr: (number | null)[]) => padArray(arr, WINDOW_SIZE)
 
     const option: echarts.EChartsOption = {
       backgroundColor: 'transparent',
@@ -168,73 +179,75 @@ export function UnifiedChart({ code }: Props) {
         axisPointer: {
           type: 'cross',
           link: [{ xAxisIndex: 'all' }] as any,
-          label: { backgroundColor: '#3b82f6' },
+          label: { show: false },
         },
         backgroundColor: 'rgba(15, 23, 42, 0.95)',
         borderColor: 'rgba(148, 163, 184, 0.25)',
         borderWidth: 1,
         textStyle: { color: '#e2e8f0', fontSize: 12 },
-        padding: [10, 14],
+        padding: 0,
         formatter: (params: any) => {
           if (!params || params.length === 0) return ''
           const date = params[0].axisValue || ''
           if (!date) return ''
 
-          const rows: string[] = [`<div style="font-weight:600;margin-bottom:6px;color:#f0f0f0">${date}</div>`]
-
-          // K线 + 均线 + 换手率
-          const klineGroup: string[] = []
+          // ---- 左栏：K线数据 ----
+          const leftItems: string[] = []
           const candle = params.find((p: any) => p.seriesName === 'K线')
           if (candle && candle.data) {
             const [o, c, l, h] = candle.data
-            klineGroup.push(`<div style="display:flex;justify-content:space-between;gap:20px"><span style="color:#94a3b8">open</span><span>${Number(o).toFixed(2)}</span></div>`)
-            klineGroup.push(`<div style="display:flex;justify-content:space-between;gap:20px"><span style="color:#94a3b8">close</span><span>${Number(c).toFixed(2)}</span></div>`)
-            klineGroup.push(`<div style="display:flex;justify-content:space-between;gap:20px"><span style="color:#94a3b8">low</span><span>${Number(l).toFixed(2)}</span></div>`)
-            klineGroup.push(`<div style="display:flex;justify-content:space-between;gap:20px"><span style="color:#94a3b8">high</span><span>${Number(h).toFixed(2)}</span></div>`)
+            leftItems.push(`<div style="display:flex;justify-content:space-between;gap:18px"><span style="color:#94a3b8">开盘</span><span>${fmt2(o)}</span></div>`)
+            leftItems.push(`<div style="display:flex;justify-content:space-between;gap:18px"><span style="color:#94a3b8">收盘</span><span>${fmt2(c)}</span></div>`)
+            leftItems.push(`<div style="display:flex;justify-content:space-between;gap:18px"><span style="color:#94a3b8">最低</span><span>${fmt2(l)}</span></div>`)
+            leftItems.push(`<div style="display:flex;justify-content:space-between;gap:18px"><span style="color:#94a3b8">最高</span><span>${fmt2(h)}</span></div>`)
           }
           params.filter((p: any) => ['MA5', 'MA30', 'MA180', 'MA250'].includes(p.seriesName)).forEach((p: any) => {
             const color = p.color || '#94a3b8'
-            klineGroup.push(`<div style="display:flex;justify-content:space-between;gap:20px"><span style="color:${color}">● ${p.seriesName}</span><span>${Number(p.value).toFixed(2)}</span></div>`)
+            leftItems.push(`<div style="display:flex;justify-content:space-between;gap:18px"><span style="color:${color}">● ${p.seriesName}</span><span>${fmt2(p.value)}</span></div>`)
           })
-          const turnover = params.find((p: any) => p.seriesName === turnoverLabel)
-          if (turnover && turnover.value != null) {
-            klineGroup.push(`<div style="display:flex;justify-content:space-between;gap:20px"><span style="color:#94a3b8">${turnoverLabel}</span><span>${formatTooltipValue(turnoverLabel, turnover.value)}</span></div>`)
+          const turnover = params.find((p: any) => p.seriesName === '换手率')
+          if (turnover) {
+            leftItems.push(`<div style="display:flex;justify-content:space-between;gap:18px;margin-top:4px;border-top:1px solid rgba(148,163,184,0.12);padding-top:4px"><span style="color:#94a3b8">换手率</span><span>${turnover.value != null ? fmt2(turnover.value) + '%' : '-'}</span></div>`)
           }
-          if (klineGroup.length) rows.push(klineGroup.join(''))
 
-          // MACD
+          // ---- 右栏：指标数据 ----
+          const rightItems: string[] = []
           const macdParams = params.filter((p: any) => ['DIF', 'DEA', 'MACD'].includes(p.seriesName))
           if (macdParams.length) {
-            rows.push('<div style="border-top:1px solid rgba(148,163,184,0.15);margin:6px 0;padding-top:4px;font-size:11px;color:#94a3b8">MACD</div>')
             macdParams.forEach((p: any) => {
               const color = p.color || '#94a3b8'
-              rows.push(`<div style="display:flex;justify-content:space-between;gap:20px;font-size:11px"><span style="color:${color}">● ${p.seriesName}</span><span>${formatTooltipValue(p.seriesName, p.value)}</span></div>`)
+              rightItems.push(`<div style="display:flex;justify-content:space-between;gap:18px"><span style="color:${color}">● ${p.seriesName}</span><span>${fmt3(p.value)}</span></div>`)
             })
           }
-
-          // RSI
           const rsiP = params.find((p: any) => p.seriesName === 'RSI')
-          if (rsiP && rsiP.value != null) {
-            rows.push('<div style="border-top:1px solid rgba(148,163,184,0.15);margin:6px 0;padding-top:4px;font-size:11px;color:#94a3b8">RSI</div>')
-            rows.push(`<div style="display:flex;justify-content:space-between;gap:20px;font-size:11px"><span style="color:${colors.rsi}">● RSI</span><span>${formatTooltipValue('RSI', rsiP.value)}</span></div>`)
+          if (rsiP) {
+            if (rightItems.length) rightItems.push('<div style="border-top:1px solid rgba(148,163,184,0.12);margin:4px 0"></div>')
+            rightItems.push(`<div style="display:flex;justify-content:space-between;gap:18px"><span style="color:${colors.rsi}">● RSI</span><span>${fmt1(rsiP.value)}</span></div>`)
           }
-
-          // 布林带
           const bbParams = params.filter((p: any) => ['上轨', '中轨', '下轨'].includes(p.seriesName))
           if (bbParams.length) {
-            rows.push('<div style="border-top:1px solid rgba(148,163,184,0.15);margin:6px 0;padding-top:4px;font-size:11px;color:#94a3b8">布林带</div>')
+            if (rightItems.length && !rsiP) rightItems.push('<div style="border-top:1px solid rgba(148,163,184,0.12);margin:4px 0"></div>')
+            else if (rightItems.length && rsiP) rightItems.push('<div style="border-top:1px solid rgba(148,163,184,0.12);margin:4px 0"></div>')
             bbParams.forEach((p: any) => {
               const color = p.color || '#94a3b8'
-              rows.push(`<div style="display:flex;justify-content:space-between;gap:20px;font-size:11px"><span style="color:${color}">● ${p.seriesName}</span><span>${formatTooltipValue(p.seriesName, p.value)}</span></div>`)
+              rightItems.push(`<div style="display:flex;justify-content:space-between;gap:18px"><span style="color:${color}">● ${p.seriesName}</span><span>${fmt2(p.value)}</span></div>`)
             })
           }
 
-          return `<div style="line-height:1.7">${rows.join('')}</div>`
+          return `
+            <div style="line-height:1.65;font-size:12px">
+              <div style="font-weight:600;margin-bottom:6px;color:#f0f0f0;padding:10px 14px 0">${date}</div>
+              <div style="display:flex;gap:14px;padding:0 14px 10px">
+                <div style="min-width:110px">${leftItems.join('')}</div>
+                <div style="min-width:110px">${rightItems.join('')}</div>
+              </div>
+            </div>
+          `
         },
       },
       axisPointer: {
         link: [{ xAxisIndex: 'all' }],
-        label: { backgroundColor: '#3b82f6' },
+        label: { show: false },
       },
       grid: [
         { left: 52, right: 16, top: 38, height: '260' },
@@ -243,27 +256,22 @@ export function UnifiedChart({ code }: Props) {
         { left: 52, right: 16, top: '448', height: '65' },
       ],
       graphic: [
-        { type: 'text', left: 10, top: 18, style: { text: 'K线', fill: '#94a3b8', fontSize: 11 } },
-        { type: 'text', left: 10, top: 314, style: { text: 'MACD', fill: '#94a3b8', fontSize: 11 } },
-        { type: 'text', left: 10, top: 384, style: { text: 'RSI', fill: '#94a3b8', fontSize: 11 } },
-        { type: 'text', left: 10, top: 442, style: { text: '布林带', fill: '#94a3b8', fontSize: 11 } },
+        { type: 'text', left: 4, top: 18, style: { text: 'K线', fill: '#94a3b8', fontSize: 11 } },
+        { type: 'text', left: 4, top: 314, style: { text: 'MACD', fill: '#94a3b8', fontSize: 11 } },
+        { type: 'text', left: 4, top: 384, style: { text: 'RSI', fill: '#94a3b8', fontSize: 11 } },
+        { type: 'text', left: 4, top: 442, style: { text: '布林带', fill: '#94a3b8', fontSize: 11 } },
       ],
       xAxis: [
-        { type: 'category', data: dates, boundaryGap: true, axisLine: { onZero: false, lineStyle: { color: 'rgba(148,163,184,0.2)' } }, axisLabel: { color: '#94a3b8', fontSize: 10 }, splitLine: { show: false }, gridIndex: 0 },
-        { type: 'category', data: dates, boundaryGap: true, axisLine: { onZero: false, lineStyle: { color: 'rgba(148,163,184,0.2)' } }, axisLabel: { show: false }, splitLine: { show: false }, gridIndex: 1 },
-        { type: 'category', data: dates, boundaryGap: true, axisLine: { onZero: false, lineStyle: { color: 'rgba(148,163,184,0.2)' } }, axisLabel: { show: false }, splitLine: { show: false }, gridIndex: 2 },
-        { type: 'category', data: dates, boundaryGap: true, axisLine: { onZero: false, lineStyle: { color: 'rgba(148,163,184,0.2)' } }, axisLabel: { color: '#94a3b8', fontSize: 10 }, splitLine: { show: false }, gridIndex: 3 },
+        { type: 'category', data: dates, boundaryGap: true, axisLine: { onZero: false, lineStyle: { color: 'rgba(148,163,184,0.2)' } }, axisLabel: { color: '#94a3b8', fontSize: 10 }, splitLine: { show: false }, gridIndex: 0, axisPointer: { label: { show: false } } },
+        { type: 'category', data: dates, boundaryGap: true, axisLine: { onZero: false, lineStyle: { color: 'rgba(148,163,184,0.2)' } }, axisLabel: { show: false }, splitLine: { show: false }, gridIndex: 1, axisPointer: { label: { show: false } } },
+        { type: 'category', data: dates, boundaryGap: true, axisLine: { onZero: false, lineStyle: { color: 'rgba(148,163,184,0.2)' } }, axisLabel: { show: false }, splitLine: { show: false }, gridIndex: 2, axisPointer: { label: { show: false } } },
+        { type: 'category', data: dates, boundaryGap: true, axisLine: { onZero: false, lineStyle: { color: 'rgba(148,163,184,0.2)' } }, axisLabel: { color: '#94a3b8', fontSize: 10 }, splitLine: { show: false }, gridIndex: 3, axisPointer: { label: { show: true, backgroundColor: '#3b82f6' } } },
       ],
       yAxis: [
-        // K线 左轴
         { scale: true, splitArea: { show: false }, splitLine: { lineStyle: { color: 'rgba(148, 163, 184, 0.08)' } }, gridIndex: 0, position: 'left', axisLabel: { fontSize: 10, color: '#94a3b8' }, splitNumber: 5 },
-        // K线 右轴（换手率/成交量）
         { scale: true, splitLine: { show: false }, gridIndex: 0, position: 'right', axisLabel: { show: false }, axisLine: { show: false }, axisTick: { show: false }, max: (value: any) => value.max * 4 },
-        // MACD
         { scale: true, splitArea: { show: false }, splitLine: { lineStyle: { color: 'rgba(148, 163, 184, 0.08)' } }, gridIndex: 1, position: 'left', axisLabel: { fontSize: 10, color: '#94a3b8' }, splitNumber: 3 },
-        // RSI
         { scale: true, splitArea: { show: false }, splitLine: { lineStyle: { color: 'rgba(148, 163, 184, 0.08)' } }, min: 0, max: 100, gridIndex: 2, position: 'left', axisLabel: { fontSize: 10, color: '#94a3b8' }, splitNumber: 2 },
-        // 布林带
         { scale: true, splitArea: { show: false }, splitLine: { lineStyle: { color: 'rgba(148, 163, 184, 0.08)' } }, gridIndex: 3, position: 'left', axisLabel: { fontSize: 10, color: '#94a3b8' }, splitNumber: 4 },
       ],
       dataZoom: [
@@ -284,7 +292,7 @@ export function UnifiedChart({ code }: Props) {
           yAxisIndex: 0,
         },
         {
-          name: turnoverLabel,
+          name: '换手率',
           type: 'bar',
           data: turnoverData,
           xAxisIndex: 0,
@@ -303,10 +311,10 @@ export function UnifiedChart({ code }: Props) {
           })),
           xAxisIndex: 1, yAxisIndex: 2,
         },
-        { name: 'RSI', type: 'line', data: pad(rsi), smooth: true, lineStyle: { color: colors.rsi, width: 2 }, symbol: 'none', xAxisIndex: 2, yAxisIndex: 3 },
-        { name: '上轨', type: 'line', data: pad(bbUpper), smooth: true, lineStyle: { color: colors.bbUpper }, symbol: 'none', xAxisIndex: 3, yAxisIndex: 4 },
-        { name: '中轨', type: 'line', data: pad(bbMid), smooth: true, lineStyle: { color: colors.bbMid, width: 2 }, symbol: 'none', xAxisIndex: 3, yAxisIndex: 4 },
-        { name: '下轨', type: 'line', data: pad(bbLower), smooth: true, lineStyle: { color: colors.bbLower }, symbol: 'none', xAxisIndex: 3, yAxisIndex: 4 },
+        { name: 'RSI', type: 'line', data: pad(rsi), smooth: true, lineStyle: { color: colors.rsi, width: 2 }, symbol: 'none', xAxisIndex: 2, yAxisIndex: 3, connectNulls: false },
+        { name: '上轨', type: 'line', data: pad(bbUpper), smooth: true, lineStyle: { color: colors.bbUpper }, symbol: 'none', xAxisIndex: 3, yAxisIndex: 4, connectNulls: false },
+        { name: '中轨', type: 'line', data: pad(bbMid), smooth: true, lineStyle: { color: colors.bbMid, width: 2 }, symbol: 'none', xAxisIndex: 3, yAxisIndex: 4, connectNulls: false },
+        { name: '下轨', type: 'line', data: pad(bbLower), smooth: true, lineStyle: { color: colors.bbLower }, symbol: 'none', xAxisIndex: 3, yAxisIndex: 4, connectNulls: false },
       ],
     }
 
