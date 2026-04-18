@@ -758,8 +758,8 @@ func FetchStockQuote(market, code string) (*StockQuote, error) {
 			quote.Low = parseAnyFloat(resp.Data["f16"])
 			quote.Open = parseAnyFloat(resp.Data["f17"])
 			quote.PreviousClose = parseAnyFloat(resp.Data["f18"])
-			quote.MarketCap = parseAnyFloat(resp.Data["f20"])
-			quote.CirculatingMarketCap = parseAnyFloat(resp.Data["f21"])
+			quote.MarketCap = parseAnyFloat(resp.Data["f20"]) * 1e8
+			quote.CirculatingMarketCap = parseAnyFloat(resp.Data["f21"]) * 1e8
 			quote.PE = parseAnyFloat(resp.Data["f9"])
 			quote.PB = parseAnyFloat(resp.Data["f23"])
 				quote.DividendYield = parseAnyFloat(resp.Data["f133"]) / 100 // 接口返回百分比数值，转为小数
@@ -1187,7 +1187,7 @@ func fetchKlinesFromNetEase(market, code string, limit int) ([]KlineData, error)
 		neteaseCode = "1" + code
 	}
 	end := time.Now().Format("20060102")
-	start := time.Now().AddDate(0, -6, 0).Format("20060102")
+	start := time.Now().AddDate(-1, 0, 0).Format("20060102")
 	url := fmt.Sprintf("http://quotes.money.163.com/service/chddata.html?code=%s&start=%s&end=%s&fields=TCLOSE;HIGH;LOW;TOPEN;LCLOSE;VOTURNOVER;VATURNOVER", neteaseCode, start, end)
 
 	client := &http.Client{Timeout: 15 * time.Second}

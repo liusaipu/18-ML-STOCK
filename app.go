@@ -1020,10 +1020,38 @@ func (a *App) GetModule4Status(symbol string) (bool, error) {
 	return compAnalysis != nil && compAnalysis.HasData && len(compAnalysis.Metrics) > 0, nil
 }
 
-// GetStockKlines 获取股票历史K线数据（日K，默认120根）
+// GetStockKlines 获取股票历史K线数据（日K），优先读取本地缓存
 func (a *App) GetStockKlines(symbol string) ([]downloader.KlineData, error) {
 	if a.storage == nil {
 		return nil, fmt.Errorf("存储未初始化")
+	}
+	// 优先读取本地缓存（分析报告生成时保存的K线数据）
+	if cached, err := a.storage.LoadStockKlines(symbol); err == nil && len(cached) > 0 {
+		// 检查缓存的K线是否有换手率，如果没有，尝试用 quote 补算
+		hasTurnover := false
+		for _, k := range cached {
+			if k.TurnoverRate > 0 {
+				hasTurnover = true
+				break
+			}
+		}
+		if !hasTurnover {
+			if quote, err := a.GetStockQuote(symbol); err == nil && quote != nil && quote.CirculatingMarketCap > 0 && quote.CurrentPrice > 0 {
+				circulatingShares := quote.CirculatingMarketCap / quote.CurrentPrice
+				for i := range cached {
+					cached[i].TurnoverRate = (cached[i].Volume * 100 / circulatingShares) * 100
+				}
+				debugLog("[GetStockKlines] %s cache hit but no turnover, computed for %d klines", symbol, len(cached))
+			} else {
+				debugLog("[GetStockKlines] %s cache hit but no turnover and no quote available", symbol)
+			}
+		}
+		debugLog("[GetStockKlines] %s cache hit, len=%d, first turnoverRate=%.2f", symbol, len(cached), cached[0].TurnoverRate)
+		return cached, nil
+	} else if err != nil {
+		debugLog("[GetStockKlines] %s cache read error: %v", symbol, err)
+	} else {
+		debugLog("[GetStockKlines] %s cache miss or empty", symbol)
 	}
 	parts := strings.Split(symbol, ".")
 	if len(parts) != 2 {
@@ -1219,8 +1247,11 @@ func (a *App) analyzeStockInternal(symbol string, overwriteLatest bool, customRI
 
 	go func() {
 		defer wgNet.Done()
-		if list, err := a.GetStockKlines(symbol); err == nil && len(list) >= 20 {
-			klines = list
+		parts := strings.Split(symbol, ".")
+		if len(parts) == 2 {
+			if list, err := downloader.FetchStockKlines(strings.ToUpper(parts[1]), parts[0], 250); err == nil && len(list) >= 20 {
+				klines = list
+			}
 		}
 	}()
 
@@ -1594,6 +1625,32 @@ func (a *App) analyzeStockInternal(symbol string, overwriteLatest bool, customRI
 	_, _ = a.storage.SaveReport(symbol, report.MarkdownContent, overwriteLatest)
 	// 保存分析快照（用于前端亮点与风险恢复）
 	_ = a.storage.SaveSnapshot(symbol, report)
+	// 保存K线数据缓存（供报告图表展示使用）
+	if len(klines) > 0 {
+		// 如果K线数据里没有换手率，用 quote 数据补算
+		hasTurnover := false
+		for _, k := range klines {
+			if k.TurnoverRate > 0 {
+				hasTurnover = true
+				break
+			}
+		}
+		if !hasTurnover && quoteData != nil && quoteData.CirculatingMarketCap > 0 && quoteData.CurrentPrice > 0 {
+			circulatingShares := quoteData.CirculatingMarketCap / quoteData.CurrentPrice
+			for i := range klines {
+				klines[i].TurnoverRate = (klines[i].Volume * 100 / circulatingShares) * 100
+			}
+			debugLog("[AnalyzeStock] %s computed turnoverRate for %d klines, first=%.2f%%", symbol, len(klines), klines[0].TurnoverRate)
+		}
+		debugLog("[AnalyzeStock] %s saving klines cache, len=%d, first turnoverRate=%.2f", symbol, len(klines), klines[0].TurnoverRate)
+		if err := a.storage.SaveStockKlines(symbol, klines); err != nil {
+			debugLog("[AnalyzeStock] %s save klines cache error: %v", symbol, err)
+		} else {
+			debugLog("[AnalyzeStock] %s klines cache saved", symbol)
+		}
+	} else {
+		debugLog("[AnalyzeStock] %s no klines to cache", symbol)
+	}
 	// 保存分析缓存
 	if hash, err := a.storage.ComputeDataHash(symbol); err == nil {
 		if compHash, err := a.storage.ComputeComparablesHash(symbol); err == nil {

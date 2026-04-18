@@ -266,10 +266,10 @@ export function UnifiedChart({ code, quote }: Props) {
         label: { show: false },
       },
       grid: [
-        { left: 62, right: 16, top: 38, height: '260' },
-        { left: 62, right: 16, top: '320', height: '50' },
-        { left: 62, right: 16, top: '390', height: '42' },
-        { left: 62, right: 16, top: '448', height: '65' },
+        { left: 75, right: 16, top: 38, height: '260' },
+        { left: 75, right: 16, top: '320', height: '50' },
+        { left: 75, right: 16, top: '390', height: '42' },
+        { left: 75, right: 16, top: '448', height: '65' },
       ],
       xAxis: [
         { type: 'category', data: dates, boundaryGap: true, axisLine: { onZero: false, lineStyle: { color: 'rgba(148,163,184,0.2)' } }, axisLabel: { color: '#94a3b8', fontSize: 10 }, splitLine: { show: false }, gridIndex: 0, axisPointer: { label: { show: false } } },
@@ -278,11 +278,11 @@ export function UnifiedChart({ code, quote }: Props) {
         { type: 'category', data: dates, boundaryGap: true, axisLine: { onZero: false, lineStyle: { color: 'rgba(148,163,184,0.2)' } }, axisLabel: { color: '#94a3b8', fontSize: 10 }, splitLine: { show: false }, gridIndex: 3, axisPointer: { label: { show: true, backgroundColor: '#3b82f6' } } },
       ],
       yAxis: [
-        { scale: true, splitArea: { show: false }, splitLine: { lineStyle: { color: 'rgba(148, 163, 184, 0.08)' } }, gridIndex: 0, position: 'left', axisLabel: { fontSize: 10, color: '#94a3b8' }, splitNumber: 5, name: 'K线', nameLocation: 'middle', nameGap: 40, nameTextStyle: { color: '#94a3b8', fontSize: 11, align: 'right' } },
+        { scale: true, splitArea: { show: false }, splitLine: { lineStyle: { color: 'rgba(148, 163, 184, 0.08)' } }, gridIndex: 0, position: 'left', axisLabel: { fontSize: 10, color: '#94a3b8', margin: 10 }, splitNumber: 5, name: 'K线', nameLocation: 'middle', nameGap: 55, nameTextStyle: { color: '#94a3b8', fontSize: 11, align: 'right' } },
         { scale: true, splitLine: { show: false }, gridIndex: 0, position: 'right', axisLabel: { show: false }, axisLine: { show: false }, axisTick: { show: false }, max: (value: any) => value.max * 4 },
-        { scale: true, splitArea: { show: false }, splitLine: { lineStyle: { color: 'rgba(148, 163, 184, 0.08)' } }, gridIndex: 1, position: 'left', axisLabel: { fontSize: 10, color: '#94a3b8' }, splitNumber: 3, name: 'MACD', nameLocation: 'middle', nameGap: 40, nameTextStyle: { color: '#94a3b8', fontSize: 11, align: 'right' } },
-        { scale: true, splitArea: { show: false }, splitLine: { lineStyle: { color: 'rgba(148, 163, 184, 0.08)' } }, min: 0, max: 100, gridIndex: 2, position: 'left', axisLabel: { fontSize: 10, color: '#94a3b8' }, splitNumber: 2, name: 'RSI', nameLocation: 'middle', nameGap: 40, nameTextStyle: { color: '#94a3b8', fontSize: 11, align: 'right' } },
-        { scale: true, splitArea: { show: false }, splitLine: { lineStyle: { color: 'rgba(148, 163, 184, 0.08)' } }, gridIndex: 3, position: 'left', axisLabel: { fontSize: 10, color: '#94a3b8' }, splitNumber: 4, name: '布林带', nameLocation: 'middle', nameGap: 40, nameTextStyle: { color: '#94a3b8', fontSize: 11, align: 'right' } },
+        { scale: true, splitArea: { show: false }, splitLine: { lineStyle: { color: 'rgba(148, 163, 184, 0.08)' } }, gridIndex: 1, position: 'left', axisLabel: { fontSize: 10, color: '#94a3b8', margin: 10 }, splitNumber: 3, name: 'MACD', nameLocation: 'middle', nameGap: 55, nameTextStyle: { color: '#94a3b8', fontSize: 11, align: 'right' } },
+        { scale: true, splitArea: { show: false }, splitLine: { lineStyle: { color: 'rgba(148, 163, 184, 0.08)' } }, min: 0, max: 100, gridIndex: 2, position: 'left', axisLabel: { fontSize: 10, color: '#94a3b8', margin: 10 }, splitNumber: 2, name: 'RSI', nameLocation: 'middle', nameGap: 55, nameTextStyle: { color: '#94a3b8', fontSize: 11, align: 'right' } },
+        { scale: true, splitArea: { show: false }, splitLine: { lineStyle: { color: 'rgba(148, 163, 184, 0.08)' } }, gridIndex: 3, position: 'left', axisLabel: { fontSize: 10, color: '#94a3b8', margin: 10 }, splitNumber: 4, name: '布林带', nameLocation: 'middle', nameGap: 55, nameTextStyle: { color: '#94a3b8', fontSize: 11, align: 'right' } },
       ],
       dataZoom: [
         { type: 'inside', xAxisIndex: [0, 1, 2, 3], start: 0, end: 100, zoomLock: true },

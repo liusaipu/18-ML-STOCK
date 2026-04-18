@@ -498,6 +498,37 @@ func (s *Storage) LoadStockQuote(symbol string) (*downloader.StockQuote, error) 
 	return &quote, nil
 }
 
+// SaveStockKlines 保存股票K线数据缓存
+func (s *Storage) SaveStockKlines(symbol string, klines []downloader.KlineData) error {
+	dir := filepath.Join(s.dataDir, "data", symbol)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return err
+	}
+	path := filepath.Join(dir, "klines.json")
+	data, err := json.MarshalIndent(klines, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, data, 0644)
+}
+
+// LoadStockKlines 读取股票K线数据缓存
+func (s *Storage) LoadStockKlines(symbol string) ([]downloader.KlineData, error) {
+	path := filepath.Join(s.dataDir, "data", symbol, "klines.json")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	var klines []downloader.KlineData
+	if err := json.Unmarshal(data, &klines); err != nil {
+		return nil, err
+	}
+	return klines, nil
+}
+
 // SaveStockSentiment 保存舆情情绪缓存
 func (s *Storage) SaveStockSentiment(symbol string, sentiment *downloader.SentimentData) error {
 	dir := filepath.Join(s.dataDir, "data", symbol)

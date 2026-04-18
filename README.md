@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="https://raw.githubusercontent.com/liusaipu/18-ML-STOCK/main/docs/logo.png" width="120" alt="StockFinLens Logo">
+<img src="./docs/logo.png" width="200" alt="StockFinLens Logo">
 
 # 股票财报透镜 StockFinLens
 

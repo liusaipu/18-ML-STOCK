@@ -88,7 +88,7 @@ export function Settings({
   industryTask
 }: SettingsProps) {
   const [isOpen, setIsOpen] = useState(false)
-  const [activeTab, setActiveTab] = useState<'appearance' | 'chart' | 'data' | 'about'>('appearance')
+  const [activeTab, setActiveTab] = useState<'appearance' | 'data' | 'about'>('appearance')
   const dropdownRef = useRef<HTMLDivElement>(null)
   const buttonRef = useRef<HTMLButtonElement>(null)
 
@@ -113,7 +113,7 @@ export function Settings({
     saveSettings(newSettings)
   }
 
-  const version = '1.3.19'
+  const version = '1.3.20'
 
   return (
     <>
@@ -130,7 +130,6 @@ export function Settings({
         <div ref={dropdownRef} className="settings-dropdown">
           <div className="settings-tabs">
             <button className={activeTab === 'appearance' ? 'active' : ''} onClick={() => setActiveTab('appearance')}>外观</button>
-            <button className={activeTab === 'chart' ? 'active' : ''} onClick={() => setActiveTab('chart')}>图表</button>
             <button className={activeTab === 'data' ? 'active' : ''} onClick={() => setActiveTab('data')}>数据</button>
             <button className={activeTab === 'about' ? 'active' : ''} onClick={() => setActiveTab('about')}>关于</button>
           </div>
@@ -143,30 +142,6 @@ export function Settings({
                   <label className="settings-radio"><input type="radio" name="theme" checked={settings.theme === 'dark'} onChange={() => updateSetting('theme', 'dark')} /><span>深色</span></label>
                   <label className="settings-radio"><input type="radio" name="theme" checked={settings.theme === 'light'} onChange={() => updateSetting('theme', 'light')} /><span>浅色</span></label>
                   <label className="settings-radio"><input type="radio" name="theme" checked={settings.theme === 'system'} onChange={() => updateSetting('theme', 'system')} /><span>跟随系统</span></label>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {activeTab === 'chart' && (
-            <div className="settings-section">
-              <div className="settings-item">
-                <label>K线默认时间范围</label>
-                <select value={settings.klineDefaultRange} onChange={(e) => updateSetting('klineDefaultRange', e.target.value as AppSettings['klineDefaultRange'])}>
-                  <option value="1m">1个月</option>
-                  <option value="3m">3个月</option>
-                  <option value="6m">6个月</option>
-                  <option value="1y">1年</option>
-                  <option value="all">全部</option>
-                </select>
-              </div>
-              <div className="settings-item">
-                <label>均线显示</label>
-                <div className="settings-checkboxes">
-                  <label className="settings-checkbox"><input type="checkbox" checked={settings.showMA5} onChange={(e) => updateSetting('showMA5', e.target.checked)} /><span>MA5</span></label>
-                  <label className="settings-checkbox"><input type="checkbox" checked={settings.showMA30} onChange={(e) => updateSetting('showMA30', e.target.checked)} /><span>MA30</span></label>
-                  <label className="settings-checkbox"><input type="checkbox" checked={settings.showMA180} onChange={(e) => updateSetting('showMA180', e.target.checked)} /><span>MA180</span></label>
-                  <label className="settings-checkbox"><input type="checkbox" checked={settings.showMA250} onChange={(e) => updateSetting('showMA250', e.target.checked)} /><span>MA250(年线)</span></label>
                 </div>
               </div>
             </div>
@@ -281,7 +256,7 @@ export function Settings({
 
           {activeTab === 'about' && (
             <div className="settings-section about-section">
-              <div className="about-logo">📈</div>
+              <img src="/logo.png" className="about-logo" alt="StockFinLens Logo" />
               <div className="about-title">股票分析系统</div>
               <div className="about-version">版本 {version}</div>
               <div className="about-desc">基于18步财报分析框架的股票研究工具</div>
