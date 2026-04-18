@@ -813,6 +813,10 @@ func fetchQuoteFromTencent(market, code string) (*StockQuote, error) {
 	quote.PreviousClose = parseStrFloat(parts[4])
 	quote.Open = parseStrFloat(parts[5])
 	quote.Volume = parseStrFloat(parts[6])
+	// 腾讯接口对科创板返回"股"，其他A股返回"手"，统一转为"手"
+	if !isHK && strings.ToUpper(market) == "SH" && strings.HasPrefix(code, "688") {
+		quote.Volume = quote.Volume / 100
+	}
 	quote.ChangeAmount = parseStrFloat(parts[31])
 	quote.ChangePercent = parseStrFloat(parts[32])
 	quote.High = parseStrFloat(parts[33])
@@ -1161,8 +1165,15 @@ func fetchKlinesFromTencent(market, code string, limit int) ([]KlineData, error)
 		}
 		date, _ := item[0].(string)
 		close := parseAnyFloat(item[2])
-		volume := parseAnyFloat(item[5])
-		amount := close * volume * 100 // 腾讯无成交额字段，用收盘价×成交量(手)×100 估算
+		// 腾讯接口的成交量单位有市场差异：科创板(SH 688)返回"股"，其他A股返回"手"
+		isKCB := strings.ToUpper(market) == "SH" && strings.HasPrefix(code, "688")
+		volumeRaw := parseAnyFloat(item[5])
+		volume := volumeRaw
+		amount := close * volumeRaw * 100 // 成交额 = 收盘价 × 手 × 100
+		if isKCB {
+			volume = volumeRaw / 100    // 科创板：股 → 手
+			amount = close * volumeRaw  // 成交额 = 收盘价 × 股数
+		}
 		klines = append(klines, KlineData{
 			Time:   date,
 			Open:   parseAnyFloat(item[1]),
