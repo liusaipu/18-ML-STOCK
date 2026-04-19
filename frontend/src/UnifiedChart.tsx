@@ -172,10 +172,13 @@ export function UnifiedChart({ code, quote }: Props) {
 
     const nullPad = Array(padCount).fill(null)
     const candleData = [...nullPad, ...displayData.map(d => [d.open, d.close, d.low, d.high])]
-    const turnoverData = [...nullPad, ...displayData.map((d: KlineData) => ({
-      value: d.turnoverRate,
-      itemStyle: { color: d.close >= d.open ? 'rgba(239,68,68,0.35)' : 'rgba(34,197,94,0.35)' },
-    }))]
+    const turnoverData = [
+      ...Array(padCount).fill(undefined),
+      ...displayData.map((d: KlineData) => ({
+        value: d.turnoverRate,
+        itemStyle: { color: d.close >= d.open ? 'rgba(239,68,68,0.35)' : 'rgba(34,197,94,0.35)' },
+      })),
+    ]
 
     const sliceDisplay = (arr: (number | null)[]) => {
       const sliced = arr.slice(-DISPLAY_SIZE)
