@@ -583,32 +583,19 @@ function App() {
     return list
   }, [watchlist, activityMap, activitySort, filterData, watchlistFilter, watchlistIndustryFilter])
 
-  // 在报告中的 activity-hint 元素内动态显示获取活跃度状态
+  // 通过 data-status 属性控制 activity-hint 状态显示（避免直接操作 DOM）
   useEffect(() => {
     if (!reportContentRef.current) return
-    const hint = reportContentRef.current.querySelector('.activity-hint')
-    if (!hint) return
-    const oldStatus = hint.querySelector('.activity-live-status')
-    if (oldStatus) oldStatus.remove()
+    const trigger = reportContentRef.current.querySelector('.fetch-activity-trigger')
+    if (!trigger) return
     if (fetchingActivity) {
-      const span = document.createElement('span')
-      span.className = 'activity-live-status'
-      span.style.cssText = 'margin-left:8px;color:#94a3b8;font-size:12px;'
-      span.textContent = '获取中...'
-      hint.appendChild(span)
-    } else if (fetchActivityStatus.type) {
-      const span = document.createElement('span')
-      span.className = 'activity-live-status'
-      const color = fetchActivityStatus.type === 'success' ? '#22c55e' : '#ef4444'
-      span.style.cssText = `margin-left:8px;color:${color};font-size:12px;`
-      span.textContent = fetchActivityStatus.message
-      hint.appendChild(span)
-      // 4秒后自动移除成功提示
-      if (fetchActivityStatus.type === 'success') {
-        setTimeout(() => {
-          if (span.parentNode) span.remove()
-        }, 4000)
-      }
+      trigger.setAttribute('data-status', 'loading')
+    } else if (fetchActivityStatus.type === 'success') {
+      trigger.setAttribute('data-status', 'success')
+    } else if (fetchActivityStatus.type === 'error') {
+      trigger.setAttribute('data-status', 'error')
+    } else {
+      trigger.removeAttribute('data-status')
     }
   }, [fetchingActivity, fetchActivityStatus])
 

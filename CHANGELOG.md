@@ -13,6 +13,9 @@
   - 为 `AnalyzeStock` 中行情/K线/舆情三个并发 goroutine 添加 `recover()`
   - 避免单点异常导致整个 Wails 应用崩溃、窗口变黑
   - 补充舆情获取阶段 debug 日志，便于后续定位问题
+- **移除 activity-hint DOM 操作，防止 React 渲染崩溃白屏**
+  - 将直接插入 DOM 节点的 useEffect 改为 `data-status` 属性 + CSS 伪元素
+  - 添加 React Error Boundary，渲染异常时显示错误堆栈而非白屏
 
 ### 新增 (Features)
 - **可比公司活跃度就地获取**

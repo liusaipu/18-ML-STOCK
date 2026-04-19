@@ -2069,6 +2069,23 @@ body.light .cp-merge.changed {
   100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0); }
 }
 
+/* 报告内获取活跃度状态 */
+.fetch-activity-trigger[data-status="loading"]::after {
+  content: ' 获取中...';
+  color: #94a3b8;
+  font-size: 12px;
+}
+.fetch-activity-trigger[data-status="success"]::after {
+  content: ' 已更新';
+  color: #22c55e;
+  font-size: 12px;
+}
+.fetch-activity-trigger[data-status="error"]::after {
+  content: ' 失败';
+  color: #ef4444;
+  font-size: 12px;
+}
+
 /* 数据管理面板 */
 .data-management {
   display: flex;
