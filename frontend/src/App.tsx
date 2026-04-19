@@ -1715,7 +1715,7 @@ function App() {
               })
             }}
           >
-            活跃度
+            热度
             {activitySort === 'desc' && ' ▼'}
             {activitySort === 'asc' && ' ▲'}
             {activitySort === 'none' && ' ⇅'}

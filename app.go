@@ -1339,7 +1339,12 @@ func (a *App) analyzeStockInternal(symbol string, overwriteLatest bool, customRI
 	wgNet.Add(3)
 
 	go func() {
-		defer wgNet.Done()
+		defer func() {
+			if r := recover(); r != nil {
+				debugLog("[PANIC] quote goroutine: %v", r)
+			}
+			wgNet.Done()
+		}()
 		if q, err := a.GetStockQuote(symbol); err == nil && q != nil {
 			quoteData = &analyzer.QuoteData{
 				CurrentPrice:         q.CurrentPrice,
@@ -1363,7 +1368,12 @@ func (a *App) analyzeStockInternal(symbol string, overwriteLatest bool, customRI
 	}()
 
 	go func() {
-		defer wgNet.Done()
+		defer func() {
+			if r := recover(); r != nil {
+				debugLog("[PANIC] klines goroutine: %v", r)
+			}
+			wgNet.Done()
+		}()
 		parts := strings.Split(symbol, ".")
 		if len(parts) == 2 {
 			if list, err := downloader.FetchStockKlines(strings.ToUpper(parts[1]), parts[0], 250); err == nil && len(list) >= 20 {
@@ -1373,7 +1383,12 @@ func (a *App) analyzeStockInternal(symbol string, overwriteLatest bool, customRI
 	}()
 
 	go func() {
-		defer wgNet.Done()
+		defer func() {
+			if r := recover(); r != nil {
+				debugLog("[PANIC] sentiment goroutine: %v", r)
+			}
+			wgNet.Done()
+		}()
 		if cachedSentiment, err := a.storage.LoadStockSentiment(symbol); err == nil && cachedSentiment != nil {
 			path := filepath.Join(a.storage.DataDir(), "data", symbol, "sentiment.json")
 			if info, err := os.Stat(path); err == nil && time.Since(info.ModTime()) < 60*time.Minute {
@@ -1400,7 +1415,9 @@ func (a *App) analyzeStockInternal(symbol string, overwriteLatest bool, customRI
 			if len(parts) == 2 {
 				code := parts[0]
 				market := strings.ToUpper(parts[1])
+				debugLog("[Sentiment] fetching for %s %s", market, code)
 				if s, err := downloader.FetchStockSentiment(market, code); err == nil && s != nil {
+					debugLog("[Sentiment] fetched ok for %s, summaries=%d", symbol, len(s.Summaries))
 					sentimentData = &analyzer.SentimentData{
 						Score:         s.Score,
 						HeatIndex:     s.HeatIndex,
@@ -1419,7 +1436,7 @@ func (a *App) analyzeStockInternal(symbol string, overwriteLatest bool, customRI
 					}
 					_ = a.storage.SaveStockSentiment(symbol, s)
 				} else {
-					fmt.Printf("[Sentiment] fetch failed for %s: %v\n", symbol, err)
+					debugLog("[Sentiment] fetch failed for %s: %v", symbol, err)
 				}
 			}
 		}

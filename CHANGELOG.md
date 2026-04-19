@@ -8,6 +8,12 @@
   - 修复 `fetchKlinesFromTencent` 和 `fetchQuoteFromTencent` 中未按市场区分导致换手率异常的问题
   - 科创板股票不再被放大100倍，主板/创业板股票不再被缩小100倍
 
+### 修复 (Fixes)
+- **并发网络请求 panic 恢复保护**
+  - 为 `AnalyzeStock` 中行情/K线/舆情三个并发 goroutine 添加 `recover()`
+  - 避免单点异常导致整个 Wails 应用崩溃、窗口变黑
+  - 补充舆情获取阶段 debug 日志，便于后续定位问题
+
 ### 新增 (Features)
 - **可比公司活跃度就地获取**
   - 报告模块4.2中，缺失活跃度的可比公司旁显示 `[获取真实活跃度]` 链接
