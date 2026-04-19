@@ -51,10 +51,10 @@ function calcMA(arr: number[], period: number): (number | null)[] {
   return ma
 }
 
-function padArray<T>(arr: T[], size: number): (T | null)[] {
+function padArray<T>(arr: T[], size: number): (T | '-')[] {
   const padCount = size - arr.length
-  if (padCount <= 0) return arr
-  return [...Array(padCount).fill(null), ...arr]
+  if (padCount <= 0) return arr as (T | '-')[]
+  return [...Array(padCount).fill('-'), ...arr]
 }
 
 function calculateIndicators(data: KlineData[]) {
@@ -170,10 +170,10 @@ export function UnifiedChart({ code, quote }: Props) {
     const padCount = DISPLAY_SIZE - displayData.length
     const dates = [...Array(padCount).fill(''), ...displayData.map(d => d.time)]
 
-    const nullPad = Array(padCount).fill(null)
-    const candleData = [...nullPad, ...displayData.map(d => [d.open, d.close, d.low, d.high])]
+    const safePad = Array(padCount).fill('-')
+    const candleData = [...safePad, ...displayData.map(d => [d.open, d.close, d.low, d.high])]
     const turnoverData = [
-      ...Array(padCount).fill(undefined),
+      ...safePad,
       ...displayData.map((d: KlineData) => ({
         value: d.turnoverRate,
         itemStyle: { color: d.close >= d.open ? 'rgba(239,68,68,0.35)' : 'rgba(34,197,94,0.35)' },
@@ -318,10 +318,10 @@ export function UnifiedChart({ code, quote }: Props) {
         { name: 'DIF', type: 'line', data: sliceDisplay(dif), smooth: true, lineStyle: { color: colors.macd }, symbol: 'none', xAxisIndex: 1, yAxisIndex: 2 },
         { name: 'DEA', type: 'line', data: sliceDisplay(dea), smooth: true, lineStyle: { color: colors.signal }, symbol: 'none', xAxisIndex: 1, yAxisIndex: 2 },
         {
-          name: 'MACD', type: 'bar', data: sliceDisplay(hist).map(v => ({
+          name: 'MACD', type: 'bar', data: sliceDisplay(hist).map(v => typeof v === 'number' ? {
             value: v,
-            itemStyle: { color: v != null && v >= 0 ? colors.histPositive : colors.histNegative },
-          })),
+            itemStyle: { color: v >= 0 ? colors.histPositive : colors.histNegative },
+          } : '-'),
           xAxisIndex: 1, yAxisIndex: 2,
         },
         { name: 'RSI', type: 'line', data: sliceDisplay(rsi), smooth: true, lineStyle: { color: colors.rsi, width: 2 }, symbol: 'none', xAxisIndex: 2, yAxisIndex: 3, connectNulls: false },

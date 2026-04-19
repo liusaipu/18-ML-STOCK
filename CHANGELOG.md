@@ -18,6 +18,14 @@
   - 添加 React Error Boundary，渲染异常时显示错误堆栈而非白屏
 - **修复 ECharts turnoverData null 值崩溃**
   - `UnifiedChart` 中 pad 元素由 `null` 改为 `undefined`，避免 ECharts 读取 `null.value` 抛出 TypeError
+- **彻底修复 ECharts 数据不足股票白屏（南网数字等）**
+  - 将所有 series 的 pad 占位符统一为 `'-'`（ECharts 官方空数据标记），涵盖 K线、换手率、MACD bar 等全部数据序列
+  - `padArray` 函数同步改为 `'-'` 填充，避免任何 `null` 对象进入 ECharts `getInitialData`
+- **修复【删除报告】按钮点击无效**
+  - Windows 系统对话框在部分环境下返回英文按钮文本 `"Yes"`，导致 `ConfirmDialog` 误判为取消
+  - Go 后端兼容 `"确定"` / `"Yes"` / `"OK"` 三种返回值，并增加 `debugLog` 便于排查
+  - 删除报告后同步清理 `snapshots` state，左下角"亮点与风险"面板不再残留旧数据
+  - 前端去掉不必要的 `loadReportHistory` 调用，简化删除流程
 
 ### 新增 (Features)
 - **可比公司活跃度就地获取**

@@ -2467,7 +2467,10 @@ func (a *App) ConfirmDialog(title, message string) bool {
 		CancelButton:  "取消",
 	})
 	if err != nil {
+		debugLog("[ConfirmDialog] error: %v", err)
 		return false
 	}
-	return selection == "确定"
+	debugLog("[ConfirmDialog] selection=%q", selection)
+	// Windows 系统对话框可能返回英文按钮文本，做兼容处理
+	return selection == "确定" || selection == "Yes" || selection == "OK"
 }

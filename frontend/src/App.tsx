@@ -1254,10 +1254,16 @@ function App() {
     }
     try {
       await DeleteReport(selectedStock.code, filename)
-      await loadReportHistory(selectedStock.code)
       setViewingHistory(null)
       setHistoryContent('')
       setReport(null)
+      setLastAnalysisAt('')
+      // 同时清理该股票的快照，避免左下角亮点与风险面板仍显示旧数据
+      setSnapshots((prev) => {
+        const next = { ...prev }
+        delete next[selectedStock.code]
+        return next
+      })
     } catch (err: any) {
       alert('删除报告失败: ' + String(err))
     }
