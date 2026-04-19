@@ -1,5 +1,9 @@
 # Changelog
 
+## [v1.3.22] - Unreleased
+
+---
+
 ## [v1.3.21] - 2026-04-18
 
 ### 修复 (Fixes)
