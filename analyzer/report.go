@@ -552,6 +552,15 @@ func writeModule4(b *strings.Builder, steps []StepResult, latest string, comp *C
 	}
 
 
+	// 检查是否有缺失活跃度的可比公司
+	hasMissingActivity := false
+	for _, s := range scoredList {
+		if s.ActivityScore < 0 {
+			hasMissingActivity = true
+			break
+		}
+	}
+
 	b.WriteString("## 4.2 可比公司明细")
 	b.WriteString(`<details style="display:inline-block;position:relative;margin-left:8px;vertical-align:middle;">`)
 	b.WriteString(`<summary style="cursor:pointer;list-style:none;color:#1890ff;font-size:14px;">ℹ️</summary>`)
@@ -565,6 +574,13 @@ func writeModule4(b *strings.Builder, steps []StepResult, latest string, comp *C
 	b.WriteString(`<em>缺失活跃度时，使用可比池有效样本的中位数替代，标记为 *</em>`)
 	b.WriteString(`</div></details>`)
 	b.WriteString("\n\n")
+	if hasMissingActivity {
+		b.WriteString(`<div class="activity-hint" style="margin:6px 0 10px;font-size:12px;color:#94a3b8;">`)
+		b.WriteString(`<span>部分可比公司活跃度使用样本中位数替代，</span>`)
+		b.WriteString(`<span class="fetch-activity-trigger" style="cursor:pointer;color:#3b82f6;text-decoration:underline;" title="获取缺失的真实活跃度数据">[获取真实活跃度]</span>`)
+		b.WriteString(`</div>`)
+		b.WriteString("\n\n")
+	}
 	b.WriteString("| 排名 | 公司 | ROE | 毛利率 | 营收增长 | 负债率 | 现金含量 | A-Score | 活跃度 | 综合得分 |\n")
 	b.WriteString("|------|------|-----|--------|----------|--------|----------|---------|--------|----------|\n")
 	for _, s := range scoredList {

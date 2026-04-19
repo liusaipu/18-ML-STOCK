@@ -523,6 +523,123 @@ func (a *App) GetWatchlistActivity() ([]WatchlistActivitySummary, error) {
 	return result, nil
 }
 
+// FetchMissingActivityResult 获取缺失活跃度结果
+type FetchMissingActivityResult struct {
+	SuccessCount int      `json:"successCount"`
+	FailCount    int      `json:"failCount"`
+	FailedCodes  []string `json:"failedCodes"`
+	Message      string   `json:"message"`
+}
+
+// FetchMissingActivity 批量获取可比公司缺失的活跃度（并发）
+func (a *App) FetchMissingActivity(codes []string) (*FetchMissingActivityResult, error) {
+	if a.storage == nil {
+		return nil, fmt.Errorf("存储未初始化")
+	}
+	baselines, _ := a.storage.LoadIndustryBaselines()
+
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	successCount := 0
+	var failedCodes []string
+
+	for _, code := range codes {
+		// 先检查缓存是否存在
+		if cached, err := a.storage.LoadActivityCache(code); err == nil && cached != nil {
+			mu.Lock()
+			successCount++
+			mu.Unlock()
+			continue
+		}
+
+		wg.Add(1)
+		go func(c string) {
+			defer wg.Done()
+
+			pureCode := c
+			market := ""
+			if strings.Contains(c, ".") {
+				parts := strings.SplitN(c, ".", 2)
+				pureCode = parts[0]
+				market = strings.ToUpper(parts[1])
+			}
+			if market == "" {
+				switch {
+				case strings.HasPrefix(pureCode, "6"):
+					market = "SH"
+				case strings.HasSuffix(c, ".HK") || strings.HasPrefix(pureCode, "00") || strings.HasPrefix(pureCode, "01") || strings.HasPrefix(pureCode, "02"):
+					market = "HK"
+				default:
+					market = "SZ"
+				}
+			}
+
+			klines, err := downloader.FetchStockKlines(market, pureCode, 60)
+			if err != nil || len(klines) < 20 {
+				fmt.Printf("[FetchMissingActivity] %s klines err=%v len=%d\n", c, err, len(klines))
+				mu.Lock()
+				failedCodes = append(failedCodes, c)
+				mu.Unlock()
+				return
+			}
+			quote, err := downloader.FetchStockQuote(market, pureCode)
+			if err != nil || quote == nil || quote.CirculatingMarketCap <= 0 {
+				fmt.Printf("[FetchMissingActivity] %s quote err=%v cap=%.0f\n", c, err, quote.CirculatingMarketCap)
+				mu.Lock()
+				failedCodes = append(failedCodes, c)
+				mu.Unlock()
+				return
+			}
+			profile, _ := downloader.FetchStockProfile(market, pureCode)
+			industry := ""
+			if profile != nil {
+				industry = profile.Industry
+			}
+			aklines := make([]analyzer.ActivityKline, len(klines))
+			for i, k := range klines {
+				aklines[i] = analyzer.ActivityKline{
+					Time:   k.Time,
+					Open:   k.Open,
+					Close:  k.Close,
+					Low:    k.Low,
+					High:   k.High,
+					Volume: k.Volume,
+					Amount: k.Amount,
+				}
+			}
+			qLite := &analyzer.StockQuoteLite{CirculatingMarketCap: quote.CirculatingMarketCap}
+			activity := analyzer.CalculateActivity(aklines, qLite, industry, baselines)
+			if activity != nil && activity.Score > 0 {
+				_ = a.storage.SaveActivityCache(c, activity)
+				mu.Lock()
+				successCount++
+				mu.Unlock()
+				fmt.Printf("[FetchMissingActivity] %s score=%.0f stars=%d\n", c, activity.Score, activity.Stars)
+			} else {
+				fmt.Printf("[FetchMissingActivity] %s skipped (nil or score=0)\n", c)
+				mu.Lock()
+				failedCodes = append(failedCodes, c)
+				mu.Unlock()
+			}
+		}(code)
+	}
+
+	wg.Wait()
+
+	failCount := len(failedCodes)
+	msg := fmt.Sprintf("成功获取 %d 家", successCount)
+	if failCount > 0 {
+		msg += fmt.Sprintf("，失败 %d 家", failCount)
+	}
+
+	return &FetchMissingActivityResult{
+		SuccessCount: successCount,
+		FailCount:    failCount,
+		FailedCodes:  failedCodes,
+		Message:      msg,
+	}, nil
+}
+
 func (a *App) GetWatchlist() ([]WatchlistItem, error) {
 	if a.storage == nil {
 		return nil, fmt.Errorf("存储未初始化")

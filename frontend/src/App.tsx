@@ -93,11 +93,11 @@ import {
   AddComparable,
   RemoveComparable,
   DownloadComparableReports,
+  FetchMissingActivity,
   GetStockQuote,
   // GetStockKlines,
   GetStockConcepts,
   ExportCurrentFinancialData,
-  ExportHistoricalFinancialData,
   GetRiskRadar,
   UpdatePolicyLibrary,
   UpdateIndustryDatabase,
@@ -172,15 +172,6 @@ function extractHighlightsAndRisks(report: AnalysisReport) {
   return { highlights, risks }
 }
 
-function formatTimestamp(iso: string) {
-  try {
-    const d = new Date(iso)
-    return d.toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })
-  } catch {
-    return iso
-  }
-}
-
 function App() {
   const [watchlist, setWatchlist] = useState<WatchlistItem[]>([])
   const [selectedCode, setSelectedCode] = useState<string | null>(null)
@@ -207,6 +198,9 @@ function App() {
   const [compDownloading, setCompDownloading] = useState(false)
   const [compReportsDownloaded, setCompReportsDownloaded] = useState(false)
   const [compDownloadStatus, setCompDownloadStatus] = useState<{type: 'success' | 'error' | null, message: string}>({type: null, message: ''})
+  const [fetchingActivity, setFetchingActivity] = useState(false)
+  const [fetchActivityStatus, setFetchActivityStatus] = useState<{type: 'success' | 'error' | null, message: string}>({type: null, message: ''})
+
   const [concepts, setConcepts] = useState<downloader.StockConcepts | null>(null)
   const [policyLibMeta, setPolicyLibMeta] = useState<{version: string, updatedAt: string} | null>(null)
   const [policyUpdating, setPolicyUpdating] = useState(false)
@@ -588,6 +582,35 @@ function App() {
     })
     return list
   }, [watchlist, activityMap, activitySort, filterData, watchlistFilter, watchlistIndustryFilter])
+
+  // 在报告中的 activity-hint 元素内动态显示获取活跃度状态
+  useEffect(() => {
+    if (!reportContentRef.current) return
+    const hint = reportContentRef.current.querySelector('.activity-hint')
+    if (!hint) return
+    const oldStatus = hint.querySelector('.activity-live-status')
+    if (oldStatus) oldStatus.remove()
+    if (fetchingActivity) {
+      const span = document.createElement('span')
+      span.className = 'activity-live-status'
+      span.style.cssText = 'margin-left:8px;color:#94a3b8;font-size:12px;'
+      span.textContent = '获取中...'
+      hint.appendChild(span)
+    } else if (fetchActivityStatus.type) {
+      const span = document.createElement('span')
+      span.className = 'activity-live-status'
+      const color = fetchActivityStatus.type === 'success' ? '#22c55e' : '#ef4444'
+      span.style.cssText = `margin-left:8px;color:${color};font-size:12px;`
+      span.textContent = fetchActivityStatus.message
+      hint.appendChild(span)
+      // 4秒后自动移除成功提示
+      if (fetchActivityStatus.type === 'success') {
+        setTimeout(() => {
+          if (span.parentNode) span.remove()
+        }, 4000)
+      }
+    }
+  }, [fetchingActivity, fetchActivityStatus])
 
   // 当切换股票时，若内存中没有快照，尝试从磁盘加载
   useEffect(() => {
@@ -982,16 +1005,6 @@ function App() {
     }
   }
 
-  const handleExportHistoryData = async (timestamp: string) => {
-    if (!selectedStock) return
-    try {
-      await ExportHistoricalFinancialData(selectedStock.code, timestamp)
-    } catch (err: any) {
-      console.error('导出历史数据失败:', err)
-      alert('导出失败: ' + String(err))
-    }
-  }
-
   const runAnalyze = async (overwriteLatest = false) => {
     if (!selectedStock) {
       alert('没有选择股票')
@@ -1327,6 +1340,48 @@ function App() {
       setTimeout(() => setCompDownloadStatus({type: null, message: ''}), 5000)
     } finally {
       setCompDownloading(false)
+    }
+  }
+
+  const handleFetchMissingActivity = async () => {
+    if (!selectedStock || comparables.length === 0) return
+    setFetchingActivity(true)
+    setFetchActivityStatus({type: null, message: ''})
+    // 保存当前滚动位置，避免更新后跳动
+    const scrollContainer = reportContentRef.current
+    const scrollTop = scrollContainer?.scrollTop ?? 0
+    try {
+      const result = await FetchMissingActivity(comparables)
+      if (result && result.successCount > 0) {
+        setFetchActivityStatus({type: 'success', message: '正在更新模块4...'})
+        const module4Result = await UpdateModule4Only(selectedStock.code)
+        if (module4Result) {
+          // 只更新 markdownContent，保留报告其他字段，避免右栏跳动
+          if (report) {
+            setReport({ ...report, markdownContent: module4Result.markdownContent } as AnalysisReport)
+          } else {
+            setReport(module4Result)
+          }
+          setSnapshots((prev) => ({ ...prev, [selectedStock.code]: module4Result }))
+          setFetchActivityStatus({type: 'success', message: `已更新 ${result.successCount} 家公司活跃度`})
+          // 恢复滚动位置
+          requestAnimationFrame(() => {
+            if (reportContentRef.current) {
+              reportContentRef.current.scrollTop = scrollTop
+            }
+          })
+        }
+      } else if (result && result.failCount > 0) {
+        setFetchActivityStatus({type: 'error', message: result.message || '获取失败'})
+      } else {
+        setFetchActivityStatus({type: 'success', message: '所有公司活跃度已是最新'})
+      }
+    } catch (err: any) {
+      console.error('获取缺失活跃度失败:', err)
+      setFetchActivityStatus({type: 'error', message: err?.message || String(err)})
+    } finally {
+      setFetchingActivity(false)
+      setTimeout(() => setFetchActivityStatus({type: null, message: ''}), 4000)
     }
   }
 
@@ -1913,35 +1968,23 @@ function App() {
               </div>
             </div>
 
-            {/* 导入按钮放在最上方 */}
-            <div className="actions-sub" style={{ marginBottom: 2, justifyContent: 'flex-start' }}>
+            {/* 导入/导出操作区 */}
+            <div className="actions-sub" style={{ marginBottom: 10, justifyContent: 'center', gap: 12 }}>
               <button className="btn-text" onClick={handleImport} disabled={loading}>
                 {loading ? '处理中...' : '导入本地csv/excel财报'}
               </button>
+              <button className="btn-text" onClick={handleExportCurrentData} disabled={!selectedStock || dataHistory.length === 0} title={dataHistory.length === 0 ? '请先下载或导入财报数据' : '导出当前财务数据到本地'}>
+                导出本地财报
+              </button>
             </div>
 
-            {/* 主操作按钮 - 保持原样 */}
+            {/* 主操作按钮 */}
             <div className="actions">
               <button className="btn primary" onClick={handleDownload} disabled={downloading || loading}>
-                <span className="btn-content">
-                  下载财报
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                    <polyline points="7 10 12 15 17 10" />
-                    <line x1="12" y1="15" x2="12" y2="3" />
-                  </svg>
-                </span>
+                下载财报
               </button>
               <button className="btn primary" onClick={handleAnalyze} disabled={analyzing || downloading || loading || dataHistory.length === 0} title={dataHistory.length === 0 ? '请先下载或导入财报数据' : ''}>
-                <span className="btn-content">
-                  18步分析
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                    <line x1="4" y1="20" x2="4" y2="14" />
-                    <line x1="8" y1="20" x2="8" y2="10" />
-                    <line x1="12" y1="20" x2="12" y2="16" />
-                    <path d="M16 12l4 4-4 4" />
-                  </svg>
-                </span>
+                18步分析
               </button>
             </div>
 
@@ -2029,29 +2072,6 @@ function App() {
                       ⬇️ 下载到本地
                     </button>
                   </div>
-                </div>
-              </Collapsible>
-            )}
-
-            {dataHistory.length > 0 && (
-              <Collapsible title="📦 财务数据历史">
-                <div className="data-history" style={{ marginTop: 0 }}>
-                  <div className="data-history-title">最近3批</div>
-                  {dataHistory.map((meta, idx) => (
-                    <div key={idx} className="data-history-row">
-                      <span className="data-history-time">{formatTimestamp(meta.timestamp)}</span>
-                      <span className="data-history-source">{meta.sourceName}</span>
-                      <span className="data-history-years">{meta.years?.length ? `${meta.years.length}年` : '-'}</span>
-                      <button
-                        className="btn-text"
-                        style={{ marginLeft: 'auto', fontSize: 11 }}
-                        onClick={() => handleExportHistoryData(meta.timestamp)}
-                        title="下载该批次到本地"
-                      >
-                        ⬇️ 下载
-                      </button>
-                    </div>
-                  ))}
                 </div>
               </Collapsible>
             )}
@@ -2184,7 +2204,7 @@ function App() {
                     onClick={handleDownloadComparables}
                     disabled={compDownloading || comparables.length === 0}
                   >
-                    {compDownloading ? '下载中...' : '下载可比公司财报'}
+                    {compDownloading ? '下载中...' : '下载财报'}
                   </button>
                   {(() => {
                     const compChanged = JSON.stringify([...appliedComparables].sort()) !== JSON.stringify([...comparables].sort())
@@ -2229,6 +2249,7 @@ function App() {
                     )}
                   </div>
                 )}
+
               </div>
             </Collapsible>
 
@@ -2422,6 +2443,11 @@ function App() {
               if (target.closest('.rim-adjust-btn')) {
                 e.preventDefault()
                 openRIMModal()
+                return
+              }
+              if (target.closest('.fetch-activity-trigger')) {
+                e.preventDefault()
+                handleFetchMissingActivity()
               }
             }}>
               <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeSlug, rehypeRaw]} components={markdownComponents}>

@@ -655,6 +655,24 @@ export namespace main {
 		    return a;
 		}
 	}
+	export class FetchMissingActivityResult {
+	    successCount: number;
+	    failCount: number;
+	    failedCodes: string[];
+	    message: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new FetchMissingActivityResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.successCount = source["successCount"];
+	        this.failCount = source["failCount"];
+	        this.failedCodes = source["failedCodes"];
+	        this.message = source["message"];
+	    }
+	}
 	export class FinancialTrendItem {
 	    year: string;
 	    roe?: number;

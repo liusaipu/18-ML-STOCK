@@ -1991,6 +1991,32 @@ body.light .cp-download:hover {
   background: rgba(37, 99, 235, 0.08);
 }
 
+.cp-activity {
+  flex: 1;
+  text-align: center;
+  text-decoration: none;
+  padding: 6px 0;
+  border: 1px dashed #10b981;
+  border-radius: 4px;
+  color: #10b981;
+  background: transparent;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+body.light .cp-activity {
+  border-color: #10b981;
+  color: #059669;
+}
+
+.cp-activity:hover {
+  background: rgba(16, 185, 129, 0.1);
+}
+
+body.light .cp-activity:hover {
+  background: rgba(5, 150, 105, 0.08);
+}
+
 .cp-merge {
   width: 34px;
   display: flex;
@@ -2040,6 +2066,45 @@ body.light .cp-merge.changed {
   0% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.4); }
   70% { box-shadow: 0 0 0 4px rgba(245, 158, 11, 0); }
   100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0); }
+}
+
+/* 数据管理面板 */
+.data-management {
+  display: flex;
+  gap: 8px;
+}
+
+.dm-btn {
+  flex: 1;
+  text-align: center;
+  padding: 8px 0;
+  border: 1px dashed #64748b;
+  border-radius: 4px;
+  color: #e2e8f0;
+  background: transparent;
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.2s;
+}
+
+body.light .dm-btn {
+  border-color: #9ca3af;
+  color: #374151;
+}
+
+.dm-btn:hover {
+  background: rgba(100, 116, 139, 0.15);
+  border-color: #94a3b8;
+}
+
+body.light .dm-btn:hover {
+  background: rgba(156, 163, 175, 0.12);
+  border-color: #6b7280;
+}
+
+.dm-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 /* 股票基本资料 */

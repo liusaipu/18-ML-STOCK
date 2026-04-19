@@ -62,6 +62,10 @@ export function ExportReportPDF(arg1, arg2) {
   return window['go']['main']['App']['ExportReportPDF'](arg1, arg2);
 }
 
+export function FetchMissingActivity(arg1) {
+  return window['go']['main']['App']['FetchMissingActivity'](arg1);
+}
+
 export function GetComparables(arg1) {
   return window['go']['main']['App']['GetComparables'](arg1);
 }
