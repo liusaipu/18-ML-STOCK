@@ -2586,3 +2586,9 @@ body.light .risk-radar-low .risk-radar-status {
 body.light .risk-radar-empty {
   color: #9ca3af;
 }
+
+/* UnifiedChart 强制光标为默认箭头，禁止 ECharts 内部变成 pointer/grab */
+.unified-chart-container,
+.unified-chart-container canvas {
+  cursor: default !important;
+}

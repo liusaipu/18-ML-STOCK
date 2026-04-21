@@ -51,9 +51,11 @@ func debugLog(format string, v ...interface{}) {
 
 // App struct
 type App struct {
-	ctx     context.Context
-	storage *Storage
-	stocks  []StockInfo // 内存中的股票代码库
+	ctx           context.Context
+	storage       *Storage
+	stocks        []StockInfo // 内存中的股票代码库
+	analysisMu    sync.Mutex
+	analysisLocks map[string]*sync.Mutex
 }
 
 // StockInfo 股票基础信息
@@ -1143,7 +1145,8 @@ func (a *App) GetStockKlines(symbol string) ([]downloader.KlineData, error) {
 		return nil, fmt.Errorf("存储未初始化")
 	}
 	// 优先读取本地缓存（分析报告生成时保存的K线数据）
-	if cached, err := a.storage.LoadStockKlines(symbol); err == nil && len(cached) > 0 {
+	// 旧缓存为250条，现需375条（1.5年）支撑全屏250条左侧指标准确性
+	if cached, err := a.storage.LoadStockKlines(symbol); err == nil && len(cached) >= 300 {
 		// 检查缓存的K线是否有换手率，如果没有，尝试用 quote 补算
 		hasTurnover := false
 		for _, k := range cached {
@@ -1176,7 +1179,7 @@ func (a *App) GetStockKlines(symbol string) ([]downloader.KlineData, error) {
 	}
 	code := parts[0]
 	market := strings.ToUpper(parts[1])
-	return downloader.FetchStockKlines(market, code, 250)
+	return downloader.FetchStockKlines(market, code, 375)
 }
 
 // GetStockQuote 获取股票实时行情（带15分钟本地缓存）
@@ -1318,6 +1321,20 @@ func (a *App) AnalyzeStockWithRIM(symbol string, overwriteLatest bool, rimJSON s
 }
 
 func (a *App) analyzeStockInternal(symbol string, overwriteLatest bool, customRIM *analyzer.RIMData) (*analyzer.AnalysisReport, error) {
+	// 按股票加锁，防止同一股票被并发分析
+	a.analysisMu.Lock()
+	if a.analysisLocks == nil {
+		a.analysisLocks = make(map[string]*sync.Mutex)
+	}
+	mu, ok := a.analysisLocks[symbol]
+	if !ok {
+		mu = &sync.Mutex{}
+		a.analysisLocks[symbol] = mu
+	}
+	a.analysisMu.Unlock()
+	mu.Lock()
+	defer mu.Unlock()
+
 	debugLog("[AnalyzeStock] Starting analysis for %s, overwriteLatest=%v", symbol, overwriteLatest)
 	if a.storage == nil {
 		debugLog("[AnalyzeStock] Error: storage not initialized")
@@ -1376,7 +1393,7 @@ func (a *App) analyzeStockInternal(symbol string, overwriteLatest bool, customRI
 		}()
 		parts := strings.Split(symbol, ".")
 		if len(parts) == 2 {
-			if list, err := downloader.FetchStockKlines(strings.ToUpper(parts[1]), parts[0], 250); err == nil && len(list) >= 20 {
+			if list, err := downloader.FetchStockKlines(strings.ToUpper(parts[1]), parts[0], 375); err == nil && len(list) >= 20 {
 				klines = list
 			}
 		}
@@ -1516,7 +1533,12 @@ func (a *App) analyzeStockInternal(symbol string, overwriteLatest bool, customRI
 	if finData != nil {
 		wg.Add(1)
 		go func() {
-			defer wg.Done()
+			defer func() {
+				if r := recover(); r != nil {
+					debugLog("[PANIC] ML engines goroutine: %v", r)
+				}
+				wg.Done()
+			}()
 			mlLocal := &analyzer.MLPredictionData{}
 			// Engine B
 			if finSeq := analyzer.BuildMLEngineBInput(finData); len(finSeq) > 0 {
@@ -1570,7 +1592,12 @@ func (a *App) analyzeStockInternal(symbol string, overwriteLatest bool, customRI
 		} else {
 			wg.Add(1)
 			go func() {
-				defer wg.Done()
+				defer func() {
+					if r := recover(); r != nil {
+						debugLog("[PANIC] RIM fetch goroutine: %v", r)
+					}
+					wg.Done()
+				}()
 				extRIM, rimErr = downloader.FetchRIMExternalData(pureCode)
 				if rimErr != nil {
 					fmt.Printf("[RIM] fetch failed for %s: %v\n", symbol, rimErr)
@@ -1585,7 +1612,12 @@ func (a *App) analyzeStockInternal(symbol string, overwriteLatest bool, customRI
 	// 并发 3: A-Score 非财务风险爬虫（股权质押、问询函、减持）
 	wg.Add(1)
 	go func() {
-		defer wg.Done()
+		defer func() {
+			if r := recover(); r != nil {
+				debugLog("[PANIC] risk crawler goroutine: %v", r)
+			}
+			wg.Done()
+		}()
 		if rc, err := downloader.FetchRiskCrawlerData(symbol); err == nil {
 			if finData != nil {
 				finData.Extras = make(map[string]float64)

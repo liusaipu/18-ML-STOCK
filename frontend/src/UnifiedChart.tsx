@@ -28,8 +28,6 @@ const colors = {
   bbLower: '#10b981',
 }
 
-const DISPLAY_SIZE = 120
-
 function calcEMA(arr: number[], period: number): (number | null)[] {
   const k = 2 / (period + 1)
   const ema: (number | null)[] = []
@@ -129,6 +127,7 @@ export function UnifiedChart({ code, quote }: Props) {
   const chartInstanceRef = useRef<echarts.ECharts | null>(null)
   const [rawData, setRawData] = useState<KlineData[]>([])
   const [loading, setLoading] = useState(false)
+  const [isExpanded, setIsExpanded] = useState(false)
 
   useEffect(() => {
     if (!code) return
@@ -141,7 +140,6 @@ export function UnifiedChart({ code, quote }: Props) {
 
   const data = useMemo(() => {
     if (rawData.length === 0) return []
-    // 如果K线没有换手率且quote有流通市值，计算近似换手率
     const hasTurnover = rawData.some(d => d.turnoverRate > 0)
     if (hasTurnover || !quote || quote.circulatingMarketCap <= 0 || quote.currentPrice <= 0) {
       return rawData
@@ -163,11 +161,13 @@ export function UnifiedChart({ code, quote }: Props) {
     const chart = echarts.init(chartRef.current, 'dark', { renderer: 'canvas' })
     chartInstanceRef.current = chart
 
-    // 用全部数据计算指标，但只显示最近120条
+    chart.getZr().on('dblclick', () => setIsExpanded(v => !v))
+
+    const displaySize = isExpanded ? 250 : 120
     const { dif, dea, hist, rsi, bbUpper, bbMid, bbLower, ma5, ma10, ma30, ma60 } = calculateIndicators(data)
 
-    const displayData = data.slice(-DISPLAY_SIZE)
-    const padCount = DISPLAY_SIZE - displayData.length
+    const displayData = data.slice(-displaySize)
+    const padCount = displaySize - displayData.length
     const dates = [...Array(padCount).fill(''), ...displayData.map(d => d.time)]
 
     const safePad = Array(padCount).fill('-')
@@ -181,9 +181,11 @@ export function UnifiedChart({ code, quote }: Props) {
     ]
 
     const sliceDisplay = (arr: (number | null)[]) => {
-      const sliced = arr.slice(-DISPLAY_SIZE)
-      return padArray(sliced, DISPLAY_SIZE)
+      const sliced = arr.slice(-displaySize)
+      return padArray(sliced, displaySize)
     }
+
+    const xAxisLabelInterval = isExpanded ? 39 : 19
 
     const option: echarts.EChartsOption = {
       backgroundColor: 'transparent',
@@ -226,14 +228,16 @@ export function UnifiedChart({ code, quote }: Props) {
             const color = p.color || '#94a3b8'
             leftItems.push(`<div style="display:flex;justify-content:space-between;gap:18px"><span style="color:${color}">● ${p.seriesName}</span><span>${fmt2(p.value)}</span></div>`)
           })
-          const turnover = params.find((p: any) => p.seriesName === '换手率')
-          if (turnover) {
-            leftItems.push(`<div style="display:flex;justify-content:space-between;gap:18px;margin-top:4px;border-top:1px solid rgba(148,163,184,0.12);padding-top:4px"><span style="color:#94a3b8">换手率</span><span>${turnover.value != null ? fmt2(turnover.value) + '%' : '-'}</span></div>`)
-          }
 
           const rightItems: string[] = []
+          const turnover = params.find((p: any) => p.seriesName === '换手率')
+          if (turnover) {
+            rightItems.push(`<div style="display:flex;justify-content:space-between;gap:18px"><span style="color:#94a3b8">换手率</span><span>${turnover.value != null ? fmt2(turnover.value) + '%' : '-'}</span></div>`)
+          }
+
           const macdParams = params.filter((p: any) => ['DIF', 'DEA', 'MACD'].includes(p.seriesName))
           if (macdParams.length) {
+            if (rightItems.length) rightItems.push('<div style="border-top:1px solid rgba(148,163,184,0.12);margin:4px 0"></div>')
             macdParams.forEach((p: any) => {
               const color = p.color || '#94a3b8'
               rightItems.push(`<div style="display:flex;justify-content:space-between;gap:18px"><span style="color:${color}">● ${p.seriesName}</span><span>${fmt3(p.value)}</span></div>`)
@@ -268,27 +272,35 @@ export function UnifiedChart({ code, quote }: Props) {
         link: [{ xAxisIndex: 'all' }],
         label: { show: false },
       },
-      grid: [
-        { left: 75, right: 16, top: 38, height: '260' },
-        { left: 75, right: 16, top: '320', height: '50' },
-        { left: 75, right: 16, top: '390', height: '42' },
-        { left: 75, right: 16, top: '448', height: '65' },
+      grid: isExpanded ? [
+        { left: 75, right: 16, top: 38, height: '44%' },
+        { left: 75, right: 16, top: '50%', height: '11%' },
+        { left: 75, right: 16, top: '62%', height: '11%' },
+        { left: 75, right: 16, top: '74%', height: '11%' },
+        { left: 75, right: 16, top: '86%', height: '14%' },
+      ] : [
+        { left: 75, right: 16, top: 38, height: 258 },
+        { left: 75, right: 16, top: 304, height: 50 },
+        { left: 75, right: 16, top: 362, height: 50 },
+        { left: 75, right: 16, top: 420, height: 50 },
+        { left: 75, right: 16, top: 478, height: 58 },
       ],
       xAxis: [
-        { type: 'category', data: dates, boundaryGap: true, axisLine: { onZero: false, lineStyle: { color: 'rgba(148,163,184,0.2)' } }, axisLabel: { color: '#94a3b8', fontSize: 10 }, splitLine: { show: false }, gridIndex: 0, axisPointer: { label: { show: false } } },
+        { type: 'category', data: dates, boundaryGap: true, axisLine: { onZero: false, lineStyle: { color: 'rgba(148,163,184,0.2)' } }, axisLabel: { color: '#94a3b8', fontSize: 10, interval: xAxisLabelInterval }, splitLine: { show: false }, gridIndex: 0, axisPointer: { label: { show: false } } },
         { type: 'category', data: dates, boundaryGap: true, axisLine: { onZero: false, lineStyle: { color: 'rgba(148,163,184,0.2)' } }, axisLabel: { show: false }, splitLine: { show: false }, gridIndex: 1, axisPointer: { label: { show: false } } },
         { type: 'category', data: dates, boundaryGap: true, axisLine: { onZero: false, lineStyle: { color: 'rgba(148,163,184,0.2)' } }, axisLabel: { show: false }, splitLine: { show: false }, gridIndex: 2, axisPointer: { label: { show: false } } },
-        { type: 'category', data: dates, boundaryGap: true, axisLine: { onZero: false, lineStyle: { color: 'rgba(148,163,184,0.2)' } }, axisLabel: { color: '#94a3b8', fontSize: 10 }, splitLine: { show: false }, gridIndex: 3, axisPointer: { label: { show: true, backgroundColor: '#3b82f6' } } },
+        { type: 'category', data: dates, boundaryGap: true, axisLine: { onZero: false, lineStyle: { color: 'rgba(148,163,184,0.2)' } }, axisLabel: { show: false }, splitLine: { show: false }, gridIndex: 3, axisPointer: { label: { show: false } } },
+        { type: 'category', data: dates, boundaryGap: true, axisLine: { onZero: false, lineStyle: { color: 'rgba(148,163,184,0.2)' } }, axisLabel: { color: '#94a3b8', fontSize: 10, interval: xAxisLabelInterval }, splitLine: { show: false }, gridIndex: 4, axisPointer: { label: { show: true, backgroundColor: '#3b82f6' } } },
       ],
       yAxis: [
-        { scale: true, splitArea: { show: false }, splitLine: { lineStyle: { color: 'rgba(148, 163, 184, 0.08)' } }, gridIndex: 0, position: 'left', axisLabel: { fontSize: 10, color: '#94a3b8', margin: 10 }, splitNumber: 5, name: 'K线', nameLocation: 'middle', nameRotate: 0, nameGap: 32, nameTextStyle: { color: '#94a3b8', fontSize: 11, align: 'right' } },
-        { scale: true, splitLine: { show: false }, gridIndex: 0, position: 'right', axisLabel: { show: false }, axisLine: { show: false }, axisTick: { show: false }, max: (value: any) => value.max * 4 },
-        { scale: true, splitArea: { show: false }, splitLine: { lineStyle: { color: 'rgba(148, 163, 184, 0.08)' } }, gridIndex: 1, position: 'left', axisLabel: { fontSize: 10, color: '#94a3b8', margin: 10 }, splitNumber: 3, name: 'MACD', nameLocation: 'middle', nameRotate: 0, nameGap: 32, nameTextStyle: { color: '#94a3b8', fontSize: 11, align: 'right' } },
-        { scale: true, splitArea: { show: false }, splitLine: { lineStyle: { color: 'rgba(148, 163, 184, 0.08)' } }, min: 0, max: 100, gridIndex: 2, position: 'left', axisLabel: { fontSize: 10, color: '#94a3b8', margin: 10 }, splitNumber: 2, name: 'RSI', nameLocation: 'middle', nameRotate: 0, nameGap: 32, nameTextStyle: { color: '#94a3b8', fontSize: 11, align: 'right' } },
-        { scale: true, splitArea: { show: false }, splitLine: { lineStyle: { color: 'rgba(148, 163, 184, 0.08)' } }, gridIndex: 3, position: 'left', axisLabel: { fontSize: 10, color: '#94a3b8', margin: 10 }, splitNumber: 4, name: '布林带', nameLocation: 'middle', nameRotate: 0, nameGap: 32, nameTextStyle: { color: '#94a3b8', fontSize: 11, align: 'right' } },
+        { scale: true, splitArea: { show: false }, splitLine: { lineStyle: { color: 'rgba(148, 163, 184, 0.08)' } }, gridIndex: 0, position: 'left', axisLabel: { fontSize: 10, color: '#94a3b8', margin: 10 }, splitNumber: 5, name: 'K线', nameLocation: 'middle', nameRotate: 0, nameGap: 32, nameTextStyle: { color: '#94a3b8', fontSize: 11, align: 'right' }, axisPointer: { label: { show: true, formatter: (params: any) => fmt2(params.value) } } },
+        { scale: true, splitArea: { show: false }, splitLine: { lineStyle: { color: 'rgba(148, 163, 184, 0.08)' } }, gridIndex: 1, position: 'left', axisLabel: { fontSize: 10, color: '#94a3b8', margin: 10 }, splitNumber: 2, name: '换手', nameLocation: 'middle', nameRotate: 0, nameGap: 32, nameTextStyle: { color: '#94a3b8', fontSize: 11, align: 'right' }, axisPointer: { label: { show: true, formatter: (params: any) => fmt2(params.value) + '%' } } },
+        { scale: true, splitArea: { show: false }, splitLine: { lineStyle: { color: 'rgba(148, 163, 184, 0.08)' } }, gridIndex: 2, position: 'left', axisLabel: { fontSize: 10, color: '#94a3b8', margin: 10 }, splitNumber: 3, name: 'MACD', nameLocation: 'middle', nameRotate: 0, nameGap: 32, nameTextStyle: { color: '#94a3b8', fontSize: 11, align: 'right' }, axisPointer: { label: { show: true, formatter: (params: any) => fmt3(params.value) } } },
+        { scale: true, splitArea: { show: false }, splitLine: { lineStyle: { color: 'rgba(148, 163, 184, 0.08)' } }, min: 0, max: 100, gridIndex: 3, position: 'left', axisLabel: { fontSize: 10, color: '#94a3b8', margin: 10 }, splitNumber: 2, name: 'RSI', nameLocation: 'middle', nameRotate: 0, nameGap: 32, nameTextStyle: { color: '#94a3b8', fontSize: 11, align: 'right' }, axisPointer: { label: { show: true, formatter: (params: any) => fmt1(params.value) } } },
+        { scale: true, splitArea: { show: false }, splitLine: { lineStyle: { color: 'rgba(148, 163, 184, 0.08)' } }, gridIndex: 4, position: 'left', axisLabel: { fontSize: 10, color: '#94a3b8', margin: 10 }, splitNumber: 3, name: 'BOLL', nameLocation: 'middle', nameRotate: 0, nameGap: 32, nameTextStyle: { color: '#94a3b8', fontSize: 11, align: 'right' }, axisPointer: { label: { show: true, formatter: (params: any) => fmt2(params.value) } } },
       ],
       dataZoom: [
-        { type: 'inside', xAxisIndex: [0, 1, 2, 3], start: 0, end: 100, zoomLock: true },
+        { type: 'inside', xAxisIndex: [0, 1, 2, 3, 4], start: 0, end: 100, zoomLock: true },
       ],
       series: [
         {
@@ -303,31 +315,33 @@ export function UnifiedChart({ code, quote }: Props) {
           },
           xAxisIndex: 0,
           yAxisIndex: 0,
+          cursor: 'default',
         },
         {
           name: '换手率',
           type: 'bar',
           data: turnoverData,
-          xAxisIndex: 0,
+          xAxisIndex: 1,
           yAxisIndex: 1,
+          cursor: 'default',
         },
-        { name: 'MA5', type: 'line', data: sliceDisplay(ma5), smooth: false, lineStyle: { color: colors.ma5, width: 1.5 }, symbol: 'none', xAxisIndex: 0, yAxisIndex: 0 },
-        { name: 'MA10', type: 'line', data: sliceDisplay(ma10), smooth: false, lineStyle: { color: colors.ma10, width: 1.5 }, symbol: 'none', xAxisIndex: 0, yAxisIndex: 0 },
-        { name: 'MA30', type: 'line', data: sliceDisplay(ma30), smooth: false, lineStyle: { color: colors.ma30, width: 1.5 }, symbol: 'none', xAxisIndex: 0, yAxisIndex: 0 },
-        { name: 'MA60', type: 'line', data: sliceDisplay(ma60), smooth: false, lineStyle: { color: colors.ma60, width: 1.5 }, symbol: 'none', xAxisIndex: 0, yAxisIndex: 0 },
-        { name: 'DIF', type: 'line', data: sliceDisplay(dif), smooth: true, lineStyle: { color: colors.macd }, symbol: 'none', xAxisIndex: 1, yAxisIndex: 2 },
-        { name: 'DEA', type: 'line', data: sliceDisplay(dea), smooth: true, lineStyle: { color: colors.signal }, symbol: 'none', xAxisIndex: 1, yAxisIndex: 2 },
+        { name: 'MA5', type: 'line', data: sliceDisplay(ma5), smooth: false, lineStyle: { color: colors.ma5, width: 1.5 }, symbol: 'none', xAxisIndex: 0, yAxisIndex: 0, cursor: 'default' },
+        { name: 'MA10', type: 'line', data: sliceDisplay(ma10), smooth: false, lineStyle: { color: colors.ma10, width: 1.5 }, symbol: 'none', xAxisIndex: 0, yAxisIndex: 0, cursor: 'default' },
+        { name: 'MA30', type: 'line', data: sliceDisplay(ma30), smooth: false, lineStyle: { color: colors.ma30, width: 1.5 }, symbol: 'none', xAxisIndex: 0, yAxisIndex: 0, cursor: 'default' },
+        { name: 'MA60', type: 'line', data: sliceDisplay(ma60), smooth: false, lineStyle: { color: colors.ma60, width: 1.5 }, symbol: 'none', xAxisIndex: 0, yAxisIndex: 0, cursor: 'default' },
+        { name: 'DIF', type: 'line', data: sliceDisplay(dif), smooth: true, lineStyle: { color: colors.macd }, symbol: 'none', xAxisIndex: 2, yAxisIndex: 2, cursor: 'default' },
+        { name: 'DEA', type: 'line', data: sliceDisplay(dea), smooth: true, lineStyle: { color: colors.signal }, symbol: 'none', xAxisIndex: 2, yAxisIndex: 2, cursor: 'default' },
         {
           name: 'MACD', type: 'bar', data: sliceDisplay(hist).map(v => typeof v === 'number' ? {
             value: v,
             itemStyle: { color: v >= 0 ? colors.histPositive : colors.histNegative },
           } : '-'),
-          xAxisIndex: 1, yAxisIndex: 2,
+          xAxisIndex: 2, yAxisIndex: 2, cursor: 'default',
         },
-        { name: 'RSI', type: 'line', data: sliceDisplay(rsi), smooth: true, lineStyle: { color: colors.rsi, width: 2 }, symbol: 'none', xAxisIndex: 2, yAxisIndex: 3, connectNulls: false },
-        { name: '上轨', type: 'line', data: sliceDisplay(bbUpper), smooth: true, lineStyle: { color: colors.bbUpper }, symbol: 'none', xAxisIndex: 3, yAxisIndex: 4, connectNulls: false },
-        { name: '中轨', type: 'line', data: sliceDisplay(bbMid), smooth: true, lineStyle: { color: colors.bbMid, width: 2 }, symbol: 'none', xAxisIndex: 3, yAxisIndex: 4, connectNulls: false },
-        { name: '下轨', type: 'line', data: sliceDisplay(bbLower), smooth: true, lineStyle: { color: colors.bbLower }, symbol: 'none', xAxisIndex: 3, yAxisIndex: 4, connectNulls: false },
+        { name: 'RSI', type: 'line', data: sliceDisplay(rsi), smooth: true, lineStyle: { color: colors.rsi, width: 2 }, symbol: 'none', xAxisIndex: 3, yAxisIndex: 3, connectNulls: false, cursor: 'default' },
+        { name: '上轨', type: 'line', data: sliceDisplay(bbUpper), smooth: true, lineStyle: { color: colors.bbUpper }, symbol: 'none', xAxisIndex: 4, yAxisIndex: 4, connectNulls: false, cursor: 'default' },
+        { name: '中轨', type: 'line', data: sliceDisplay(bbMid), smooth: true, lineStyle: { color: colors.bbMid, width: 2 }, symbol: 'none', xAxisIndex: 4, yAxisIndex: 4, connectNulls: false, cursor: 'default' },
+        { name: '下轨', type: 'line', data: sliceDisplay(bbLower), smooth: true, lineStyle: { color: colors.bbLower }, symbol: 'none', xAxisIndex: 4, yAxisIndex: 4, connectNulls: false, cursor: 'default' },
       ],
     }
 
@@ -341,14 +355,65 @@ export function UnifiedChart({ code, quote }: Props) {
       chart.dispose()
       chartInstanceRef.current = null
     }
-  }, [data])
+  }, [data, isExpanded])
+
+  const [isLightTheme, setIsLightTheme] = useState(false)
+  useEffect(() => {
+    const check = () => setIsLightTheme(document.body.classList.contains('light'))
+    check()
+    const observer = new MutationObserver(check)
+    observer.observe(document.body, { attributes: true, attributeFilter: ['class'] })
+    return () => observer.disconnect()
+  }, [])
+
+  const fullscreenBg = isLightTheme ? '#f8fafc' : '#0f172a'
+  const btnBg = isLightTheme ? 'rgba(255,255,255,0.9)' : 'rgba(30,41,59,0.9)'
+  const btnText = isLightTheme ? '#1f2937' : '#e2e8f0'
+  const hintText = isLightTheme ? '#94a3b8' : '#64748b'
+
+  useEffect(() => {
+    if (!isExpanded) return
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setIsExpanded(false)
+    }
+    window.addEventListener('keydown', handleKey)
+    return () => window.removeEventListener('keydown', handleKey)
+  }, [isExpanded])
 
   if (loading) return <div style={{ padding: 40, textAlign: 'center', color: '#64748b' }}>加载图表数据中...</div>
   if (data.length === 0) return <div style={{ padding: 40, textAlign: 'center', color: '#64748b' }}>暂无K线数据</div>
 
   return (
-    <div style={{ width: '100%', height: '560px' }}>
-      <div ref={chartRef} style={{ width: '100%', height: '100%' }} />
+    <div style={{ width: '100%', height: '560px', position: 'relative' }}>
+      <div style={{
+        width: isExpanded ? '100vw' : '100%',
+        height: isExpanded ? '100vh' : '100%',
+        position: isExpanded ? 'fixed' : 'relative',
+        top: 0, left: 0,
+        zIndex: isExpanded ? 9999 : 1,
+        backgroundColor: isExpanded ? fullscreenBg : 'transparent',
+      }}>
+        <div style={{
+          position: 'absolute', top: 12, left: 12, zIndex: 10000,
+          pointerEvents: 'none',
+        }}>
+          <span style={{ color: hintText, fontSize: 11 }}>
+            {isExpanded ? '双击 / Esc 回到原来的样式' : '双击能扩展到全窗口'}
+          </span>
+        </div>
+        {isExpanded && (
+          <button onClick={() => setIsExpanded(false)} style={{
+            position: 'absolute', top: 12, right: 12, zIndex: 10000,
+            padding: '6px 14px', borderRadius: 4,
+            border: '1px solid rgba(148,163,184,0.3)',
+            background: btnBg, color: btnText,
+            fontSize: 13, cursor: 'pointer',
+          }}>
+            退出全屏
+          </button>
+        )}
+        <div ref={chartRef} className="unified-chart-container" style={{ width: '100%', height: '100%' }} />
+      </div>
     </div>
   )
 }
