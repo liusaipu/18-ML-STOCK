@@ -5,32 +5,32 @@ import (
 	"strings"
 )
 
-// RunAnalysis 执行完整的18步分析，返回报告
+// RunAnalysis 执行完整的财报透视分析，返回报告
 func RunAnalysis(baseDir, symbol string) (*AnalysisReport, error) {
 	return RunAnalysisWithComparablesAndQuoteAndSentimentAndPolicy(baseDir, symbol, nil, nil, nil, nil)
 }
 
-// RunAnalysisWithComparables 执行完整的18步分析，并集成可比公司横向对比
+// RunAnalysisWithComparables 执行完整的财报透视分析，并集成可比公司横向对比
 func RunAnalysisWithComparables(baseDir, symbol string, comp *ComparableAnalysis) (*AnalysisReport, error) {
 	return RunAnalysisWithComparablesAndQuoteAndSentimentAndPolicy(baseDir, symbol, comp, nil, nil, nil)
 }
 
-// RunAnalysisWithComparablesAndQuote 执行完整的18步分析，集成可比公司横向对比与实时行情
+// RunAnalysisWithComparablesAndQuote 执行完整的财报透视分析，集成可比公司横向对比与实时行情
 func RunAnalysisWithComparablesAndQuote(baseDir, symbol string, comp *ComparableAnalysis, quote *QuoteData) (*AnalysisReport, error) {
 	return RunAnalysisWithComparablesAndQuoteAndSentimentAndPolicy(baseDir, symbol, comp, quote, nil, nil)
 }
 
-// RunAnalysisWithComparablesAndQuoteAndSentiment 执行完整的18步分析，集成可比公司横向对比、实时行情与舆情情绪
+// RunAnalysisWithComparablesAndQuoteAndSentiment 执行完整的财报透视分析，集成可比公司横向对比、实时行情与舆情情绪
 func RunAnalysisWithComparablesAndQuoteAndSentiment(baseDir, symbol string, comp *ComparableAnalysis, quote *QuoteData, sentiment *SentimentData) (*AnalysisReport, error) {
 	return RunAnalysisWithComparablesAndQuoteAndSentimentAndPolicy(baseDir, symbol, comp, quote, sentiment, nil)
 }
 
-// RunAnalysisWithComparablesAndQuoteAndSentimentAndPolicy 执行完整的18步分析，集成可比公司横向对比、实时行情、舆情情绪与政策匹配度
+// RunAnalysisWithComparablesAndQuoteAndSentimentAndPolicy 执行完整的财报透视分析，集成可比公司横向对比、实时行情、舆情情绪与政策匹配度
 func RunAnalysisWithComparablesAndQuoteAndSentimentAndPolicy(baseDir, symbol string, comp *ComparableAnalysis, quote *QuoteData, sentiment *SentimentData, policy *PolicyMatchData) (*AnalysisReport, error) {
 	return RunAnalysisWithAll(baseDir, symbol, comp, quote, sentiment, policy, nil, nil, nil, nil)
 }
 
-// RunAnalysisWithAll 执行完整的18步分析，集成所有附加模块（可比公司、行情、舆情、政策、技术形态、交易活跃度、机器学习、RIM估值）
+// RunAnalysisWithAll 执行完整的财报透视分析，集成所有附加模块（可比公司、行情、舆情、政策、技术形态、交易活跃度、机器学习、RIM估值）
 func RunAnalysisWithAll(baseDir, symbol string, comp *ComparableAnalysis, quote *QuoteData, sentiment *SentimentData, policy *PolicyMatchData, technical *TechnicalData, activity *ActivityData, ml *MLPredictionData, rim *RIMData) (*AnalysisReport, error) {
 	data, err := LoadFinancialData(baseDir, symbol)
 	if err != nil {

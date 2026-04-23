@@ -259,7 +259,7 @@ export function Settings({
               <img src="/logo.png" className="about-logo" alt="StockFinLens Logo" />
               <div className="about-title">股票分析系统</div>
               <div className="about-version">版本 {version}</div>
-              <div className="about-desc">基于18步财报分析框架的股票研究工具</div>
+              <div className="about-desc">基于多维财报透视分析框架的股票研究工具</div>
               <a href="https://github.com/liusaipu/18-ML-STOCK/releases" target="_blank" rel="noopener noreferrer" className="about-link">检查更新</a>
             </div>
           )}

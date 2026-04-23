@@ -7,7 +7,7 @@ import (
 
 const baseScorePerStep = 100.0 / 18.0
 
-// Evaluate 根据18步结果，为每一年计算总分和评级
+// Evaluate 根据财报透视各维度结果，为每一年计算总分和评级
 type YearScore struct {
 	Year        string
 	RawScore    float64

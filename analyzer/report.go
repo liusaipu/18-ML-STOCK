@@ -23,7 +23,7 @@ func GenerateMarkdown(symbol string, years []string, steps []StepResult, scores 
 	// ==================== 封面 ====================
 	b.WriteString(fmt.Sprintf("# %s 深度投资分析报告\n\n", symbol))
 	b.WriteString(fmt.Sprintf("**股票代码**: %s  \n", symbol))
-	b.WriteString("**分析框架**: 十八步财务分析法（quant-trading v2.2 兼容框架）  \n")
+	b.WriteString("**分析框架**: 财报透视分析框架  \n")
 	b.WriteString(fmt.Sprintf("**最新报告期**: %s  \n", latest))
 	b.WriteString(fmt.Sprintf("**数据基础**: 基于 %d 年财务报表数据（%s ~ %s）\n\n", len(years), latest, years[len(years)-1]))
 	b.WriteString("---\n\n")
@@ -245,7 +245,7 @@ func writeModule1(b *strings.Builder, symbol string, steps []StepResult, latest,
 	b.WriteString("| 评估维度 | 评级 | 得分 | 关键结论 |\n")
 	b.WriteString("|----------|------|------|----------|\n")
 	if score != nil {
-		b.WriteString(fmt.Sprintf("| **基本面（18步综合）** | %s | **%.0f/100** | %s |\n", scoreToStars(score.RawScore), score.RawScore, gradeComment(score.RawScore)))
+		b.WriteString(fmt.Sprintf("| **财务健康度综合评分** | %s | **%.0f/100** | %s |\n", scoreToStars(score.RawScore), score.RawScore, gradeComment(score.RawScore)))
 	}
 	b.WriteString(fmt.Sprintf("| **成长能力** | %s | %.0f/100 | %s |\n", scoreToStars(growthScore(steps, latest)), growthScore(steps, latest), growthComment(steps, latest)))
 	b.WriteString(fmt.Sprintf("| **盈利能力** | %s | %.0f/100 | %s |\n", scoreToStars(profitScore(steps, latest)), profitScore(steps, latest), profitComment(steps, latest)))
@@ -378,12 +378,12 @@ func writeModule3(b *strings.Builder, steps []StepResult, years []string, latest
 	b.WriteString("\n")
 	b.WriteString("> **解读**: 持续观察ROE和毛利率的趋势变化，若连续下滑需警惕竞争力衰退；资产负债率稳定或下降为加分项。M-Score已纳入A-Score综合风险体系，A-Score≥60时建议重点核查财报真实性与偿债能力。\n\n")
 
-	b.WriteString(fmt.Sprintf("## 3.3 十八步分析详情（%s）\n\n", latest))
+	b.WriteString(fmt.Sprintf("## 3.3 财务指标逐项解读（%s）\n\n", latest))
 	categories := []struct {
 		name  string
 		steps []int
 	}{
-		{"会计与资产质量", []int{1, 2, 5, 6, 7, 8}},
+		{"会计与资产质量", []int{2, 5, 6, 7, 8}},
 		{"偿债与营运安全", []int{3, 4, 11, 17}},
 		{"盈利能力", []int{10, 12, 13, 14, 16}},
 		{"现金流与分红", []int{15, 18}},
@@ -1420,7 +1420,7 @@ func writeModule14(b *strings.Builder, symbol string, steps []StepResult, latest
 	b.WriteString("| 模块 | 权重 | 得分 | 加权分 |\n")
 	b.WriteString("|------|------|------|--------|\n")
 	if score != nil {
-		b.WriteString(fmt.Sprintf("| 基本面（18步综合） | 30%% | %.0f/100 | %.1f |\n", score.RawScore, score.RawScore*0.30))
+		b.WriteString(fmt.Sprintf("| 财务健康度综合评分 | 30%% | %.0f/100 | %.1f |\n", score.RawScore, score.RawScore*0.30))
 		b.WriteString(fmt.Sprintf("| 盈利能力 | 15%% | %.0f/100 | %.1f |\n", profitScore(steps, latest), profitScore(steps, latest)*0.15))
 		b.WriteString(fmt.Sprintf("| 现金流质量 | 15%% | %.0f/100 | %.1f |\n", cashScore(steps, latest), cashScore(steps, latest)*0.15))
 		b.WriteString(fmt.Sprintf("| 成长能力 | 15%% | %.0f/100 | %.1f |\n", growthScore(steps, latest), growthScore(steps, latest)*0.15))
@@ -1612,7 +1612,7 @@ func writeModule15(b *strings.Builder, symbol string, steps []StepResult, years 
 	b.WriteString(fmt.Sprintf("| 资产负债率 | %.2f%% | - | %s |\n", getStepValue(steps, 3, latest, "debtRatio"), drEmoji(getStepValue(steps, 3, latest, "debtRatio"))))
 	b.WriteString(fmt.Sprintf("| A-Score | %.1f | - | %s |\n", getStepValue(steps, 8, latest, "AScore"), asEmoji(getStepValue(steps, 8, latest, "AScore"))))
 	if score != nil {
-		b.WriteString(fmt.Sprintf("| 十八步评分 | %.0f分（%s） | - | - |\n", score.RawScore, score.Grade))
+		b.WriteString(fmt.Sprintf("| 财报健康分 | %.0f分（%s） | - | - |\n", score.RawScore, score.Grade))
 	}
 	b.WriteString("\n")
 
@@ -1650,7 +1650,7 @@ func writeModule15(b *strings.Builder, symbol string, steps []StepResult, years 
 	b.WriteString("\n")
 
 	b.WriteString("## 16.4 免责声明\n\n")
-	b.WriteString("本报告基于公开财务报表数据及十八步财务分析模型生成，仅供参考，不构成任何投资建议。投资有风险，入市需谨慎。\n\n")
+	b.WriteString("本报告基于公开财务报表数据及财报透视分析模型生成，仅供参考，不构成任何投资建议。投资有风险，入市需谨慎。\n\n")
 }
 
 // ==================== 辅助函数 ====================

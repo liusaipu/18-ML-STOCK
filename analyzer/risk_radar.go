@@ -17,7 +17,7 @@ type RiskRadarItem struct {
 	Desc     string `json:"desc"`    // 指标说明
 }
 
-// BuildRiskRadar 从18步分析结果中提取最近一年的关键风险信号，并与行业均值对比
+// BuildRiskRadar 从财报透视分析结果中提取最近一年的关键风险信号，并与行业均值对比
 func BuildRiskRadar(steps []StepResult, extras map[string]float64, years []string, industry string) []RiskRadarItem {
 	if len(years) == 0 {
 		return nil

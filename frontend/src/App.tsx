@@ -265,7 +265,7 @@ function App() {
     { label: '模块8: A-Score 综合风险画像', id: '模块8-a-score-综合风险画像' },
     { label: '模块9: 技术面分析', id: '模块9-技术面分析' },
     { label: '模块10: ML机器学习预测', id: '模块10-ml机器学习预测' },
-    { label: '模块11: 智能选股6大条件', id: '模块11-智能选股6大条件' },
+    { label: '模块11: 智能选股7大条件', id: '模块11-智能选股7大条件' },
     { label: '模块12: 芒格逆向思维检查', id: '模块12-芒格逆向思维检查' },
     { label: '模块13: 巴菲特-芒格投资检查清单', id: '模块13-巴菲特-芒格投资检查清单' },
     { label: '模块14: 社交媒体情绪监控', id: '模块14-社交媒体情绪监控' },
@@ -1012,7 +1012,7 @@ function App() {
       setViewingHistory(null)
       setHistoryContent('')
       if (settings.analysisNotification) {
-        SendNotification('分析完成', `${selectedStock.name || selectedStock.code} 的十八步分析已完成`).catch(() => {})
+        SendNotification('分析完成', `${selectedStock.name || selectedStock.code} 的财报分析已完成`).catch(() => {})
       }
       if (result) {
         setSnapshots((prev) => ({ ...prev, [selectedStock.code]: result }))
@@ -1134,7 +1134,7 @@ function App() {
       setViewingHistory(null)
       setHistoryContent('')
       if (settings.analysisNotification) {
-        SendNotification('分析完成', `${selectedStock.name || selectedStock.code} 的十八步分析（含RIM估值）已完成`).catch(() => {})
+        SendNotification('分析完成', `${selectedStock.name || selectedStock.code} 的财报分析（含RIM估值）已完成`).catch(() => {})
       }
       if (result) {
         setSnapshots((prev) => ({ ...prev, [selectedStock.code]: result }))
@@ -1977,7 +1977,7 @@ function App() {
                 下载财报
               </button>
               <button className="btn primary" onClick={handleAnalyze} disabled={analyzing || downloading || loading || dataHistory.length === 0} title={dataHistory.length === 0 ? '请先下载或导入财报数据' : ''}>
-                18步分析
+                财报分析
               </button>
             </div>
 
@@ -2137,7 +2137,7 @@ function App() {
                       <div className="risk-radar-hint">基于本地数据计算 · 设置中可更新</div>
                     </>
                   ) : (
-                    <div className="risk-radar-empty">暂无对比数据（请先执行18步分析）</div>
+                    <div className="risk-radar-empty">暂无对比数据（请先执行财报分析）</div>
                   )}
                 </div>
               </Collapsible>
@@ -2332,7 +2332,7 @@ function App() {
               <span className="report-timestamp">
                 {lastAnalysisAt
                   ? `上次分析: ${lastAnalysisAt}`
-                  : '请先执行18步分析'}
+                  : '请先执行财报分析'}
               </span>
             )}
             {displayContent && (
@@ -2450,7 +2450,7 @@ function App() {
           ) : selectedStock ? (
             <div className="placeholder">
               <p>【Markdown 报告展示区】</p>
-              <p>选择股票后点击"18步分析"，报告将在此渲染</p>
+              <p>选择股票后点击"财报分析"，报告将在此渲染</p>
             </div>
           ) : (
             <div className="placeholder">

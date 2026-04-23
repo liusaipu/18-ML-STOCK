@@ -1300,7 +1300,7 @@ func (a *App) CheckAnalysisCache(symbol string) (*CacheStatus, error) {
 	return result, nil
 }
 
-// AnalyzeStock 对指定股票执行18步财务分析
+// AnalyzeStock 对指定股票执行财报透视分析
 func (a *App) AnalyzeStock(symbol string, overwriteLatest bool) (*analyzer.AnalysisReport, error) {
 	return a.analyzeStockInternal(symbol, overwriteLatest, nil)
 }
@@ -2188,7 +2188,7 @@ func (a *App) ExportHistoricalFinancialData(symbol string, timestamp string) err
 	return copyFile(tmpZip, savePath)
 }
 
-// ExportFinancialDataToExcel 将当前股票财务数据及18步分析结果导出为 Excel
+// ExportFinancialDataToExcel 将当前股票财务数据及财报分析结果导出为 Excel
 func (a *App) ExportFinancialDataToExcel(symbol string) error {
 	if a.storage == nil {
 		return fmt.Errorf("存储未初始化")
@@ -2201,7 +2201,7 @@ func (a *App) ExportFinancialDataToExcel(symbol string) error {
 		return fmt.Errorf("没有可用的财务数据")
 	}
 
-	// 尝试读取快照获取18步分析结果
+	// 尝试读取快照获取财报分析结果
 	var steps []analyzer.StepResult
 	snapshot, _ := a.storage.LoadSnapshot(symbol)
 	if snapshot != nil && len(snapshot.StepResults) > 0 {
@@ -2247,8 +2247,8 @@ func (a *App) ExportFinancialDataToExcel(symbol string) error {
 	writeSheet("利润表", data.IncomeStatement)
 	writeSheet("现金流量表", data.CashFlow)
 
-	// Sheet4: 18步分析汇总
-	analysisSheet := "18步分析汇总"
+	// Sheet4: 财报分析汇总
+	analysisSheet := "财报分析汇总"
 	f.NewSheet(analysisSheet)
 	f.SetCellValue(analysisSheet, "A1", "步骤")
 	f.SetCellValue(analysisSheet, "B1", "分析维度")
@@ -2281,7 +2281,7 @@ func (a *App) ExportFinancialDataToExcel(symbol string) error {
 			}
 		}
 	} else {
-		f.SetCellValue(analysisSheet, "A2", "暂无分析数据（请先执行18步分析）")
+		f.SetCellValue(analysisSheet, "A2", "暂无分析数据（请先执行财报分析）")
 	}
 	f.SetColWidth(analysisSheet, "A", "A", 8)
 	f.SetColWidth(analysisSheet, "B", "B", 45)
