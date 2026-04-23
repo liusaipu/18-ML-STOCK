@@ -2541,3 +2541,75 @@ func calcComparableScore(m *ComparableMetrics, all []*ComparableMetrics, medianA
 		normalizeScore(act, minAct, maxAct, false)*0.10
 	return s
 }
+
+// HighlightRisk 亮点与风险摘要
+type HighlightRisk struct {
+	Highlights []string `json:"highlights"`
+	Risks      []string `json:"risks"`
+}
+
+// ExtractHighlightsAndRisks 从分析步骤中提取亮点与风险摘要
+func ExtractHighlightsAndRisks(steps []StepResult, years []string) HighlightRisk {
+	if len(years) == 0 {
+		return HighlightRisk{Highlights: []string{}, Risks: []string{}}
+	}
+	latest := years[0]
+
+	roe := getStepValue(steps, 16, latest, "roe")
+	gm := getStepValue(steps, 10, latest, "grossMargin")
+	growth := getStepValue(steps, 9, latest, "growthRate")
+	pg := getStepValue(steps, 16, latest, "profitGrowth")
+	ascore := getStepValue(steps, 8, latest, "AScore")
+	dr := getStepValue(steps, 3, latest, "debtRatio")
+	cr := getStepValue(steps, 15, latest, "cashRatio")
+
+	var highlights, risks []string
+
+	if roe >= 15 {
+		highlights = append(highlights, "ROE 优秀，资本回报能力强")
+	} else {
+		risks = append(risks, "ROE 低于 15%，资本回报能力有待提升")
+	}
+
+	if gm >= 40 {
+		highlights = append(highlights, "高毛利率，定价权稳固")
+	} else {
+		risks = append(risks, "毛利率未达 40%，产品竞争力一般")
+	}
+
+	if dr <= 40 {
+		highlights = append(highlights, "低负债率，财务结构稳健")
+	} else if dr > 60 {
+		risks = append(risks, "负债率超过 60%，偿债压力偏大")
+	}
+
+	if ascore < 40 {
+		highlights = append(highlights, "A-Score 安全，财务质量良好")
+	} else if ascore < 60 {
+		highlights = append(highlights, "A-Score 低风险，财务质量可控")
+	} else if ascore < 70 {
+		risks = append(risks, "A-Score 中风险，需关注财务健康度")
+	} else {
+		risks = append(risks, "A-Score 高风险，建议谨慎")
+	}
+
+	if growth >= 10 {
+		highlights = append(highlights, "营收稳健增长")
+	} else if growth < 0 {
+		risks = append(risks, "营收负增长，成长性承压")
+	}
+
+	if pg >= 10 {
+		highlights = append(highlights, "净利润持续增长")
+	} else if pg < 0 {
+		risks = append(risks, "净利润下滑，盈利能力减弱")
+	}
+
+	if cr >= 100 {
+		highlights = append(highlights, "经营现金流充沛，盈利质量高")
+	} else if cr > 0 {
+		risks = append(risks, "现金流含金量不足")
+	}
+
+	return HighlightRisk{Highlights: highlights, Risks: risks}
+}

@@ -46,6 +46,8 @@ type AnalysisReport struct {
 	OverallGrade    string                 `json:"overallGrade"`
 	MarkdownContent string                 `json:"markdownContent"`
 	RIM             *RIMData               `json:"rim,omitempty"`
+	Highlights      []string               `json:"highlights"`
+	Risks           []string               `json:"risks"`
 }
 
 // PassItem 单一年度的达标项

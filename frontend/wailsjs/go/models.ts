@@ -312,6 +312,8 @@ export namespace analyzer {
 	    overallGrade: string;
 	    markdownContent: string;
 	    rim?: RIMData;
+    highlights: string[];
+    risks: string[];
 	
 	    static createFrom(source: any = {}) {
 	        return new AnalysisReport(source);
@@ -328,6 +330,8 @@ export namespace analyzer {
 	        this.overallGrade = source["overallGrade"];
 	        this.markdownContent = source["markdownContent"];
 	        this.rim = this.convertValues(source["rim"], RIMData);
+        this.highlights = source["highlights"] || [];
+        this.risks = source["risks"] || [];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

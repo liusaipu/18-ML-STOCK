@@ -112,6 +112,8 @@ func RunAnalysisWithAll(baseDir, symbol string, comp *ComparableAnalysis, quote 
 
 	md := GenerateMarkdown(symbol, data.Years, steps, scores, comp, industry, quote, sentiment, policy, technical, activity, ml, rim)
 
+	hr := ExtractHighlightsAndRisks(steps, data.Years)
+
 	report := &AnalysisReport{
 		Symbol:          symbol,
 		CompanyName:     symbol,
@@ -122,6 +124,8 @@ func RunAnalysisWithAll(baseDir, symbol string, comp *ComparableAnalysis, quote 
 		OverallGrade:    overallGrade,
 		MarkdownContent: md,
 		RIM:             rim,
+		Highlights:      hr.Highlights,
+		Risks:           hr.Risks,
 	}
 	return report, nil
 }

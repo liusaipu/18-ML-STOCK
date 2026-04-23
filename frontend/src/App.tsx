@@ -617,6 +617,10 @@ function App() {
   const currentSnapshot = selectedStock ? snapshots[selectedStock.code] : null
   const { highlights, risks } = useMemo(() => {
     if (!currentSnapshot) return { highlights: [], risks: [] }
+    // 优先使用后端统一生成的亮点/风险，fallback 到前端本地计算
+    if (currentSnapshot.highlights && currentSnapshot.highlights.length > 0) {
+      return { highlights: currentSnapshot.highlights, risks: currentSnapshot.risks || [] }
+    }
     return extractHighlightsAndRisks(currentSnapshot)
   }, [currentSnapshot])
 
