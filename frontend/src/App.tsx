@@ -155,9 +155,9 @@ function extractHighlightsAndRisks(report: AnalysisReport) {
   else if (dr > 60) risks.push('负债率超过 60%，偿债压力偏大')
 
   // A-Score 综合风险评分（A股适配）
-  if (ascore < 40) highlights.push('A-Score 低风险，财务质量良好')
-  else if (ascore < 60) highlights.push('A-Score 中等风险，需关注')
-  else if (ascore < 80) risks.push('A-Score 偏高，存在财务操纵或偿债风险')
+  if (ascore < 40) highlights.push('A-Score 安全，财务质量良好')
+  else if (ascore < 60) highlights.push('A-Score 低风险，财务质量可控')
+  else if (ascore < 70) risks.push('A-Score 中风险，需关注财务健康度')
   else risks.push('A-Score 高风险，建议谨慎')
 
   if (growth >= 10) highlights.push('营收稳健增长')
@@ -2595,6 +2595,9 @@ function App() {
           <div className="modal-content rim-modal" onClick={(e) => e.stopPropagation()}>
             <h4>调整 RIM 估值参数</h4>
             <div className="rim-form">
+              <div className="rim-hint" style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 8 }}>
+                💡 默认参数基准：2025年4月市场数据，建议根据当前市场环境调整
+              </div>
               <div className="rim-row">
                 <label>Beta</label>
                 <input type="number" step={0.01} value={rimBeta} onChange={(e) => setRimBeta(Number(e.target.value))} />
