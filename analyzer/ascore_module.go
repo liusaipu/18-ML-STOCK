@@ -42,7 +42,7 @@ func writeAScoreProfile(b *strings.Builder, steps []StepResult, years []string, 
 	b.WriteString("|--------|------|----------|\n")
 	b.WriteString(fmt.Sprintf("| **M-Score** | %.3f | Beneish 财务造假风险指标 |\n", ms))
 	b.WriteString(fmt.Sprintf("| **Z-Score** | %.2f | Altman 破产风险评分 |\n", zs))
-	b.WriteString(fmt.Sprintf("| **现金流偏离度** | %.1f%% | 净利润与经营现金流背离程度 |\n", cd))
+	b.WriteString(fmt.Sprintf("| **现金流风险分** | %.1f %s | 净利润与经营现金流背离程度（负值=现金流优于利润） |\n", cd, cashDevStatus(cd)))
 	b.WriteString(fmt.Sprintf("| **应收账款异常度** | %.1f%% | 应收增速 vs 营收增速偏离 |\n", ar))
 	b.WriteString(fmt.Sprintf("| **毛利率异常波动** | %.1f%% | 毛利率连续恶化信号 |\n", gm))
 	b.WriteString(fmt.Sprintf("| **A-Score（综合）** | **%.1f** | **%s** |\n", as, ascoreComment(as)))
@@ -54,7 +54,7 @@ func writeAScoreProfile(b *strings.Builder, steps []StepResult, years []string, 
 	b.WriteString("|------|----------|--------|------|------|\n")
 	b.WriteString(fmt.Sprintf("| **M-Score（造假风险）** | %.3f | %.1f | 15%% | %s |\n", ms, mRisk, riskLevel(mRisk)))
 	b.WriteString(fmt.Sprintf("| **Z-Score（破产风险）** | %.2f | %.1f | 20%% | %s |\n", zs, zRisk, riskLevel(zRisk)))
-	b.WriteString(fmt.Sprintf("| **现金流偏离度** | %.1f%% | %.1f | 20%% | %s |\n", cd, normalizeCashDev(cd), riskLevel(normalizeCashDev(cd))))
+	b.WriteString(fmt.Sprintf("| **现金流风险分** | %.1f | %.1f | 20%% | %s |\n", cd, normalizeCashDev(cd), riskLevel(normalizeCashDev(cd))))
 	b.WriteString(fmt.Sprintf("| **应收账款异常** | %.1f%% | %.1f | 15%% | %s |\n", ar, ar, riskLevel(ar)))
 	b.WriteString(fmt.Sprintf("| **毛利率异常波动** | %.1f%% | %.1f | 10%% | %s |\n", gm, gm, riskLevel(gm)))
 	b.WriteString(fmt.Sprintf("| **非财务信号** | — | %.1f | 20%% | %s |\n", crawler, riskLevel(crawler)))
@@ -164,6 +164,22 @@ func normalizeCashDev(cd float64) float64 {
 		v = 100
 	}
 	return v
+}
+
+func cashDevStatus(cd float64) string {
+	if cd < 0 {
+		return "🟢 优秀"
+	}
+	if cd < 20 {
+		return "🟢 健康"
+	}
+	if cd < 40 {
+		return "🟡 关注"
+	}
+	if cd < 60 {
+		return "🟡 偏高"
+	}
+	return "🔴 高风险"
 }
 
 func riskLevel(v float64) string {
