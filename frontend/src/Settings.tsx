@@ -259,7 +259,7 @@ export function Settings({
               <img src="/logo.png" className="about-logo" alt="StockFinLens Logo" />
               <div className="about-title">股票财报透镜</div>
               <div className="about-version">版本 {version}</div>
-              <div className="about-desc">穿透财报看真相，自动扫描财务风险，每笔数字都有出处。</div>
+              <div className="about-desc">穿透财报看真相，自动扫描财务风险，支持数据溯源。</div>
               <a href="https://github.com/liusaipu/stockfinlens/releases" target="_blank" rel="noopener noreferrer" className="about-link">检查更新</a>
             </div>
           )}
