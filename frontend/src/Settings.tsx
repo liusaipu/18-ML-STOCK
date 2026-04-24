@@ -257,10 +257,10 @@ export function Settings({
           {activeTab === 'about' && (
             <div className="settings-section about-section">
               <img src="/logo.png" className="about-logo" alt="StockFinLens Logo" />
-              <div className="about-title">股票分析系统</div>
+              <div className="about-title">股票财报透镜</div>
               <div className="about-version">版本 {version}</div>
-              <div className="about-desc">基于多维财报透视分析框架的股票研究工具</div>
-              <a href="https://github.com/liusaipu/18-ML-STOCK/releases" target="_blank" rel="noopener noreferrer" className="about-link">检查更新</a>
+              <div className="about-desc">穿透 A股/港股 财报表象，多维透视企业真实健康度。A-Score 风险热力图量化财务风险，基本面/技术面/估值/舆情一体化分析，计算溯源让每项结论有据可查。</div>
+              <a href="https://github.com/liusaipu/stockfinlens/releases" target="_blank" rel="noopener noreferrer" className="about-link">检查更新</a>
             </div>
           )}
         </div>
