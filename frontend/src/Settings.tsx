@@ -259,7 +259,7 @@ export function Settings({
               <img src="/logo.png" className="about-logo" alt="StockFinLens Logo" />
               <div className="about-title">股票财报透镜</div>
               <div className="about-version">版本 {version}</div>
-              <div className="about-desc">穿透 A股/港股 财报表象，多维透视企业真实健康度。A-Score 风险热力图量化财务风险，基本面/技术面/估值/舆情一体化分析，计算溯源让每项结论有据可查。</div>
+              <div className="about-desc">穿透财报看真相，自动扫描财务风险，每笔数字都有出处。</div>
               <a href="https://github.com/liusaipu/stockfinlens/releases" target="_blank" rel="noopener noreferrer" className="about-link">检查更新</a>
             </div>
           )}
