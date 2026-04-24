@@ -50,6 +50,25 @@ def make_gradient(size, color_top, color_bottom):
     return base
 
 
+def make_radial_gradient(size, center_color, edge_color):
+    """Create a radial gradient image (center bright -> edge dark)."""
+    w, h = size
+    cx, cy = w / 2, h / 2
+    max_dist = ((cx) ** 2 + (cy) ** 2) ** 0.5
+    img = Image.new("RGBA", size)
+    pixels = img.load()
+    for y in range(h):
+        for x in range(w):
+            dist = ((x - cx) ** 2 + (y - cy) ** 2) ** 0.5
+            t = min(1.0, dist / max_dist)
+            r = int(center_color[0] * (1 - t) + edge_color[0] * t)
+            g = int(center_color[1] * (1 - t) + edge_color[1] * t)
+            b = int(center_color[2] * (1 - t) + edge_color[2] * t)
+            a = int(center_color[3] * (1 - t) + edge_color[3] * t)
+            pixels[x, y] = (r, g, b, a)
+    return img
+
+
 def remove_white_bg_smart(img, threshold=210):
     """Remove white/light background and clean edge halos."""
     pixels = img.load()
@@ -92,31 +111,49 @@ def remove_white_bg_smart(img, threshold=210):
 
 
 def prepare_source():
-    """Load source, upscale, remove bg, thicken strokes, enhance colors."""
+    """Load source, upscale, remove bg, thicken strokes to solid red."""
     src = Image.open(SRC_IMG).convert("RGBA")
     
-    # Upscale more for smoother edges (source is only 195x147)
+    # Upscale for smooth edges
     upscale = 12
     src = src.resize((src.width * upscale, src.height * upscale), Image.LANCZOS)
     
     # Remove white background
     src = remove_white_bg_smart(src, threshold=210)
     
-    # Thicken strokes: heavy dilation for much bolder lines
+    # Thicken strokes: double dilation for bold lines (same as preview_2)
     r, g, b, a = src.split()
-    a = a.filter(ImageFilter.MaxFilter(5))  # large kernel for bold strokes
-    src = Image.merge("RGBA", (r, g, b, a))
+    a = a.filter(ImageFilter.MaxFilter(5))
+    a = a.filter(ImageFilter.MaxFilter(5))
     
-    # Keep edges crisp after heavy dilation
-    src = src.filter(ImageFilter.UnsharpMask(radius=3, percent=200, threshold=3))
+    # Slight blur for softer edges, then gentle sharpen
+    a = a.filter(ImageFilter.GaussianBlur(radius=1))
+    a = a.filter(ImageFilter.UnsharpMask(radius=2, percent=150, threshold=3))
     
-    # Enhance: stronger contrast & saturation for bolder, richer reds
-    enhancer = ImageEnhance.Contrast(src)
-    src = enhancer.enhance(1.8)
-    enhancer = ImageEnhance.Sharpness(src)
-    src = enhancer.enhance(2.2)
-    enhancer = ImageEnhance.Color(src)
-    src = enhancer.enhance(2.0)
+    # Flatten to solid red base, then add subtle radial highlight at cross area
+    RED, GREEN, BLUE = 225, 25, 35
+    red   = a.point(lambda x: RED   if x > 0 else 0)
+    green = a.point(lambda x: GREEN if x > 0 else 0)
+    blue  = a.point(lambda x: BLUE  if x > 0 else 0)
+    src = Image.merge("RGBA", (red, green, blue, a))
+    
+    # Subtle radial gradient: center (cross area) slightly brighter, edges slightly darker
+    w, h = src.size
+    cx, cy = w / 2, h / 2
+    max_r = ((w/2)**2 + (h/2)**2) ** 0.5 * 0.55
+    pixels = src.load()
+    for y in range(h):
+        for x in range(w):
+            r, g, b, a_val = pixels[x, y]
+            if a_val > 20:
+                dist = ((x - cx)**2 + (y - cy)**2) ** 0.5
+                t = min(1.0, dist / max_r)
+                # Center brighter (highlight cross), edge darker (subtle shadow)
+                brightness = 1.0 - t * 0.35  # 0.65 to 1.0 range
+                nr = min(255, int(RED * brightness + 35 * (1 - brightness)))
+                ng = min(255, int(GREEN * brightness + 12 * (1 - brightness)))
+                nb = min(255, int(BLUE * brightness + 18 * (1 - brightness)))
+                pixels[x, y] = (nr, ng, nb, a_val)
     
     return src
 
@@ -149,6 +186,24 @@ def add_outer_glow(img, blur=40, glow_color=(220, 30, 40, 70)):
     return result
 
 
+def add_outline(img, outline_color=(255, 200, 200, 200), thickness=1):
+    """Add a thin light outline around the shape based on alpha channel."""
+    r, g, b, a = img.split()
+    # Dilate alpha to create outline ring
+    dilated = a.filter(ImageFilter.MaxFilter(2 * thickness + 1))
+    # Outline = dilated - original
+    from PIL import ImageChops
+    outline_mask = ImageChops.difference(dilated, a)
+    # Create outline layer
+    ol_r = outline_mask.point(lambda x: outline_color[0] if x > 0 else 0)
+    ol_g = outline_mask.point(lambda x: outline_color[1] if x > 0 else 0)
+    ol_b = outline_mask.point(lambda x: outline_color[2] if x > 0 else 0)
+    ol_a = outline_mask.point(lambda x: outline_color[3] if x > 0 else 0)
+    outline_layer = Image.merge("RGBA", (ol_r, ol_g, ol_b, ol_a))
+    # Composite: outline behind original
+    return Image.alpha_composite(outline_layer, img)
+
+
 def add_inner_highlight(bg_img, radius_ratio=0.22, opacity=22):
     """Add a subtle top inner highlight to a rounded rect background."""
     w, h = bg_img.size
@@ -168,14 +223,14 @@ def add_inner_highlight(bg_img, radius_ratio=0.22, opacity=22):
 
 
 def create_bg(size, for_macos=False):
-    """Create a beautiful background with gradient and rounded corners."""
+    """Create a deep blue radial gradient background with rounded corners."""
     w, h = size
     rr = 0.22 if for_macos else 0.18
     
-    # Rich dark gradient with stronger red undertone for more presence
-    bg_top = (42, 35, 38, 255)
-    bg_bottom = (18, 14, 16, 255)
-    bg = make_gradient((w, h), bg_top, bg_bottom)
+    # Deep blue radial gradient: center bright -> edge dark
+    center_color = (42, 65, 125, 255)  # lighter deep blue center
+    edge_color   = (12, 20, 45, 255)   # darker deep blue edge
+    bg = make_radial_gradient((w, h), center_color, edge_color)
     
     # Apply rounded mask
     mask = rounded_rect_mask((w, h), radius_ratio=rr)
@@ -193,7 +248,7 @@ def generate_icon_design(size, for_macos=False, src=None):
         src = prepare_source()
     
     w = h = size
-    padding = int(size * 0.03)  # very tight padding = W nearly fills the icon
+    padding = int(size * 0.01)  # minimal padding = W fills almost entire icon
     target_w = w - padding * 2
     target_h = h - padding * 2
     
@@ -209,12 +264,19 @@ def generate_icon_design(size, for_macos=False, src=None):
     # Resize to target
     w_img = src.resize((new_w, new_h), Image.LANCZOS)
     
-    # Layer effects: stronger glow -> shadow
-    w_glow = add_outer_glow(w_img, blur=max(14, size // 18), glow_color=(235, 45, 55, 85))
-    w_final = add_drop_shadow(w_glow, offset=(0, max(3, size // 50)), blur=max(10, size // 25), shadow_color=(0, 0, 0, 110))
+    # Small icons: extra sharpening to keep strokes solid at tiny sizes
+    if size <= 64:
+        w_img = w_img.filter(ImageFilter.UnsharpMask(radius=2, percent=250, threshold=3))
+    
+    # Layer effects: much brighter glow -> shadow
+    w_glow = add_outer_glow(w_img, blur=max(18, size // 14), glow_color=(255, 80, 90, 110))
+    w_final = add_drop_shadow(w_glow, offset=(0, max(4, size // 40)), blur=max(12, size // 22), shadow_color=(0, 0, 0, 120))
     
     # Background
     bg = create_bg((w, h), for_macos=for_macos)
+    
+    # Vertical nudge: only for large icons (optical center), strict center for small
+    nudge = max(1, size // 150) if size >= 128 else 0
     
     # For macOS, add subtle outer shadow to the whole icon
     if for_macos and size >= 64:
@@ -231,7 +293,7 @@ def generate_icon_design(size, for_macos=False, src=None):
         # Center W
         wx, wy = w_final.size
         cx = (canvas.width - wx) // 2
-        cy = (canvas.height - wy) // 2 - max(1, size // 150)
+        cy = (canvas.height - wy) // 2 - nudge
         canvas.paste(w_final, (cx, cy), w_final)
         return canvas
     else:
@@ -239,7 +301,7 @@ def generate_icon_design(size, for_macos=False, src=None):
         final.paste(bg, (0, 0), bg)
         wx, wy = w_final.size
         cx = (w - wx) // 2
-        cy = (h - wy) // 2 - max(1, size // 150)
+        cy = (h - wy) // 2 - nudge
         final.paste(w_final, (cx, cy), w_final)
         return final
 
