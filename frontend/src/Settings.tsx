@@ -154,11 +154,11 @@ export function Settings({
                 <label>财报下载年限</label>
                 <div className="settings-input-group">
                   <input type="number" min={3} max={10} value={settings.reportYears} onChange={(e) => updateSetting('reportYears', parseInt(e.target.value) || 5)} />
-                  <span>�?/span>
+                  <span>年</span>
                 </div>
               </div>
               <div className="settings-item">
-                <label>自动更新行业�?/label>
+                <label>自动更新行业库</label>
                 <div className="settings-toggle-switch">
                   <label className="switch"><input type="checkbox" checked={settings.autoUpdateIndustryDB} onChange={(e) => updateSetting('autoUpdateIndustryDB', e.target.checked)} /><span className="slider"></span></label>
                 </div>
@@ -170,18 +170,18 @@ export function Settings({
                 </div>
               </div>
 
-              {/* 数据管理分割�?*/}
+              {/* 数据管理分割线 */}
               <div className="settings-divider" />
 
-              {/* 产业政策�?*/}
+              {/* 产业政策库 */}
               <div className="settings-data-section">
-                <div className="settings-data-title">📚 产业政策�?/div>
+                <div className="settings-data-title">📚 产业政策库</div>
                 <div className="settings-data-info">
                   <div>版本: <span>{policyLibMeta?.version || 'builtin'}</span></div>
-                  <div>更新�? <span>{policyLibMeta?.updatedAt || '内置默认'}</span></div>
+                  <div>更新于: <span>{policyLibMeta?.updatedAt || '内置默认'}</span></div>
                 </div>
                 <div className="settings-data-desc">
-                  为报告模�?（政策匹配度评估）提供政策关键词数据
+                  为报告模块5（政策匹配度评估）提供政策关键词数据
                 </div>
                 {onUpdatePolicyLibrary && (
                   <button 
@@ -189,7 +189,7 @@ export function Settings({
                     onClick={onUpdatePolicyLibrary}
                     disabled={policyUpdating}
                   >
-                    {policyUpdating ? '更新�?..' : '🔄 更新政策�?}
+                    {policyUpdating ? '更新中...' : '🔄 更新政策库'}
                   </button>
                 )}
                 {policyActionStatus?.type && !policyUpdating && (
@@ -207,11 +207,11 @@ export function Settings({
               <div className="settings-data-section">
                 <div className="settings-data-title">🏭 行业均值数据库</div>
                 <div className="settings-data-info">
-                  <div>行业�? <span>{industryDBMeta?.count || 0}</span></div>
-                  <div>更新�? <span>{industryDBMeta?.updatedAt || '未更�?}</span></div>
+                  <div>行业数: <span>{industryDBMeta?.count || 0}</span></div>
+                  <div>更新于: <span>{industryDBMeta?.updatedAt || '未更新'}</span></div>
                 </div>
                 <div className="settings-data-desc">
-                  为报告模�?（行业横向对比）提供行业基准数据
+                  为报告模块4（行业横向对比）提供行业基准数据
                 </div>
                 {onUpdateIndustryDB && (
                   <button 
@@ -221,14 +221,14 @@ export function Settings({
                   >
                     {industryUpdating
                       ? (industryTask?.status === 'running' && industryTask?.total
-                          ? `后台采集�?${Math.round((industryTask.progress || 0) / industryTask.total * 100)}%...`
-                          : '后台采集�?..')
-                      : '🔄 更新行业数据�?}
+                          ? `后台采集中 ${Math.round((industryTask.progress || 0) / industryTask.total * 100)}%...`
+                          : '后台采集中...')
+                      : '🔄 更新行业数据库'}
                   </button>
                 )}
                 {industryTask?.status === 'running' && (
                   <div className="settings-action-status">
-                    <span style={{ color: '#94a3b8' }}>{industryTask.message || '正在采集全市场数�?..'}</span>
+                    <span style={{ color: '#94a3b8' }}>{industryTask.message || '正在采集全市场数据...'}</span>
                   </div>
                 )}
                 {industryTask?.status === 'completed' && !industryUpdating && (
@@ -259,8 +259,8 @@ export function Settings({
               <img src="/logo.png" className="about-logo" alt="StockFinLens Logo" />
               <div className="about-title">股票财报透镜</div>
               <div className="about-version">版本 {version}</div>
-              <div className="about-desc">穿透财报看真相，自动扫描财务风险，重要指标可溯源�?/div>
-              <a href="https://github.com/liusaipu/stockfinlens/releases" target="_blank" rel="noopener noreferrer" className="about-link">检查更�?/a>
+              <div className="about-desc">穿透财报看真相，自动扫描财务风险，重要指标可溯源。</div>
+              <a href="https://github.com/liusaipu/stockfinlens/releases" target="_blank" rel="noopener noreferrer" className="about-link">检查更新</a>
             </div>
           )}
         </div>
