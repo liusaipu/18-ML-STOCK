@@ -768,9 +768,9 @@ func writeModule7(b *strings.Builder, steps []StepResult, latest string, quote *
 	roe := getStepValue(steps, 16, latest, "roe")
 
 	b.WriteString(fmt.Sprintf("## 7.1 模型参数（基于 %s 年报）", latest) + traceTrigger(16) + "\n\n")
-	b.WriteString("| 参数 | 符号 | 取值 | 说明 |\n")
-	b.WriteString("|------|------|------|------|\n")
-	b.WriteString(fmt.Sprintf("| **%s ROE** | ROE | %.2f%% | 年报数据 |\n", latest, roe))
+	b.WriteString("| 参数 | <span style=\"white-space:nowrap;\">符号</span> | 取值 | 说明 |\n")
+	b.WriteString("|------|-----------|------|------|\n")
+	b.WriteString(fmt.Sprintf("| **ROE** | ROE | %.2f%% | 年报数据 |\n", roe))
 
 	hasRIM := rim != nil && rim.HasData && rim.Result != nil
 	var bps0, ke, gTerminal, currentPrice float64
@@ -780,13 +780,13 @@ func writeModule7(b *strings.Builder, steps []StepResult, latest string, quote *
 		ke = rim.Params.KE
 		gTerminal = rim.Params.GTerminal
 		currentPrice = rim.Params.CurrentPrice
-		b.WriteString(fmt.Sprintf("| **每股净资产** | BPS | %.2f元 | %s |\n", bps0, rimSourceDesc(rim, quote)))
-		b.WriteString(fmt.Sprintf("| **资本成本** | kE | %.2f%% | CAPM(Rf=%.2f%%, Beta=%.2f, Rm-Rf=%.2f%%) |\n", ke*100, rim.Rf*100, rim.Beta, rim.RmRf*100))
-		b.WriteString(fmt.Sprintf("| **永续增长率** | g | %.1f%% | 稳态假设 |\n", gTerminal*100))
+		b.WriteString(fmt.Sprintf("| **每股净资产** | BPS&nbsp; | %.2f元 | %s |\n", bps0, rimSourceDesc(rim, quote)))
+		b.WriteString(fmt.Sprintf("| **资本成本** | kE&nbsp; | %.2f%% | CAPM(Rf=%.2f%%, Beta=%.2f, Rm-Rf=%.2f%%) |\n", ke*100, rim.Rf*100, rim.Beta, rim.RmRf*100))
+		b.WriteString(fmt.Sprintf("| **永续增长率** | g&nbsp;&nbsp; | %.1f%% | 稳态假设 |\n", gTerminal*100))
 		if currentPrice > 0 {
-			b.WriteString(fmt.Sprintf("| **当前股价** | P | %.2f元 | 实时行情 |\n", currentPrice))
+			b.WriteString(fmt.Sprintf("| **当前股价** | P&nbsp;&nbsp; | %.2f元 | 实时行情 |\n", currentPrice))
 		} else {
-			b.WriteString("| **当前股价** | P | - | 待接入实时行情 |\n")
+			b.WriteString("| **当前股价** | P&nbsp;&nbsp; | - | 待接入实时行情 |\n")
 		}
 		// 显示预测期 EPS
 		if len(rim.Result.Details) > 0 {
@@ -797,13 +797,13 @@ func writeModule7(b *strings.Builder, steps []StepResult, latest string, quote *
 				}
 				epsLine += fmt.Sprintf("第%d年 %.2f", d.Year, d.EPS)
 			}
-			b.WriteString(fmt.Sprintf("| **预测期 EPS** | - | %s | 机构一致预期 |\n", epsLine))
+			b.WriteString(fmt.Sprintf("| **预测期 EPS** | -&nbsp; | %s | 机构一致预期 |\n", epsLine))
 		}
 	} else {
-		b.WriteString("| **每股净资产** | BPS | 待计算 | 需接入实时行情与财报 |\n")
-		b.WriteString("| **资本成本** | kE | 7.0% | 假设值 |\n")
-		b.WriteString("| **永续增长率** | g | 3.0% | 假设值 |\n")
-		b.WriteString("| **当前股价** | P | - | 待接入实时行情 |\n")
+		b.WriteString("| **每股净资产** | BPS&nbsp; | 待计算 | 需接入实时行情与财报 |\n")
+		b.WriteString("| **资本成本** | kE&nbsp; | 7.0% | 假设值 |\n")
+		b.WriteString("| **永续增长率** | g&nbsp;&nbsp; | 3.0% | 假设值 |\n")
+		b.WriteString("| **当前股价** | P&nbsp;&nbsp; | - | 待接入实时行情 |\n")
 	}
 	b.WriteString("\n")
 
