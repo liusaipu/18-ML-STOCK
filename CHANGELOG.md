@@ -1,5 +1,26 @@
 # Changelog
 
+## [v1.3.24] - 2026-04-23
+
+### 新增 (Features)
+- **A-Score 指标说明折叠块**
+  - 在模块1.1（执行摘要）和模块8（A-Score 画像）的 A-Score 评分旁增加 ℹ️ 可折叠说明
+  - 说明涵盖：指标定义、六维打分逻辑、A股/港股覆盖差异、评判标准、核心价值
+
+### 优化 (Improvements)
+- **About 页面文案重写**
+  - 去掉"18维"等专业术语和"黑箱"等负面表述
+  - 最终定稿："穿透财报看真相，自动扫描财务风险，重要指标可溯源"
+  - 同步更新 GitHub 仓库描述和软件内 About 描述
+
+### 重构 (Refactor)
+- **仓库与模块名称统一**
+  - Go module 路径从 `github.com/stock-analyzer` 迁移至 `github.com/liusaipu/stockfinlens`
+  - 所有 import 路径同步替换
+  - wails.json 应用名同步更新为 `stockfinlens`
+
+---
+
 ## [v1.3.23] - 2026-04-23
 
 ### 新增 (Features)
