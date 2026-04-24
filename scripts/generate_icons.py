@@ -102,18 +102,22 @@ def prepare_source():
     # Remove white background
     src = remove_white_bg_smart(src, threshold=210)
     
-    # Thicken strokes: dilate the alpha channel slightly
+    # Thicken strokes: aggressive dilation for much bolder lines
     r, g, b, a = src.split()
     a = a.filter(ImageFilter.MaxFilter(3))
+    a = a.filter(ImageFilter.MaxFilter(3))  # second pass for extra thickness
     src = Image.merge("RGBA", (r, g, b, a))
+    
+    # Keep edges crisp after heavy dilation
+    src = src.filter(ImageFilter.UnsharpMask(radius=2, percent=150, threshold=3))
     
     # Enhance: stronger contrast & saturation for bolder, richer reds
     enhancer = ImageEnhance.Contrast(src)
-    src = enhancer.enhance(1.5)
-    enhancer = ImageEnhance.Sharpness(src)
-    src = enhancer.enhance(1.8)
-    enhancer = ImageEnhance.Color(src)
     src = enhancer.enhance(1.6)
+    enhancer = ImageEnhance.Sharpness(src)
+    src = enhancer.enhance(2.0)
+    enhancer = ImageEnhance.Color(src)
+    src = enhancer.enhance(1.8)
     
     return src
 
@@ -190,7 +194,7 @@ def generate_icon_design(size, for_macos=False, src=None):
         src = prepare_source()
     
     w = h = size
-    padding = int(size * 0.06)  # tight padding = much bigger W
+    padding = int(size * 0.03)  # very tight padding = W nearly fills the icon
     target_w = w - padding * 2
     target_h = h - padding * 2
     
