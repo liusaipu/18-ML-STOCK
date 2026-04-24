@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/stock-analyzer/analyzer"
+	"github.com/liusaipu/stockfinlens/analyzer"
 )
 
 func TestAnalyze603501(t *testing.T) {

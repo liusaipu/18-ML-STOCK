@@ -8,8 +8,8 @@
 
 1. 克隆仓库
    ```bash
-   git clone https://github.com/liusaipu/18-ML-STOCK.git
-   cd 18-ML-STOCK
+   git clone https://github.com/liusaipu/stockfinlens.git
+   cd stockfinlens
    ```
 
 2. 安装依赖

@@ -37,7 +37,7 @@ pip install akshare
 
 ```bash
 # 克隆项目
-git clone https://github.com/liusaipu/18-ML-STOCK.git
+git clone https://github.com/liusaipu/stockfinlens.git
 cd 18-ML-STOCK
 
 # 安装前端依赖

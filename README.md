@@ -8,7 +8,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Go Version](https://img.shields.io/badge/Go-%3E%3D%201.22-blue)](https://golang.org)
-[![Stars](https://img.shields.io/github/stars/liusaipu/18-ML-STOCK?style=social)](https://github.com/liusaipu/18-ML-STOCK/stargazers)
+[![Stars](https://img.shields.io/github/stars/liusaipu/stockfinlens?style=social)](https://github.com/liusaipu/stockfinlens/stargazers)
 
 [English](./README_EN.md) | 简体中文
 
@@ -88,7 +88,7 @@ A-Score = 财务造假层(60%) + 破产风险层(20%) + 非财务信号层(20%)
 
 ### 下载即用
 
-从 [Releases](https://github.com/liusaipu/18-ML-STOCK/releases) 下载对应平台安装包：
+从 [Releases](https://github.com/liusaipu/stockfinlens/releases) 下载对应平台安装包：
 
 | 平台      | 文件                           | 系统要求          |
 | ------- | ---------------------------- | ------------- |
@@ -140,7 +140,7 @@ pip install akshare
 go install github.com/wailsapp/wails/v2/cmd/wails@latest
 
 # 克隆项目
-git clone https://github.com/liusaipu/18-ML-STOCK.git
+git clone https://github.com/liusaipu/stockfinlens.git
 cd 18-ML-STOCK
 
 # 安装前端依赖
@@ -218,6 +218,6 @@ wails build
 
 如果 **股票财报透镜** 帮你看清了财报背后的真相，请 ⭐ **Star** 支持一下！
 
-[报告 Bug](https://github.com/liusaipu/18-ML-STOCK/issues) · [功能建议](https://github.com/liusaipu/18-ML-STOCK/issues) · [下载最新版](https://github.com/liusaipu/18-ML-STOCK/releases)
+[报告 Bug](https://github.com/liusaipu/stockfinlens/issues) · [功能建议](https://github.com/liusaipu/stockfinlens/issues) · [下载最新版](https://github.com/liusaipu/stockfinlens/releases)
 
 </div>

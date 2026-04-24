@@ -1,4 +1,4 @@
-module github.com/stock-analyzer
+module github.com/liusaipu/stockfinlens
 
 go 1.25.0
 

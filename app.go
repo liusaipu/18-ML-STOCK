@@ -15,8 +15,8 @@ import (
 	"sync"
 	"time"
 
-	analyzer "github.com/stock-analyzer/analyzer"
-	"github.com/stock-analyzer/downloader"
+	analyzer "github.com/liusaipu/stockfinlens/analyzer"
+	"github.com/liusaipu/stockfinlens/downloader"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 	"github.com/xuri/excelize/v2"

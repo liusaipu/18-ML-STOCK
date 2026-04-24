@@ -5,8 +5,8 @@ import (
 	"sort"
 	"time"
 
-	"github.com/stock-analyzer/analyzer"
-	"github.com/stock-analyzer/downloader"
+	"github.com/liusaipu/stockfinlens/analyzer"
+	"github.com/liusaipu/stockfinlens/downloader"
 )
 
 // 50只覆盖各行业和市值特征的样本股

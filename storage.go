@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/stock-analyzer/analyzer"
-	"github.com/stock-analyzer/downloader"
+	"github.com/liusaipu/stockfinlens/analyzer"
+	"github.com/liusaipu/stockfinlens/downloader"
 )
 
 // Storage 本地文件存储管理器

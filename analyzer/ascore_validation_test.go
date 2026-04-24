@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/stock-analyzer/downloader"
+	"github.com/liusaipu/stockfinlens/downloader"
 )
 
 func TestAScoreValidation(t *testing.T) {
