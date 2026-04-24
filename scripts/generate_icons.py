@@ -92,23 +92,28 @@ def remove_white_bg_smart(img, threshold=210):
 
 
 def prepare_source():
-    """Load source, upscale, remove bg, enhance colors."""
+    """Load source, upscale, remove bg, thicken strokes, enhance colors."""
     src = Image.open(SRC_IMG).convert("RGBA")
     
-    # Upscale first to get smooth edges (source is only 195x147)
-    upscale = 6
+    # Upscale more for smoother edges (source is only 195x147)
+    upscale = 10
     src = src.resize((src.width * upscale, src.height * upscale), Image.LANCZOS)
     
     # Remove white background
     src = remove_white_bg_smart(src, threshold=210)
     
-    # Enhance: make reds more vibrant and add contrast
+    # Thicken strokes: dilate the alpha channel slightly
+    r, g, b, a = src.split()
+    a = a.filter(ImageFilter.MaxFilter(3))
+    src = Image.merge("RGBA", (r, g, b, a))
+    
+    # Enhance: stronger contrast & saturation for bolder, richer reds
     enhancer = ImageEnhance.Contrast(src)
-    src = enhancer.enhance(1.25)
+    src = enhancer.enhance(1.5)
     enhancer = ImageEnhance.Sharpness(src)
-    src = enhancer.enhance(1.4)
+    src = enhancer.enhance(1.8)
     enhancer = ImageEnhance.Color(src)
-    src = enhancer.enhance(1.3)
+    src = enhancer.enhance(1.6)
     
     return src
 
@@ -164,9 +169,9 @@ def create_bg(size, for_macos=False):
     w, h = size
     rr = 0.22 if for_macos else 0.18
     
-    # Rich dark gradient with subtle red undertone
-    bg_top = (35, 32, 36, 255)
-    bg_bottom = (20, 18, 22, 255)
+    # Rich dark gradient with stronger red undertone for more presence
+    bg_top = (42, 35, 38, 255)
+    bg_bottom = (18, 14, 16, 255)
     bg = make_gradient((w, h), bg_top, bg_bottom)
     
     # Apply rounded mask
@@ -185,7 +190,7 @@ def generate_icon_design(size, for_macos=False, src=None):
         src = prepare_source()
     
     w = h = size
-    padding = int(size * 0.12)  # smaller padding = bigger W
+    padding = int(size * 0.06)  # tight padding = much bigger W
     target_w = w - padding * 2
     target_h = h - padding * 2
     
@@ -201,9 +206,9 @@ def generate_icon_design(size, for_macos=False, src=None):
     # Resize to target
     w_img = src.resize((new_w, new_h), Image.LANCZOS)
     
-    # Layer effects: glow -> shadow
-    w_glow = add_outer_glow(w_img, blur=max(10, size // 25), glow_color=(210, 35, 45, 65))
-    w_final = add_drop_shadow(w_glow, offset=(0, max(2, size // 70)), blur=max(8, size // 30), shadow_color=(0, 0, 0, 90))
+    # Layer effects: stronger glow -> shadow
+    w_glow = add_outer_glow(w_img, blur=max(14, size // 18), glow_color=(235, 45, 55, 85))
+    w_final = add_drop_shadow(w_glow, offset=(0, max(3, size // 50)), blur=max(10, size // 25), shadow_color=(0, 0, 0, 110))
     
     # Background
     bg = create_bg((w, h), for_macos=for_macos)
