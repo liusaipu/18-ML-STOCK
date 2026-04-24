@@ -96,28 +96,27 @@ def prepare_source():
     src = Image.open(SRC_IMG).convert("RGBA")
     
     # Upscale more for smoother edges (source is only 195x147)
-    upscale = 10
+    upscale = 12
     src = src.resize((src.width * upscale, src.height * upscale), Image.LANCZOS)
     
     # Remove white background
     src = remove_white_bg_smart(src, threshold=210)
     
-    # Thicken strokes: aggressive dilation for much bolder lines
+    # Thicken strokes: heavy dilation for much bolder lines
     r, g, b, a = src.split()
-    a = a.filter(ImageFilter.MaxFilter(3))
-    a = a.filter(ImageFilter.MaxFilter(3))  # second pass for extra thickness
+    a = a.filter(ImageFilter.MaxFilter(5))  # large kernel for bold strokes
     src = Image.merge("RGBA", (r, g, b, a))
     
     # Keep edges crisp after heavy dilation
-    src = src.filter(ImageFilter.UnsharpMask(radius=2, percent=150, threshold=3))
+    src = src.filter(ImageFilter.UnsharpMask(radius=3, percent=200, threshold=3))
     
     # Enhance: stronger contrast & saturation for bolder, richer reds
     enhancer = ImageEnhance.Contrast(src)
-    src = enhancer.enhance(1.6)
-    enhancer = ImageEnhance.Sharpness(src)
-    src = enhancer.enhance(2.0)
-    enhancer = ImageEnhance.Color(src)
     src = enhancer.enhance(1.8)
+    enhancer = ImageEnhance.Sharpness(src)
+    src = enhancer.enhance(2.2)
+    enhancer = ImageEnhance.Color(src)
+    src = enhancer.enhance(2.0)
     
     return src
 
