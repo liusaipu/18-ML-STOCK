@@ -291,6 +291,8 @@ func writeModule1(b *strings.Builder, symbol string, steps []StepResult, latest,
 		b.WriteString(fmt.Sprintf("| **综合建议** | **%s** | **%.0f/100** | %s |\n", investmentGrade(weighted), weighted, strategyAdvice(weighted)))
 	}
 	b.WriteString("\n")
+	b.WriteString(aScoreTooltip())
+	b.WriteString("\n")
 
 	b.WriteString("## 1.2 综合评级与建议\n\n")
 	if score != nil {
@@ -2612,4 +2614,22 @@ func ExtractHighlightsAndRisks(steps []StepResult, years []string) HighlightRisk
 	}
 
 	return HighlightRisk{Highlights: highlights, Risks: risks}
+}
+
+// aScoreTooltip 返回 A-Score 指标说明的 Markdown 折叠块
+func aScoreTooltip() string {
+	return `<details>
+<summary>ℹ️ A-Score 是什么？</summary>
+
+**A-Score（0-100分）综合评估企业财务风险，分数越高，潜在隐患越大。**
+
+基于公开财务报表与监管信息，从六个维度打分：**财务造假风险、偿债能力、现金流质量、应收账款健康度、盈利稳定性**，以及**股权质押/减持/监管问询**等非财务信号。其中财务维度适用于 A 股与港股，非财务信号目前主要覆盖 A 股。
+
+**评判标准**：< 40分安全，40-60分低风险，60-70分中风险（需深入核查），≥ 70分高危（建议回避）。
+
+**核心价值**：在财报暴雷前发现财务隐患，快速筛掉有明显问题的公司。
+
+</details>
+
+`
 }
