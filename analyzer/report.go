@@ -222,7 +222,7 @@ func writeEightIndicatorsHighlight(b *strings.Builder, steps []StepResult, lates
 
 	// 添加 A-Score 风险评分
 	ascore := getStepValue(steps, 8, latest, "AScore")
-	b.WriteString("### A-Score 风险评分" + infoIcon("A-Score 风险评分", "A-Score（0-100分）综合评估企业财务风险，分数越高，潜在隐患越大。<br/>基于公开财务报表与监管信息，从六个维度打分：财务造假风险、偿债能力、现金流质量、应收账款健康度、盈利稳定性，以及股权质押/减持/监管问询等非财务信号。其中财务维度适用于 A 股与港股，非财务信号目前主要覆盖 A 股。<br/><strong>评判标准</strong>：&lt; 40分安全，40-60分低风险，60-70分中风险（需深入核查），≥ 70分高危（建议回避）。<br/><strong>核心价值</strong>：在财报暴雷前发现财务隐患，快速筛掉有明显问题的公司。") + "\n\n")
+	b.WriteString("### A-Score 风险评分 " + infoIcon("A-Score 风险评分", "A-Score（0-100分）综合评估企业财务风险，分数越高，潜在隐患越大。<br/>基于公开财务报表与监管信息，从六个维度打分：财务造假风险、偿债能力、现金流质量、应收账款健康度、盈利稳定性，以及股权质押/减持/监管问询等非财务信号。其中财务维度适用于 A 股与港股，非财务信号目前主要覆盖 A 股。<br/><strong>评判标准</strong>：&lt; 40分安全，40-60分低风险，60-70分中风险（需深入核查），≥ 70分高危（建议回避）。<br/><strong>核心价值</strong>：在财报暴雷前发现财务隐患，快速筛掉有明显问题的公司。") + "\n\n")
 	b.WriteString(fmt.Sprintf("| 指标 | 数值 | 风险等级 | 说明 |\n"))
 	b.WriteString("|------|------|----------|------|\n")
 	if ascore > 0 {
