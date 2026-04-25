@@ -35,7 +35,6 @@ func writeAScoreProfile(b *strings.Builder, steps []StepResult, years []string, 
 
 	// 1. 总览横幅
 	b.WriteString(fmt.Sprintf("> **%s** | **A-Score = %.1f** | %s\n\n", ascoreBadge(as), as, ascoreBrief(as)))
-	b.WriteString(aScoreTooltip())
 
 	// 2. 核心子指标概览（原模块3.5内容）
 	b.WriteString("## 8.1 A-Score 核心子指标概览\n\n")
