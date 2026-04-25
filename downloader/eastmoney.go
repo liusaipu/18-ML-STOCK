@@ -1053,8 +1053,8 @@ func FetchStockKlines(market, code string, limit int) ([]KlineData, error) {
 		secid = "0." + code
 	}
 
-	// 1. 东方财富 HTTPS
-	url := fmt.Sprintf("https://push2.eastmoney.com/api/qt/stock/kline/get?ut=fa5fd1943c7b386f172d6893dbfba10b&secid=%s&fields1=f1&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f61&klt=101&fqt=0&end=20500101&lmt=%d", secid, limit)
+	// 1. 东方财富 HTTPS（使用 push2his 域名与 akshare 一致的参数，fqt=1 前复权）
+	url := fmt.Sprintf("https://push2his.eastmoney.com/api/qt/stock/kline/get?ut=fa5fd1943c7b386f172d6893dbfba10b&secid=%s&fields1=f1,f2,f3,f4,f5,f6&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61,f116&klt=101&fqt=1&end=20500101&lmt=%d", secid, limit)
 	body, err := httpGetWithReferer(url, "https://quote.eastmoney.com/")
 	if err == nil {
 		var resp struct {
@@ -1084,20 +1084,30 @@ func parseEastMoneyKlines(lines []string) []KlineData {
 		if len(parts) < 6 {
 			continue
 		}
+		open := parseStrFloat(parts[1])
+		close := parseStrFloat(parts[2])
+		high := parseStrFloat(parts[3])
+		low := parseStrFloat(parts[4])
+		// 基本数据校验：过滤明显异常的K线（如价格为0、high<low 等）
+		if open <= 0 || close <= 0 || high <= 0 || low <= 0 || high < low {
+			continue
+		}
 		amount := 0.0
 		if len(parts) > 6 {
 			amount = parseStrFloat(parts[6])
 		}
 		turnoverRate := 0.0
-		if len(parts) > 8 {
+		if len(parts) > 10 {
+			turnoverRate = parseStrFloat(parts[10])
+		} else if len(parts) > 8 {
 			turnoverRate = parseStrFloat(parts[8])
 		}
 		result = append(result, KlineData{
 			Time:         parts[0],
-			Open:         parseStrFloat(parts[1]),
-			Close:        parseStrFloat(parts[2]),
-			Low:          parseStrFloat(parts[3]),
-			High:         parseStrFloat(parts[4]),
+			Open:         open,
+			Close:        close,
+			High:         high,
+			Low:          low,
 			Volume:       parseStrFloat(parts[5]),
 			Amount:       amount,
 			TurnoverRate: turnoverRate,
