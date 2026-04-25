@@ -269,7 +269,7 @@ func writeModule1(b *strings.Builder, symbol string, steps []StepResult, latest,
 		b.WriteString(fmt.Sprintf("| **交易活跃度** | - | -/100 | 数据不足 |\n"))
 	}
 	ascore := getStepValue(steps, 8, latest, "AScore")
-	b.WriteString(fmt.Sprintf("| **A-Score风险** %s | %s | %.0f/100 | %s |\n", infoIcon("a-score"), asEmoji(ascore), ascore, ascoreComment(ascore)))
+	b.WriteString(fmt.Sprintf("| **A-Score风险** %s | %s | %.0f/100 | %s |\n", infoIcon("A-Score 风险评分", "A-Score（0-100分）综合评估企业财务风险，分数越高，潜在隐患越大。<br/>基于公开财务报表与监管信息，从六个维度打分：财务造假风险、偿债能力、现金流质量、应收账款健康度、盈利稳定性，以及股权质押/减持/监管问询等非财务信号。其中财务维度适用于 A 股与港股，非财务信号目前主要覆盖 A 股。<br/><strong>评判标准</strong>：&lt; 40分安全，40-60分低风险，60-70分中风险（需深入核查），≥ 70分高危（建议回避）。<br/><strong>核心价值</strong>：在财报暴雷前发现财务隐患，快速筛掉有明显问题的公司。"), asEmoji(ascore), ascore, ascoreComment(ascore)))
 	if ml != nil && ml.Summary != nil && ml.Summary.HasData {
 		sum := ml.Summary
 		var predText string
@@ -562,19 +562,7 @@ func writeModule4(b *strings.Builder, steps []StepResult, latest string, comp *C
 		}
 	}
 
-	b.WriteString("## 4.2 可比公司明细")
-	b.WriteString(`<details style="display:inline-block;position:relative;margin-left:8px;vertical-align:middle;">`)
-	b.WriteString(`<summary style="cursor:pointer;list-style:none;color:#1890ff;font-size:14px;">ℹ️</summary>`)
-	b.WriteString(`<div style="position:absolute;left:28px;top:-8px;width:360px;background:#fff;border:1px solid #d9d9d9;border-radius:8px;padding:12px;box-shadow:0 4px 12px rgba(0,0,0,0.15);z-index:100;font-size:13px;line-height:1.6;color:#333;">`)
-	b.WriteString(`<strong>综合得分计算方式</strong><br/>`)
-	b.WriteString(`在“当前公司 + 可比公司”池内，对每个指标做 Min-Max 标准化（0~100 分），再按以下权重加权求和：<br/>`)
-	b.WriteString(`• ROE 25%　• 毛利率 20%　• 营收增长 15%　• 现金含量 10%<br/>`)
-	b.WriteString(`• 负债率 10%（反向，越低越好）<br/>`)
-	b.WriteString(`• A-Score 10%（反向，越低越好）<br/>`)
-	b.WriteString(`• 活跃度 10%<br/>`)
-	b.WriteString(`<em>缺失活跃度时，使用可比池有效样本的中位数替代，标记为 *</em>`)
-	b.WriteString(`</div></details>`)
-	b.WriteString("\n\n")
+	b.WriteString("## 4.2 可比公司明细" + infoTooltipHTML("综合得分计算方式", `在“当前公司 + 可比公司”池内，对每个指标做 Min-Max 标准化（0~100 分），再按以下权重加权求和：<br/>• ROE 25%　• 毛利率 20%　• 营收增长 15%　• 现金含量 10%<br/>• 负债率 10%（反向，越低越好）<br/>• A-Score 10%（反向，越低越好）<br/>• 活跃度 10%<br/><em>缺失活跃度时，使用可比池有效样本的中位数替代，标记为 *</em>`) + "\n\n")
 	if hasMissingActivity {
 		b.WriteString(`<div class="activity-hint" style="margin:6px 0 10px;font-size:12px;color:#94a3b8;">`)
 		b.WriteString(`<span>部分可比公司活跃度使用样本中位数替代，</span>`)
@@ -2224,8 +2212,12 @@ func fmtVal(v float64, unit string) string {
 	return fmt.Sprintf("%.3f", v)
 }
 
-func infoIcon(key string) string {
-	return fmt.Sprintf(`<span class="info-icon" data-key="%s">ℹ️</span>`, key)
+func infoTooltipHTML(title, body string) string {
+	return fmt.Sprintf(`<details class="inline-tooltip"><summary>ℹ️</summary><div class="inline-tooltip-body"><strong>%s</strong><br/>%s</div></details>`, title, body)
+}
+
+func infoIcon(title, body string) string {
+	return infoTooltipHTML(title, body)
 }
 
 func traceTrigger(stepNums ...int) string {

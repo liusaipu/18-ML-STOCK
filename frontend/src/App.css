@@ -1329,49 +1329,61 @@ body.light .trace-trigger-btn:hover {
   background: rgba(37, 99, 235, 0.1);
 }
 
-/* 信息图标按钮 */
-.info-icon-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  height: 18px;
-  padding: 0;
-  margin: 0 0 0 4px;
-  font-size: 13px;
-  line-height: 1;
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: #64748b;
-  border-radius: 50%;
+/* 内联信息提示 tooltip */
+.inline-tooltip {
+  display: inline-block;
+  position: relative;
+  margin-left: 6px;
   vertical-align: middle;
-  transition: color 0.15s, background 0.15s;
 }
 
-.info-icon-btn:hover {
+.inline-tooltip summary {
+  cursor: pointer;
+  list-style: none;
   color: #3b82f6;
-  background: rgba(59, 130, 246, 0.12);
+  font-size: 14px;
+  line-height: 1;
+  user-select: none;
 }
 
-body.light .info-icon-btn {
-  color: #9ca3af;
+.inline-tooltip summary::-webkit-details-marker {
+  display: none;
 }
 
-body.light .info-icon-btn:hover {
-  color: #2563eb;
-  background: rgba(37, 99, 235, 0.1);
-}
-
-.info-tooltip-content .info-tooltip-body p {
-  margin: 0 0 10px 0;
+.inline-tooltip .inline-tooltip-body {
+  position: absolute;
+  left: 28px;
+  top: -8px;
+  width: 360px;
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  padding: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+  z-index: 100;
   font-size: 13px;
-  line-height: 1.7;
-  color: #94a3b8;
+  line-height: 1.6;
+  color: #e2e8f0;
 }
 
-body.light .info-tooltip-content .info-tooltip-body p {
-  color: #4b5563;
+.inline-tooltip .inline-tooltip-body strong {
+  color: #f8fafc;
+  font-size: 14px;
+}
+
+body.light .inline-tooltip summary {
+  color: #2563eb;
+}
+
+body.light .inline-tooltip .inline-tooltip-body {
+  background: #ffffff;
+  border-color: #d9d9d9;
+  color: #333333;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+body.light .inline-tooltip .inline-tooltip-body strong {
+  color: #111827;
 }
 
 /* 计算溯源抽屉 */
