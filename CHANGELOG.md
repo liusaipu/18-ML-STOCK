@@ -1,5 +1,39 @@
 # Changelog
 
+## [v1.3.25] - 2026-04-25
+
+### 修复 (Fixes)
+- **K线开盘价显示异常**
+  - 修复所有股票 K 线开盘价显示为递减序列（119、118、117...）的问题
+  - 根因：WebView2/Vite 缓存了旧前端页面；同时 ECharts `candle.data` 解析与预期不一致
+  - tooltip 改为使用 `params.dataIndex` 直接从 `displayData` 数组取值，彻底绕过 ECharts 内部数据解析层
+
+- **换手柱图不显示**
+  - 根因：`App.tsx` 传递的 `quote` 为 `null`，`UnifiedChart` 无法补算历史换手率
+  - `UnifiedChart` 改为独立调用 `GetStockQuote` 获取行情，不再依赖父组件的 `quote` prop
+  - `GetStockQuote` 缓存校验增加 `CirculatingMarketCap > 0` 条件，防止无效缓存持续返回
+
+- **涨跌额/涨跌幅计算错误**
+  - 从 `当天收盘 - 当天开盘` 修正为 `当天收盘 - 昨天收盘`
+  - 涨跌幅基准同步修正为昨天收盘价
+
+- **MACD 柱状图数值偏差**
+  - 公式从 `DIF - DEA` 修正为 `2 × (DIF - DEA)`，与雪球、同花顺等主流软件一致
+
+- **RSI 指标偏差与单周期问题**
+  - 计算方法从简单平均（SMA）改为 Wilder's smoothing（指数平滑），与雪球一致
+  - 从单条 RSI(14) 扩展为 RSI6、RSI12、RSI24 三条线，与雪球 RSI(6,12,24) 对齐
+
+### 数据层 (Data)
+- **东方财富 K 线接口适配**
+  - 域名切换为 `push2his.eastmoney.com`
+  - 新增参数：`fqt=1`（前复权）、`rtntype=6`、`beg=0`、`end=20500101`
+  - 扩展 `fields2` 字段：`f51-f61,f116`
+  - `parseEastMoneyKlines` 增加 `offset=1` 适配新接口默认返回格式
+  - 增加数据校验：过滤价格≤0、`high<low` 等异常行
+
+---
+
 ## [v1.3.24] - 2026-04-23
 
 ### 新增 (Features)

@@ -2232,7 +2232,7 @@ func traceTrigger(stepNums ...int) string {
 		}
 		sb.WriteString(fmt.Sprintf("%d", n))
 	}
-	sb.WriteString(`">ℹ️</span>`)
+	sb.WriteString(`">❓</span>`)
 	return sb.String()
 }
 

@@ -1337,6 +1337,22 @@ body.light .trace-trigger-btn:hover {
   vertical-align: middle;
 }
 
+/* 隐藏 <details> summary 的默认三角形标记 */
+.inline-tooltip summary {
+  list-style: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+}
+
+.inline-tooltip summary::-webkit-details-marker {
+  display: none;
+}
+
+.inline-tooltip summary::marker {
+  display: none;
+}
+
 .inline-tooltip-trigger {
   cursor: pointer;
   color: #3b82f6;

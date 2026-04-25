@@ -1053,8 +1053,9 @@ func FetchStockKlines(market, code string, limit int) ([]KlineData, error) {
 		secid = "0." + code
 	}
 
-	// 1. 东方财富 HTTPS（使用 push2his 域名与 akshare 一致的参数，fqt=1 前复权）
-	url := fmt.Sprintf("https://push2his.eastmoney.com/api/qt/stock/kline/get?ut=fa5fd1943c7b386f172d6893dbfba10b&secid=%s&fields1=f1,f2,f3,f4,f5,f6&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61,f116&klt=101&fqt=1&end=20500101&lmt=%d", secid, limit)
+	// 1. 东方财富 HTTPS（使用 push2his 域名与 akshare 一致的参数，fqt=1 前复权，rtntype=6 确保 fields2 生效）
+	url := fmt.Sprintf("https://push2his.eastmoney.com/api/qt/stock/kline/get?ut=fa5fd1943c7b386f172d6893dbfba10b&secid=%s&fields1=f1,f2,f3,f4,f5,f6&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61,f116&klt=101&fqt=1&beg=0&end=20500101&rtntype=6&lmt=%d", secid, limit)
+	fmt.Printf("[FetchStockKlines] EastMoney URL: %s\n", url)
 	body, err := httpGetWithReferer(url, "https://quote.eastmoney.com/")
 	if err == nil {
 		var resp struct {
@@ -1063,8 +1064,17 @@ func FetchStockKlines(market, code string, limit int) ([]KlineData, error) {
 			} `json:"data"`
 		}
 		if json.Unmarshal(body, &resp) == nil && len(resp.Data.Klines) > 0 {
+			fmt.Printf("[FetchStockKlines] EastMoney returned %d klines, first=%s\n", len(resp.Data.Klines), resp.Data.Klines[0])
 			return parseEastMoneyKlines(resp.Data.Klines), nil
+		} else {
+			prefixLen := 200
+			if len(body) < prefixLen {
+				prefixLen = len(body)
+			}
+			fmt.Printf("[FetchStockKlines] EastMoney unmarshal fail or empty klines, body prefix=%s\n", string(body)[:prefixLen])
 		}
+	} else {
+		fmt.Printf("[FetchStockKlines] EastMoney request error: %v\n", err)
 	}
 
 	// 2. 腾讯财经 HTTPS
@@ -1079,39 +1089,51 @@ func FetchStockKlines(market, code string, limit int) ([]KlineData, error) {
 
 func parseEastMoneyKlines(lines []string) []KlineData {
 	var result []KlineData
+	// push2his.eastmoney.com 默认返回格式（fields2未生效时）：
+	// 日期,天数计数,开盘,收盘,最低,最高,成交量,成交额,振幅,涨跌幅,涨跌额,换手率
+	// 即所有字段相对于标准格式向后偏移1位
+	const offset = 1
+
 	for _, line := range lines {
 		parts := strings.Split(line, ",")
-		if len(parts) < 6 {
+		if len(parts) < 6+offset {
 			continue
 		}
-		open := parseStrFloat(parts[1])
-		close := parseStrFloat(parts[2])
-		high := parseStrFloat(parts[3])
-		low := parseStrFloat(parts[4])
+
+		open := parseStrFloat(parts[1+offset])
+		close := parseStrFloat(parts[2+offset])
+		low := parseStrFloat(parts[3+offset])   // push2his默认: parts[4]=最低
+		high := parseStrFloat(parts[4+offset])  // push2his默认: parts[5]=最高
+
 		// 基本数据校验：过滤明显异常的K线（如价格为0、high<low 等）
 		if open <= 0 || close <= 0 || high <= 0 || low <= 0 || high < low {
 			continue
 		}
+
 		amount := 0.0
-		if len(parts) > 6 {
-			amount = parseStrFloat(parts[6])
+		if len(parts) > 6+offset {
+			amount = parseStrFloat(parts[6+offset])
 		}
 		turnoverRate := 0.0
-		if len(parts) > 10 {
-			turnoverRate = parseStrFloat(parts[10])
-		} else if len(parts) > 8 {
-			turnoverRate = parseStrFloat(parts[8])
+		if len(parts) > 10+offset {
+			turnoverRate = parseStrFloat(parts[10+offset])
+		} else if len(parts) > 8+offset {
+			turnoverRate = parseStrFloat(parts[8+offset])
 		}
+
 		result = append(result, KlineData{
 			Time:         parts[0],
 			Open:         open,
 			Close:        close,
 			High:         high,
 			Low:          low,
-			Volume:       parseStrFloat(parts[5]),
+			Volume:       parseStrFloat(parts[5+offset]),
 			Amount:       amount,
 			TurnoverRate: turnoverRate,
 		})
+	}
+	if len(result) > 0 {
+		fmt.Printf("[parseEastMoneyKlines] parsed %d klines, first=%+v\n", len(result), result[0])
 	}
 	return result
 }

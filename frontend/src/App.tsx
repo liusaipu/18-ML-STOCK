@@ -1540,6 +1540,8 @@ function App() {
                 setTraceList(matched)
                 setCurrentTrace(matched[0])
                 setTraceDrawerOpen(true)
+              } else {
+                alert('暂无该指标的计算过程数据，请重新执行分析后再试。')
               }
             }}
             title="查看计算过程"

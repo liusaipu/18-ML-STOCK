@@ -1179,7 +1179,16 @@ func (a *App) GetStockKlines(symbol string) ([]downloader.KlineData, error) {
 	}
 	code := parts[0]
 	market := strings.ToUpper(parts[1])
-	return downloader.FetchStockKlines(market, code, 375)
+	klist, err := downloader.FetchStockKlines(market, code, 375)
+	if err != nil {
+		debugLog("[GetStockKlines] %s FetchStockKlines error: %v", symbol, err)
+		return nil, err
+	}
+	if len(klist) > 0 {
+		last := klist[len(klist)-1]
+		debugLog("[GetStockKlines] %s fetched %d klines, last={Time:%s Open:%.2f Close:%.2f High:%.2f Low:%.2f}", symbol, len(klist), last.Time, last.Open, last.Close, last.High, last.Low)
+	}
+	return klist, nil
 }
 
 // GetStockQuote 获取股票实时行情（带15分钟本地缓存）
@@ -1194,11 +1203,12 @@ func (a *App) GetStockQuote(symbol string) (*downloader.StockQuote, error) {
 		path := filepath.Join(a.storage.DataDir(), "data", symbol, "quote.json")
 		info, err := os.Stat(path)
 		if err == nil && time.Since(info.ModTime()) < 15*time.Minute {
-			// 校验缓存数据是否合理（过滤掉错误解析的巨大盘百分比或时间戳）
-			if cached.CurrentPrice > 0 && cached.ChangePercent > -50 && cached.ChangePercent < 50 {
+			// 校验缓存数据是否合理（过滤掉错误解析的巨大盘百分比或时间戳，同时校验流通市值）
+			if cached.CurrentPrice > 0 && cached.ChangePercent > -50 && cached.ChangePercent < 50 && cached.CirculatingMarketCap > 0 {
 				a.fillShareholderReturnRate(symbol, cached)
 				return cached, nil
 			}
+			debugLog("[GetStockQuote] %s cache invalid (price=%.2f change=%.2f cap=%.0f), refetching", symbol, cached.CurrentPrice, cached.ChangePercent, cached.CirculatingMarketCap)
 		}
 	}
 
@@ -1215,6 +1225,7 @@ func (a *App) GetStockQuote(symbol string) (*downloader.StockQuote, error) {
 	if err != nil {
 		return nil, fmt.Errorf("获取行情失败: %w", err)
 	}
+	debugLog("[GetStockQuote] %s quote={CurrentPrice:%.2f CirculatingMarketCap:%.0f MarketCap:%.0f}", symbol, quote.CurrentPrice, quote.CirculatingMarketCap, quote.MarketCap)
 	_ = a.storage.SaveStockQuote(symbol, quote)
 	a.fillShareholderReturnRate(symbol, quote)
 	return quote, nil

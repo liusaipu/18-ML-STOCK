@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import * as echarts from 'echarts'
 import type { downloader } from '../wailsjs/go/models'
-import { GetStockKlines } from '../wailsjs/go/main/App'
+import { GetStockKlines, GetStockQuote } from '../wailsjs/go/main/App'
 
 type KlineData = downloader.KlineData
 type StockQuote = downloader.StockQuote
@@ -22,7 +22,9 @@ const colors = {
   signal: '#3b82f6',
   histPositive: '#ef4444',
   histNegative: '#22c55e',
-  rsi: '#8b5cf6',
+  rsi6: '#f97316',
+  rsi12: '#a78bfa',
+  rsi24: '#94a3b8',
   bbUpper: '#ef4444',
   bbMid: '#f59e0b',
   bbLower: '#10b981',
@@ -73,21 +75,41 @@ function calculateIndicators(data: KlineData[]) {
     if (dif[i] == null) dea.push(null)
     else dea.push(validDea[deaIdx++] ?? null)
   }
-  const hist: (number | null)[] = dif.map((v, i) => (v == null || dea[i] == null) ? null : v - dea[i]!)
+  const hist: (number | null)[] = dif.map((v, i) => (v == null || dea[i] == null) ? null : 2 * (v - dea[i]!))
 
-  const rsi: (number | null)[] = []
-  for (let i = 0; i < closes.length; i++) {
-    if (i < 14) { rsi.push(null); continue }
-    let gains = 0, losses = 0
-    for (let j = i - 13; j <= i; j++) {
-      const diff = closes[j] - closes[j - 1]
-      if (diff >= 0) gains += diff
-      else losses += -diff
+  function calcRSI(period: number): (number | null)[] {
+    const result: (number | null)[] = []
+    let avgGain = 0
+    let avgLoss = 0
+    for (let i = 0; i < closes.length; i++) {
+      if (i === 0) { result.push(null); continue }
+      const diff = closes[i] - closes[i - 1]
+      const gain = diff > 0 ? diff : 0
+      const loss = diff < 0 ? -diff : 0
+      if (i < period) {
+        // 积累初始 period 个变化值
+        avgGain += gain
+        avgLoss += loss
+        result.push(null)
+      } else if (i === period) {
+        // 第一个 RSI：简单平均
+        avgGain += gain
+        avgLoss += loss
+        avgGain /= period
+        avgLoss /= period
+        result.push(avgLoss === 0 ? 100 : 100 - 100 / (1 + avgGain / avgLoss))
+      } else {
+        // 后续 RSI：Wilder's smoothing
+        avgGain = (avgGain * (period - 1) + gain) / period
+        avgLoss = (avgLoss * (period - 1) + loss) / period
+        result.push(avgLoss === 0 ? 100 : 100 - 100 / (1 + avgGain / avgLoss))
+      }
     }
-    const avgGain = gains / 14
-    const avgLoss = losses / 14
-    rsi.push(avgLoss === 0 ? 100 : 100 - 100 / (1 + avgGain / avgLoss))
+    return result
   }
+  const rsi6 = calcRSI(6)
+  const rsi12 = calcRSI(12)
+  const rsi24 = calcRSI(24)
 
   const bbUpper: (number | null)[] = [], bbMid: (number | null)[] = [], bbLower: (number | null)[] = []
   for (let i = 0; i < closes.length; i++) {
@@ -100,7 +122,7 @@ function calculateIndicators(data: KlineData[]) {
     bbLower.push(mean - 2 * std)
   }
 
-  return { dif, dea, hist, rsi, bbUpper, bbMid, bbLower, ma5, ma10, ma30, ma60 }
+  return { dif, dea, hist, rsi6, rsi12, rsi24, bbUpper, bbMid, bbLower, ma5, ma10, ma30, ma60 }
 }
 
 function fmt2(v: any): string {
@@ -122,13 +144,20 @@ function fmt1(v: any): string {
   return n.toFixed(1)
 }
 
-export function UnifiedChart({ code, quote }: Props) {
+export function UnifiedChart({ code, quote: propQuote }: Props) {
   const chartRef = useRef<HTMLDivElement>(null)
   const chartInstanceRef = useRef<echarts.ECharts | null>(null)
   const [rawData, setRawData] = useState<KlineData[]>([])
+  const [localQuote, setLocalQuote] = useState<StockQuote | undefined>(propQuote)
   const [loading, setLoading] = useState(false)
   const [isExpanded, setIsExpanded] = useState(false)
 
+  // 如果 propQuote 变化，同步更新 localQuote
+  useEffect(() => {
+    setLocalQuote(propQuote)
+  }, [propQuote])
+
+  // K 线数据加载
   useEffect(() => {
     if (!code) return
     setLoading(true)
@@ -138,8 +167,21 @@ export function UnifiedChart({ code, quote }: Props) {
       .finally(() => setLoading(false))
   }, [code])
 
+  // 自己获取行情（如果 propQuote 为 null/undefined）
+  useEffect(() => {
+    if (!code || propQuote) return
+    GetStockQuote(code)
+      .then((q) => {
+        if (q && q.currentPrice > 0) {
+          setLocalQuote(q)
+        }
+      })
+      .catch(() => {})
+  }, [code, propQuote])
+
   const data = useMemo(() => {
     if (rawData.length === 0) return []
+    const quote = localQuote
     const hasTurnover = rawData.some(d => d.turnoverRate > 0)
     if (hasTurnover || !quote || quote.circulatingMarketCap <= 0 || quote.currentPrice <= 0) {
       return rawData
@@ -149,7 +191,7 @@ export function UnifiedChart({ code, quote }: Props) {
       ...d,
       turnoverRate: (d.volume * 100 / circulatingShares) * 100,
     }))
-  }, [rawData, quote])
+  }, [rawData, localQuote])
 
   useEffect(() => {
     if (!chartRef.current || data.length === 0) return
@@ -164,7 +206,7 @@ export function UnifiedChart({ code, quote }: Props) {
     chart.getZr().on('dblclick', () => setIsExpanded(v => !v))
 
     const displaySize = isExpanded ? 250 : 120
-    const { dif, dea, hist, rsi, bbUpper, bbMid, bbLower, ma5, ma10, ma30, ma60 } = calculateIndicators(data)
+    const { dif, dea, hist, rsi6, rsi12, rsi24, bbUpper, bbMid, bbLower, ma5, ma10, ma30, ma60 } = calculateIndicators(data)
 
     const displayData = data.slice(-displaySize)
     const padCount = displaySize - displayData.length
@@ -217,18 +259,23 @@ export function UnifiedChart({ code, quote }: Props) {
 
           const leftItems: string[] = []
           const candle = params.find((p: any) => p.seriesName === 'K线')
-          if (candle && candle.data) {
-            const [o, c, l, h] = candle.data
-            const change = c - o
-            const changePct = o !== 0 ? (change / o) * 100 : 0
-            const changeColor = change >= 0 ? '#ef4444' : '#22c55e'
-            const changeSign = change >= 0 ? '+' : ''
-            leftItems.push(`<div style="display:flex;justify-content:space-between;gap:18px"><span style="color:#94a3b8">开盘</span><span>${fmt2(o)}</span></div>`)
-            leftItems.push(`<div style="display:flex;justify-content:space-between;gap:18px"><span style="color:#94a3b8">收盘</span><span>${fmt2(c)}</span></div>`)
-            leftItems.push(`<div style="display:flex;justify-content:space-between;gap:18px"><span style="color:#94a3b8">涨跌额</span><span style="color:${changeColor}">${changeSign}${fmt2(change)}</span></div>`)
-            leftItems.push(`<div style="display:flex;justify-content:space-between;gap:18px"><span style="color:#94a3b8">涨跌幅</span><span style="color:${changeColor}">${changeSign}${fmt2(changePct)}%</span></div>`)
-            leftItems.push(`<div style="display:flex;justify-content:space-between;gap:18px"><span style="color:#94a3b8">最低</span><span>${fmt2(l)}</span></div>`)
-            leftItems.push(`<div style="display:flex;justify-content:space-between;gap:18px"><span style="color:#94a3b8">最高</span><span>${fmt2(h)}</span></div>`)
+          if (candle) {
+            const idx = candle.dataIndex - padCount
+            const d = displayData[idx]
+            if (d) {
+              const o = d.open, c = d.close, l = d.low, h = d.high
+              const prevClose = idx > 0 ? displayData[idx - 1].close : o
+              const change = c - prevClose
+              const changePct = prevClose !== 0 ? (change / prevClose) * 100 : 0
+              const changeColor = change >= 0 ? '#ef4444' : '#22c55e'
+              const changeSign = change >= 0 ? '+' : ''
+              leftItems.push(`<div style="display:flex;justify-content:space-between;gap:18px"><span style="color:#94a3b8">开盘</span><span>${fmt2(o)}</span></div>`)
+              leftItems.push(`<div style="display:flex;justify-content:space-between;gap:18px"><span style="color:#94a3b8">收盘</span><span>${fmt2(c)}</span></div>`)
+              leftItems.push(`<div style="display:flex;justify-content:space-between;gap:18px"><span style="color:#94a3b8">涨跌额</span><span style="color:${changeColor}">${changeSign}${fmt2(change)}</span></div>`)
+              leftItems.push(`<div style="display:flex;justify-content:space-between;gap:18px"><span style="color:#94a3b8">涨跌幅</span><span style="color:${changeColor}">${changeSign}${fmt2(changePct)}%</span></div>`)
+              leftItems.push(`<div style="display:flex;justify-content:space-between;gap:18px"><span style="color:#94a3b8">最低</span><span>${fmt2(l)}</span></div>`)
+              leftItems.push(`<div style="display:flex;justify-content:space-between;gap:18px"><span style="color:#94a3b8">最高</span><span>${fmt2(h)}</span></div>`)
+            }
           }
           params.filter((p: any) => ['MA5', 'MA10', 'MA30', 'MA60'].includes(p.seriesName)).forEach((p: any) => {
             const color = p.color || '#94a3b8'
@@ -249,10 +296,13 @@ export function UnifiedChart({ code, quote }: Props) {
               rightItems.push(`<div style="display:flex;justify-content:space-between;gap:18px"><span style="color:${color}">● ${p.seriesName}</span><span>${fmt3(p.value)}</span></div>`)
             })
           }
-          const rsiP = params.find((p: any) => p.seriesName === 'RSI')
-          if (rsiP) {
+          const rsiParams = params.filter((p: any) => ['RSI6', 'RSI12', 'RSI24'].includes(p.seriesName))
+          if (rsiParams.length) {
             if (rightItems.length) rightItems.push('<div style="border-top:1px solid rgba(148,163,184,0.12);margin:4px 0"></div>')
-            rightItems.push(`<div style="display:flex;justify-content:space-between;gap:18px"><span style="color:${colors.rsi}">● RSI</span><span>${fmt1(rsiP.value)}</span></div>`)
+            rsiParams.forEach((p: any) => {
+              const colorMap: Record<string, string> = { RSI6: colors.rsi6, RSI12: colors.rsi12, RSI24: colors.rsi24 }
+              rightItems.push(`<div style="display:flex;justify-content:space-between;gap:18px"><span style="color:${colorMap[p.seriesName] || '#94a3b8'}">● ${p.seriesName}</span><span>${fmt1(p.value)}</span></div>`)
+            })
           }
           const bbParams = params.filter((p: any) => ['上轨', '中轨', '下轨'].includes(p.seriesName))
           if (bbParams.length) {
@@ -302,7 +352,7 @@ export function UnifiedChart({ code, quote }: Props) {
         { scale: true, splitArea: { show: false }, splitLine: { lineStyle: { color: 'rgba(148, 163, 184, 0.08)' } }, gridIndex: 0, position: 'left', axisLabel: { fontSize: 10, color: '#94a3b8', margin: 10 }, splitNumber: 5, name: 'K线', nameLocation: 'middle', nameRotate: 0, nameGap: 32, nameTextStyle: { color: '#94a3b8', fontSize: 11, align: 'right' }, axisPointer: { label: { show: true, formatter: (params: any) => fmt2(params.value) } } },
         { scale: true, splitArea: { show: false }, splitLine: { lineStyle: { color: 'rgba(148, 163, 184, 0.08)' } }, gridIndex: 1, position: 'left', axisLabel: { fontSize: 10, color: '#94a3b8', margin: 10 }, splitNumber: 2, name: '换手', nameLocation: 'middle', nameRotate: 0, nameGap: 32, nameTextStyle: { color: '#94a3b8', fontSize: 11, align: 'right' }, axisPointer: { label: { show: true, formatter: (params: any) => fmt2(params.value) + '%' } } },
         { scale: true, splitArea: { show: false }, splitLine: { lineStyle: { color: 'rgba(148, 163, 184, 0.08)' } }, gridIndex: 2, position: 'left', axisLabel: { fontSize: 10, color: '#94a3b8', margin: 10 }, splitNumber: 3, name: 'MACD', nameLocation: 'middle', nameRotate: 0, nameGap: 32, nameTextStyle: { color: '#94a3b8', fontSize: 11, align: 'right' }, axisPointer: { label: { show: true, formatter: (params: any) => fmt3(params.value) } } },
-        { scale: true, splitArea: { show: false }, splitLine: { lineStyle: { color: 'rgba(148, 163, 184, 0.08)' } }, min: 0, max: 100, gridIndex: 3, position: 'left', axisLabel: { fontSize: 10, color: '#94a3b8', margin: 10 }, splitNumber: 2, name: 'RSI', nameLocation: 'middle', nameRotate: 0, nameGap: 32, nameTextStyle: { color: '#94a3b8', fontSize: 11, align: 'right' }, axisPointer: { label: { show: true, formatter: (params: any) => fmt1(params.value) } } },
+        { scale: true, splitArea: { show: false }, splitLine: { lineStyle: { color: 'rgba(148, 163, 184, 0.08)' } }, min: 0, max: 100, gridIndex: 3, position: 'left', axisLabel: { fontSize: 10, color: '#94a3b8', margin: 10 }, splitNumber: 2, name: 'RSI(6,12,24)', nameLocation: 'middle', nameRotate: 0, nameGap: 32, nameTextStyle: { color: '#94a3b8', fontSize: 11, align: 'right' }, axisPointer: { label: { show: true, formatter: (params: any) => fmt1(params.value) } } },
         { scale: true, splitArea: { show: false }, splitLine: { lineStyle: { color: 'rgba(148, 163, 184, 0.08)' } }, gridIndex: 4, position: 'left', axisLabel: { fontSize: 10, color: '#94a3b8', margin: 10 }, splitNumber: 3, name: 'BOLL', nameLocation: 'middle', nameRotate: 0, nameGap: 32, nameTextStyle: { color: '#94a3b8', fontSize: 11, align: 'right' }, axisPointer: { label: { show: true, formatter: (params: any) => fmt2(params.value) } } },
       ],
       dataZoom: [
@@ -344,7 +394,9 @@ export function UnifiedChart({ code, quote }: Props) {
           } : '-'),
           xAxisIndex: 2, yAxisIndex: 2, cursor: 'default',
         },
-        { name: 'RSI', type: 'line', data: sliceDisplay(rsi), smooth: true, lineStyle: { color: colors.rsi, width: 2 }, symbol: 'none', xAxisIndex: 3, yAxisIndex: 3, connectNulls: false, cursor: 'default' },
+        { name: 'RSI6', type: 'line', data: sliceDisplay(rsi6), smooth: true, lineStyle: { color: colors.rsi6, width: 1.5 }, symbol: 'none', xAxisIndex: 3, yAxisIndex: 3, connectNulls: false, cursor: 'default' },
+        { name: 'RSI12', type: 'line', data: sliceDisplay(rsi12), smooth: true, lineStyle: { color: colors.rsi12, width: 1.5 }, symbol: 'none', xAxisIndex: 3, yAxisIndex: 3, connectNulls: false, cursor: 'default' },
+        { name: 'RSI24', type: 'line', data: sliceDisplay(rsi24), smooth: true, lineStyle: { color: colors.rsi24, width: 1.5 }, symbol: 'none', xAxisIndex: 3, yAxisIndex: 3, connectNulls: false, cursor: 'default' },
         { name: '上轨', type: 'line', data: sliceDisplay(bbUpper), smooth: true, lineStyle: { color: colors.bbUpper }, symbol: 'none', xAxisIndex: 4, yAxisIndex: 4, connectNulls: false, cursor: 'default' },
         { name: '中轨', type: 'line', data: sliceDisplay(bbMid), smooth: true, lineStyle: { color: colors.bbMid, width: 2 }, symbol: 'none', xAxisIndex: 4, yAxisIndex: 4, connectNulls: false, cursor: 'default' },
         { name: '下轨', type: 'line', data: sliceDisplay(bbLower), smooth: true, lineStyle: { color: colors.bbLower }, symbol: 'none', xAxisIndex: 4, yAxisIndex: 4, connectNulls: false, cursor: 'default' },
