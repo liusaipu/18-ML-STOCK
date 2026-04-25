@@ -74,12 +74,8 @@ function InlineTooltip({ title, body }: { title: string; body: string }) {
       ref={ref}
       className="inline-tooltip"
       open={open}
-      onClick={(e) => {
-        e.preventDefault()
-        setOpen((prev) => !prev)
-      }}
     >
-      <summary>ℹ️</summary>
+      <summary onClick={(e) => { e.preventDefault(); setOpen((prev) => !prev) }}>ℹ️</summary>
       <div className="inline-tooltip-body">
         <strong>{title}</strong><br/>
         {body}
