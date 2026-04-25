@@ -219,8 +219,14 @@ export function UnifiedChart({ code, quote }: Props) {
           const candle = params.find((p: any) => p.seriesName === 'K线')
           if (candle && candle.data) {
             const [o, c, l, h] = candle.data
+            const change = c - o
+            const changePct = o !== 0 ? (change / o) * 100 : 0
+            const changeColor = change >= 0 ? '#ef4444' : '#22c55e'
+            const changeSign = change >= 0 ? '+' : ''
             leftItems.push(`<div style="display:flex;justify-content:space-between;gap:18px"><span style="color:#94a3b8">开盘</span><span>${fmt2(o)}</span></div>`)
             leftItems.push(`<div style="display:flex;justify-content:space-between;gap:18px"><span style="color:#94a3b8">收盘</span><span>${fmt2(c)}</span></div>`)
+            leftItems.push(`<div style="display:flex;justify-content:space-between;gap:18px"><span style="color:#94a3b8">涨跌额</span><span style="color:${changeColor}">${changeSign}${fmt2(change)}</span></div>`)
+            leftItems.push(`<div style="display:flex;justify-content:space-between;gap:18px"><span style="color:#94a3b8">涨跌幅</span><span style="color:${changeColor}">${changeSign}${fmt2(changePct)}%</span></div>`)
             leftItems.push(`<div style="display:flex;justify-content:space-between;gap:18px"><span style="color:#94a3b8">最低</span><span>${fmt2(l)}</span></div>`)
             leftItems.push(`<div style="display:flex;justify-content:space-between;gap:18px"><span style="color:#94a3b8">最高</span><span>${fmt2(h)}</span></div>`)
           }

@@ -7,7 +7,7 @@ import (
 
 // writeAScoreProfile 输出 A-Score 综合风险画像（模块8，位于 RIM 之后、技术面之前）
 func writeAScoreProfile(b *strings.Builder, steps []StepResult, years []string, latest string, comp *ComparableAnalysis) {
-	b.WriteString("# 模块8: A-Score 综合风险画像" + traceTrigger(8) + "\n\n")
+	b.WriteString("# 模块8: A-Score 综合风险画像\n\n")
 	b.WriteString("A-Score 是专为 A 股市场构建的多维度综合风险评分（0-100，越高越危险），融合 Beneish M-Score（财务造假风险）、Altman Z-Score（破产/偿债风险）、现金流偏离度、应收账款异常度、毛利率异常波动，以及股权质押、监管问询、大股东减持等非财务信号。\n\n")
 
 	step8 := steps[7]

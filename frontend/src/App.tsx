@@ -1542,10 +1542,24 @@ function App() {
       const titleText = children?.toString() || ''
       // 匹配模块标题：模块X: 标题
       const isModuleTitle = /^模块\d+/.test(titleText)
+      const isModule8 = titleText.includes('模块8')
       
       return (
-        <h1 id={id} {...props} style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingRight: '32px' }}>
-          <span>{children}</span>
+        <h1 id={id} {...props} style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingRight: isModule8 ? '52px' : '32px' }}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            {children}
+            {isModule8 && (
+              <details className="inline-tooltip">
+                <summary>ℹ️</summary>
+                <div className="inline-tooltip-body">
+                  <strong>A-Score 综合风险画像</strong><br/>
+                  A-Score（0-100分）综合评估企业财务风险，分数越高，潜在隐患越大。<br/>
+                  基于公开财务报表与监管信息，从六个维度打分：财务造假风险、偿债能力、现金流质量、应收账款健康度、盈利稳定性，以及股权质押/减持/监管问询等非财务信号。其中财务维度适用于 A 股与港股，非财务信号目前主要覆盖 A 股。<br/>
+                  <strong>评判标准</strong>：&lt; 40分安全，40-60分低风险，60-70分中风险（需深入核查），≥ 70分高危（建议回避）。
+                </div>
+              </details>
+            )}
+          </span>
           {isModuleTitle && (
             <ModuleCopyButton moduleId={id || ''} moduleTitle={titleText} />
           )}
