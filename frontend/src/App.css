@@ -1331,23 +1331,25 @@ body.light .trace-trigger-btn:hover {
 
 /* 内联信息提示 tooltip */
 .inline-tooltip {
-  display: inline-block;
+  display: inline-flex;
   position: relative;
   margin-left: 6px;
   vertical-align: middle;
 }
 
-.inline-tooltip summary {
+.inline-tooltip-trigger {
   cursor: pointer;
-  list-style: none;
   color: #3b82f6;
   font-size: 14px;
   line-height: 1;
   user-select: none;
+  padding: 2px;
+  border-radius: 4px;
+  transition: background 0.15s;
 }
 
-.inline-tooltip summary::-webkit-details-marker {
-  display: none;
+.inline-tooltip-trigger:hover {
+  background: rgba(59, 130, 246, 0.12);
 }
 
 .inline-tooltip .inline-tooltip-body {
@@ -1371,8 +1373,12 @@ body.light .trace-trigger-btn:hover {
   font-size: 14px;
 }
 
-body.light .inline-tooltip summary {
+body.light .inline-tooltip-trigger {
   color: #2563eb;
+}
+
+body.light .inline-tooltip-trigger:hover {
+  background: rgba(37, 99, 235, 0.1);
 }
 
 body.light .inline-tooltip .inline-tooltip-body {
