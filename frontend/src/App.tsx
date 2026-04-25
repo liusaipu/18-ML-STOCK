@@ -1579,12 +1579,19 @@ function App() {
       const isModule8 = titleText.includes('模块8')
       // 强制修正模块8的 id，确保 TOC 导航匹配
       const headingId = isModule8 ? '模块8-a-score-综合风险画像' : id
+      // 检测 children 中是否已包含 trace-trigger（避免后端旧版本叠加）
+      let hasTraceTrigger = false
+      Children.forEach(children, (child: any) => {
+        if (child && typeof child === 'object' && typeof child.props?.className === 'string' && child.props.className.includes('trace-trigger')) {
+          hasTraceTrigger = true
+        }
+      })
       
       return (
-        <h1 id={headingId} {...props} style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingRight: isModule8 ? '52px' : '32px' }}>
+        <h1 id={headingId} {...props} style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingRight: isModule8 && !hasTraceTrigger ? '52px' : '32px' }}>
           <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             {children}
-            {isModule8 && (
+            {isModule8 && !hasTraceTrigger && (
               <InlineTooltip
                 title="A-Score 综合风险画像"
                 body="A-Score（0-100分）综合评估企业财务风险，分数越高，潜在隐患越大。基于公开财务报表与监管信息，从六个维度打分：财务造假风险、偿债能力、现金流质量、应收账款健康度、盈利稳定性，以及股权质押/减持/监管问询等非财务信号。其中财务维度适用于 A 股与港股，非财务信号目前主要覆盖 A 股。评判标准：< 40分安全，40-60分低风险，60-70分中风险（需深入核查），≥ 70分高危（建议回避）。"
