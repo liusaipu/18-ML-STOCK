@@ -40,10 +40,47 @@ def resize_icon(size):
     return src.resize((size, size), method)
 
 
+import struct
+import io
+
 def make_ico(sizes, out_path):
-    """Create a multi-frame ICO file."""
-    frames = [resize_icon(sz).convert("RGBA") for sz in sizes]
-    frames[0].save(out_path, format="ICO", append_images=frames[1:])
+    """Create a multi-frame ICO file (PNG format per frame, supports alpha)."""
+    # ICO standard sizes only: 16,32,48,64,128,256
+    ico_sizes = [sz for sz in sizes if sz in (16, 32, 48, 64, 128, 256)]
+    frames = [resize_icon(sz).convert("RGBA") for sz in ico_sizes]
+
+    # Build ICO header
+    count = len(frames)
+    header = struct.pack('<HHH', 0, 1, count)  # reserved, type=icon, count
+
+    entries = b''
+    data_offset = 6 + 16 * count
+    image_data = b''
+
+    for idx, (img, sz) in enumerate(zip(frames, ico_sizes)):
+        # Save each frame as PNG
+        buf = io.BytesIO()
+        img.save(buf, format='PNG')
+        png_bytes = buf.getvalue()
+
+        # ICONDIRENTRY
+        w_byte = sz if sz < 256 else 0
+        h_byte = sz if sz < 256 else 0
+        entry = struct.pack('<BBBBHHII',
+            w_byte, h_byte,  # width, height
+            0,               # colors (0 = >256)
+            0,               # reserved
+            1,               # color planes
+            32,              # bits per pixel
+            len(png_bytes),  # size in bytes
+            data_offset      # offset
+        )
+        entries += entry
+        image_data += png_bytes
+        data_offset += len(png_bytes)
+
+    with open(out_path, 'wb') as f:
+        f.write(header + entries + image_data)
 
 
 def main():
