@@ -236,6 +236,7 @@ function App() {
   const [traceDrawerOpen, setTraceDrawerOpen] = useState(false)
   const [currentTrace, setCurrentTrace] = useState<analyzer.CalcTrace | null>(null)
   const [traceList, setTraceList] = useState<analyzer.CalcTrace[]>([])
+  const [infoTooltip, setInfoTooltip] = useState<{title: string, content: string} | null>(null)
   const [forceAnalyzeOpen, setForceAnalyzeOpen] = useState(false)
   const [lastAnalysisAt, setLastAnalysisAt] = useState('')
   const [trendDrawerCode, setTrendDrawerCode] = useState<string | null>(null)
@@ -1493,7 +1494,7 @@ function App() {
 
   const markdownComponents = useMemo(() => ({
     details: DetailsComponent,
-    span({ className, 'data-steps': dataSteps, children, ...props }: any) {
+    span({ className, 'data-steps': dataSteps, 'data-key': dataKey, children, ...props }: any) {
       if (className === 'trace-trigger' && dataSteps) {
         const stepNums = String(dataSteps)
           .split(',')
@@ -1519,6 +1520,26 @@ function App() {
             {children}
           </button>
         )
+      }
+      if (className === 'info-icon' && dataKey) {
+        const infoMap: Record<string, {title: string, content: string}> = {
+          'a-score': {
+            title: 'A-Score 风险评分',
+            content: 'A-Score（0-100分）综合评估企业财务风险，分数越高，潜在隐患越大。\\n\\n基于公开财务报表与监管信息，从六个维度打分：财务造假风险、偿债能力、现金流质量、应收账款健康度、盈利稳定性，以及股权质押/减持/监管问询等非财务信号。其中财务维度适用于 A 股与港股，非财务信号目前主要覆盖 A 股。\\n\\n评判标准：< 40分安全，40-60分低风险，60-70分中风险（需深入核查），≥ 70分高危（建议回避）。\\n\\n核心价值：在财报暴雷前发现财务隐患，快速筛掉有明显问题的公司。'
+          }
+        }
+        const info = infoMap[dataKey]
+        if (info) {
+          return (
+            <button
+              className="info-icon-btn"
+              onClick={() => setInfoTooltip(info)}
+              title="点击查看说明"
+            >
+              {children}
+            </button>
+          )
+        }
       }
       return (
         <span className={className} {...props}>
@@ -2560,6 +2581,23 @@ function App() {
                   <div className="trace-note">{currentTrace.note}</div>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Info tooltip popover */}
+      {infoTooltip && (
+        <div className="modal-overlay" onClick={() => setInfoTooltip(null)}>
+          <div className="modal-content info-tooltip-content" onClick={(e) => e.stopPropagation()}>
+            <h4>{infoTooltip.title}</h4>
+            <div className="info-tooltip-body">
+              {infoTooltip.content.split('\\n').map((line, i) => (
+                <p key={i}>{line}</p>
+              ))}
+            </div>
+            <div className="modal-actions">
+              <button className="btn primary" onClick={() => setInfoTooltip(null)}>知道了</button>
             </div>
           </div>
         </div>

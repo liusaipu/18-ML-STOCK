@@ -1329,6 +1329,51 @@ body.light .trace-trigger-btn:hover {
   background: rgba(37, 99, 235, 0.1);
 }
 
+/* 信息图标按钮 */
+.info-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  margin: 0 0 0 4px;
+  font-size: 13px;
+  line-height: 1;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #64748b;
+  border-radius: 50%;
+  vertical-align: middle;
+  transition: color 0.15s, background 0.15s;
+}
+
+.info-icon-btn:hover {
+  color: #3b82f6;
+  background: rgba(59, 130, 246, 0.12);
+}
+
+body.light .info-icon-btn {
+  color: #9ca3af;
+}
+
+body.light .info-icon-btn:hover {
+  color: #2563eb;
+  background: rgba(37, 99, 235, 0.1);
+}
+
+.info-tooltip-content .info-tooltip-body p {
+  margin: 0 0 10px 0;
+  font-size: 13px;
+  line-height: 1.7;
+  color: #94a3b8;
+}
+
+body.light .info-tooltip-content .info-tooltip-body p {
+  color: #4b5563;
+}
+
 /* 计算溯源抽屉 */
 .trace-overlay {
   position: fixed;

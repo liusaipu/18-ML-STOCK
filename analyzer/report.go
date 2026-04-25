@@ -269,7 +269,7 @@ func writeModule1(b *strings.Builder, symbol string, steps []StepResult, latest,
 		b.WriteString(fmt.Sprintf("| **交易活跃度** | - | -/100 | 数据不足 |\n"))
 	}
 	ascore := getStepValue(steps, 8, latest, "AScore")
-	b.WriteString(fmt.Sprintf("| **A-Score风险** | %s | %.0f/100 | %s |\n", asEmoji(ascore), ascore, ascoreComment(ascore)))
+	b.WriteString(fmt.Sprintf("| **A-Score风险** %s | %s | %.0f/100 | %s |\n", infoIcon("a-score"), asEmoji(ascore), ascore, ascoreComment(ascore)))
 	if ml != nil && ml.Summary != nil && ml.Summary.HasData {
 		sum := ml.Summary
 		var predText string
@@ -291,7 +291,6 @@ func writeModule1(b *strings.Builder, symbol string, steps []StepResult, latest,
 		b.WriteString(fmt.Sprintf("| **综合建议** | **%s** | **%.0f/100** | %s |\n", investmentGrade(weighted), weighted, strategyAdvice(weighted)))
 	}
 	b.WriteString("\n")
-	b.WriteString(aScoreTooltip())
 	b.WriteString("\n")
 
 	b.WriteString("## 1.2 综合评级与建议\n\n")
@@ -2225,6 +2224,10 @@ func fmtVal(v float64, unit string) string {
 	return fmt.Sprintf("%.3f", v)
 }
 
+func infoIcon(key string) string {
+	return fmt.Sprintf(`<span class="info-icon" data-key="%s">ℹ️</span>`, key)
+}
+
 func traceTrigger(stepNums ...int) string {
 	if len(stepNums) == 0 {
 		return ""
@@ -2237,7 +2240,7 @@ func traceTrigger(stepNums ...int) string {
 		}
 		sb.WriteString(fmt.Sprintf("%d", n))
 	}
-	sb.WriteString(`">❓</span>`)
+	sb.WriteString(`">ℹ️</span>`)
 	return sb.String()
 }
 
