@@ -131,7 +131,7 @@ def prepare_source():
     a = a.filter(ImageFilter.UnsharpMask(radius=2, percent=150, threshold=3))
     
     # Flatten to solid red base, then add subtle radial highlight at cross area
-    RED, GREEN, BLUE = 225, 25, 35
+    RED, GREEN, BLUE = 235, 28, 38
     red   = a.point(lambda x: RED   if x > 0 else 0)
     green = a.point(lambda x: GREEN if x > 0 else 0)
     blue  = a.point(lambda x: BLUE  if x > 0 else 0)
@@ -186,6 +186,29 @@ def add_outer_glow(img, blur=40, glow_color=(220, 30, 40, 70)):
     return result
 
 
+def add_bevel_shadow(img, offset=(-3, 3), shadow_color=(100, 8, 12, 90)):
+    """Add a subtle 3D bevel shadow: shape appears to float with shadow on lower-left."""
+    w, h = img.size
+    r, g, b, a = img.split()
+    
+    # Create canvas large enough for offset
+    pad_x, pad_y = abs(offset[0]), abs(offset[1])
+    canvas = Image.new("RGBA", (w + pad_x * 2, h + pad_y * 2), (0, 0, 0, 0))
+    
+    # Shadow: offset alpha shifted to lower-left
+    shadow_a = a.point(lambda x: int(x * 0.45))
+    shadow_r = shadow_a.point(lambda x: shadow_color[0] if x > 0 else 0)
+    shadow_g = shadow_a.point(lambda x: shadow_color[1] if x > 0 else 0)
+    shadow_b = shadow_a.point(lambda x: shadow_color[2] if x > 0 else 0)
+    shadow_layer = Image.merge("RGBA", (shadow_r, shadow_g, shadow_b, shadow_a))
+    
+    # Paste shadow with offset
+    canvas.paste(shadow_layer, (pad_x + offset[0], pad_y + offset[1]), shadow_layer)
+    # Paste original on top
+    canvas.paste(img, (pad_x, pad_y), img)
+    return canvas
+
+
 def add_outline(img, outline_color=(255, 200, 200, 200), thickness=1):
     """Add a thin light outline around the shape based on alpha channel."""
     r, g, b, a = img.split()
@@ -228,8 +251,8 @@ def create_bg(size, for_macos=False):
     rr = 0.22 if for_macos else 0.18
     
     # Deep blue radial gradient: center bright -> edge dark
-    center_color = (42, 65, 125, 255)  # lighter deep blue center
-    edge_color   = (12, 20, 45, 255)   # darker deep blue edge
+    center_color = (50, 75, 145, 255)  # lighter deep blue center
+    edge_color   = (6, 10, 25, 255)    # darker deep blue edge
     bg = make_radial_gradient((w, h), center_color, edge_color)
     
     # Apply rounded mask
@@ -270,7 +293,9 @@ def generate_icon_design(size, for_macos=False, src=None):
     
     # Layer effects: much brighter glow -> shadow
     w_glow = add_outer_glow(w_img, blur=max(18, size // 14), glow_color=(255, 80, 90, 110))
-    w_final = add_drop_shadow(w_glow, offset=(0, max(4, size // 40)), blur=max(12, size // 22), shadow_color=(0, 0, 0, 120))
+    # Small icons: no shadow offset to keep W perfectly centered vertically
+    shadow_offset = (0, 0) if size <= 64 else (0, max(4, size // 40))
+    w_final = add_drop_shadow(w_glow, offset=shadow_offset, blur=max(12, size // 22), shadow_color=(0, 0, 0, 120))
     
     # Background
     bg = create_bg((w, h), for_macos=for_macos)
