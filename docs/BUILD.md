@@ -38,7 +38,7 @@ pip install akshare
 ```bash
 # 克隆项目
 git clone https://github.com/liusaipu/stockfinlens.git
-cd 18-ML-STOCK
+cd stockfinlens
 
 # 安装前端依赖
 cd frontend && npm install && cd ..
@@ -101,7 +101,7 @@ wails build -platform darwin/universal
 ## 目录结构速览
 
 ```
-├── analyzer/          # Go 分析引擎（18维财报、A-Score、ML 推理调用）
+├── analyzer/          # Go 分析引擎（财报透视、A-Score、ML 推理调用）
 ├── downloader/        # 数据下载层（东方财富、腾讯行情等）
 ├── frontend/          # React + TypeScript 前端
 ├── ml_models/         # ONNX 模型与 Python 推理脚本

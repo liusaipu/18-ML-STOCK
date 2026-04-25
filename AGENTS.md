@@ -1,4 +1,4 @@
-# Agent Guidelines for stock-analyzer
+# Agent Guidelines for stockfinlens
 
 ## Release Checklist
 
@@ -28,7 +28,7 @@ Both build scripts (`build-release.sh` and `build-windows.ps1`) now enforce this
 
 ### 3. Required Assets in Release Package
 The final release ZIP must include:
-- `stock-analyzer.exe` (or `.app` on macOS)
+- `stockfinlens.exe` (or `.app` on macOS)
 - `ml_models/` — ML model files and Python inference scripts
 - `scripts/` — Python data-fetching and update scripts
 

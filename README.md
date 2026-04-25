@@ -30,7 +30,7 @@
 
 ## ✨ 核心透视能力
 
-### 🔬 18维财报深度扫描
+### 🔬 财报透视分析
 
 从审计意见到分红政策，逐层拆解企业财务健康度：
 
@@ -141,7 +141,7 @@ go install github.com/wailsapp/wails/v2/cmd/wails@latest
 
 # 克隆项目
 git clone https://github.com/liusaipu/stockfinlens.git
-cd 18-ML-STOCK
+cd stockfinlens
 
 # 安装前端依赖
 cd frontend && npm install && cd ..
@@ -163,7 +163,7 @@ wails build
 |------|--------|----------|
 | **前端层** | React + TypeScript + Vite | K线透镜 · 财报展示 · 报告渲染 · 交互设置面板 |
 | **Wails 绑定层** | Go + Wails v2 | 本地存储 · 数据校验 · 分析编排 · 报告生成 |
-| **透视引擎** | Go | 18维财务分析 · A-Score 评分 · RIM 估值 · 可比公司聚焦 |
+| **透视引擎** | Go | 财报透视分析 · A-Score 评分 · RIM 估值 · 可比公司聚焦 |
 | **ML 推理层** | Python + ONNX Runtime | 情绪引擎 · 财务引擎 · 风险引擎（纯本地推理，无需联网） |
 | **数据源** | 多源聚合 | 东方财富 · 同花顺 CSV/Excel · 腾讯行情 · akshare（可选增强） |
 
@@ -171,7 +171,7 @@ wails build
 
 ## 📝 数据说明
 
-**本地存储路径**：`~/.config/stockfinlens/`
+**本地存储路径**：`~/.config/stock-analyzer/`
 
 - `watchlist.json`：自选股票列表（最多100只）
 - `comparables.json`：可比公司配置
@@ -185,7 +185,7 @@ wails build
 
 ## 🗺️ 路线图
 
-- [x] 18维财报透视引擎
+- [x] 财报透视引擎
 - [x] A-Score 风险热力图
 - [x] ML 三引擎本地推理 (ONNX)
 - [x] 可比公司聚焦分析
