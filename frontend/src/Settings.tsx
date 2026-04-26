@@ -72,6 +72,8 @@ interface SettingsProps {
   policyActionStatus?: { type: 'success' | 'error' | null; message: string }
   industryActionStatus?: { type: 'success' | 'error' | null; message: string }
   industryTask?: any
+  // Python 依赖检测
+  onCheckPythonDeps?: () => void
 }
 
 export function Settings({ 
@@ -85,7 +87,8 @@ export function Settings({
   onUpdateIndustryDB,
   policyActionStatus,
   industryActionStatus,
-  industryTask
+  industryTask,
+  onCheckPythonDeps,
 }: SettingsProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [activeTab, setActiveTab] = useState<'appearance' | 'data' | 'about'>('appearance')
@@ -200,6 +203,22 @@ export function Settings({
                       <span className="status-error">{policyActionStatus.message.length > 40 ? policyActionStatus.message.slice(0, 40) + '...' : policyActionStatus.message}</span>
                     )}
                   </div>
+                )}
+              </div>
+
+              {/* Python 环境 */}
+              <div className="settings-data-section">
+                <div className="settings-data-title">🐍 Python 环境</div>
+                <div className="settings-data-desc">
+                  检测 ML 推理和数据更新所需的 Python 依赖包
+                </div>
+                {onCheckPythonDeps && (
+                  <button 
+                    className="settings-data-btn" 
+                    onClick={onCheckPythonDeps}
+                  >
+                    🔍 检测 Python 环境
+                  </button>
                 )}
               </div>
 

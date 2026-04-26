@@ -243,6 +243,36 @@ func (a *App) SearchStocks(keyword string) []StockInfo {
 	return results
 }
 
+// CheckPythonDependencies 检测 Python 环境及依赖包状态
+func (a *App) CheckPythonDependencies() *PythonEnvResult {
+	return CheckPythonEnv()
+}
+
+// InstallPythonDependencies 安装缺失的 Python 依赖包
+func (a *App) InstallPythonDependencies(packages []string) error {
+	python := findPythonExecutable()
+	if python == "" {
+		return fmt.Errorf("未找到 Python 可执行文件，请先安装 Python 3.10+")
+	}
+
+	return InstallPythonPackages(python, packages, func(line string) {
+		// 通过 Wails Events 向前端发送实时安装日志
+		if a.ctx != nil {
+			runtime.EventsEmit(a.ctx, "python:install:progress", strings.TrimSpace(line))
+		}
+	})
+}
+
+// MarkPythonDepsChecked 标记 Python 依赖已检查过
+func (a *App) MarkPythonDepsChecked() {
+	_ = markDepsChecked()
+}
+
+// HasPythonDepsChecked 检查是否已做过依赖检测
+func (a *App) HasPythonDepsChecked() bool {
+	return hasCheckedDeps()
+}
+
 // GetWatchlist 获取自选列表
 // WatchlistActivitySummary 自选股票活跃度摘要
 type WatchlistActivitySummary struct {

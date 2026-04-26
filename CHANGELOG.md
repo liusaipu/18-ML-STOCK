@@ -2,6 +2,14 @@
 
 ## [v1.3.25] - 2026-04-25
 
+### 新增 (Features)
+- **Python 依赖自动检测与一键安装**
+  - 首次启动时自动检测 Python 环境及 7 个核心依赖包（onnxruntime、scikit-learn、numpy、pandas、akshare、requests、openpyxl）
+  - 缺失包可一键自动 `pip install` 安装，实时输出安装日志到前端弹窗
+  - 支持 Windows/macOS 跨平台 Python 查找（含 .venv、常见安装路径、PATH 等）
+  - 设置面板「数据」页新增「🔍 检测 Python 环境」手动触发入口
+  - 检测通过后写入标记文件，避免每次启动重复弹窗
+
 ### 修复 (Fixes)
 - **K线开盘价显示异常**
   - 修复所有股票 K 线开盘价显示为递减序列（119、118、117...）的问题

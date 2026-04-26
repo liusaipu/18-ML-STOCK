@@ -22,6 +22,10 @@ export function CheckAnalysisCache(arg1) {
   return window['go']['main']['App']['CheckAnalysisCache'](arg1);
 }
 
+export function CheckPythonDependencies() {
+  return window['go']['main']['App']['CheckPythonDependencies']();
+}
+
 export function ConfirmDialog(arg1, arg2) {
   return window['go']['main']['App']['ConfirmDialog'](arg1, arg2);
 }
@@ -138,6 +142,10 @@ export function GetWatchlistFilterData() {
   return window['go']['main']['App']['GetWatchlistFilterData']();
 }
 
+export function HasPythonDepsChecked() {
+  return window['go']['main']['App']['HasPythonDepsChecked']();
+}
+
 export function ImportFinancialReports(arg1) {
   return window['go']['main']['App']['ImportFinancialReports'](arg1);
 }
@@ -146,8 +154,16 @@ export function InitIndustryDatabase() {
   return window['go']['main']['App']['InitIndustryDatabase']();
 }
 
+export function InstallPythonDependencies(arg1) {
+  return window['go']['main']['App']['InstallPythonDependencies'](arg1);
+}
+
 export function LoadAnalysisSnapshot(arg1) {
   return window['go']['main']['App']['LoadAnalysisSnapshot'](arg1);
+}
+
+export function MarkPythonDepsChecked() {
+  return window['go']['main']['App']['MarkPythonDepsChecked']();
 }
 
 export function RefreshIndustryBaselines() {

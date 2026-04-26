@@ -5,6 +5,7 @@ import { UnifiedChart } from './UnifiedChart'
 import { FinancialTrendDrawer } from './FinancialTrendDrawer'
 import { Settings, loadSettings, AppSettings } from './Settings'
 import { ModuleCopyButton, setGlobalMarkdownContent } from './ModuleCopyButton'
+import { PythonDepsModal } from './PythonDepsModal'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import rehypeSlug from 'rehype-slug'
@@ -134,6 +135,7 @@ import {
   UpdateModule4Only,
   LoadAnalysisSnapshot,
   SendNotification,
+  HasPythonDepsChecked,
 } from '../wailsjs/go/main/App'
 import type { main, analyzer, downloader } from '../wailsjs/go/models'
 
@@ -269,6 +271,8 @@ function App() {
   const [trendDrawerCode, setTrendDrawerCode] = useState<string | null>(null)
   const [riskRadar, setRiskRadar] = useState<RiskRadarItem[] | null>(null)
   const [downloadMenuOpen, setDownloadMenuOpen] = useState(false)
+  // Python 依赖检测弹窗
+  const [showPythonDepsModal, setShowPythonDepsModal] = useState(false)
 
   // RIM 参数弹窗状态
   const [showRIMModal, setShowRIMModal] = useState(false)
@@ -489,6 +493,12 @@ function App() {
       }
     }
     autoUpdateIndustry()
+    // 首次启动检测 Python 依赖
+    HasPythonDepsChecked().then(checked => {
+      if (!checked) {
+        setShowPythonDepsModal(true)
+      }
+    })
   }, [])
 
   // 自选股变化时刷新活跃度
@@ -1619,6 +1629,7 @@ function App() {
         policyActionStatus={policyActionStatus}
         industryActionStatus={industryActionStatus}
         industryTask={industryTask}
+        onCheckPythonDeps={() => setShowPythonDepsModal(true)}
       />
 
       {/* 左栏：自选列表 */}
@@ -2717,6 +2728,12 @@ function App() {
           onClose={() => setTrendDrawerCode(null)}
         />
       )}
+
+      {/* Python 依赖检测弹窗 */}
+      <PythonDepsModal
+        isOpen={showPythonDepsModal}
+        onClose={() => setShowPythonDepsModal(false)}
+      />
     </div>
   )
 }

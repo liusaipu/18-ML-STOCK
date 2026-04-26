@@ -14,6 +14,8 @@ export function AnalyzeStockWithRIM(arg1:string,arg2:boolean,arg3:string):Promis
 
 export function CheckAnalysisCache(arg1:string):Promise<main.CacheStatus>;
 
+export function CheckPythonDependencies():Promise<main.PythonEnvResult>;
+
 export function ConfirmDialog(arg1:string,arg2:string):Promise<boolean>;
 
 export function DeleteReport(arg1:string,arg2:string):Promise<void>;
@@ -72,11 +74,17 @@ export function GetWatchlistActivity():Promise<Array<main.WatchlistActivitySumma
 
 export function GetWatchlistFilterData():Promise<Array<main.WatchlistFilterItem>>;
 
+export function HasPythonDepsChecked():Promise<boolean>;
+
 export function ImportFinancialReports(arg1:string):Promise<main.ImportResult>;
 
 export function InitIndustryDatabase():Promise<void>;
 
+export function InstallPythonDependencies(arg1:Array<string>):Promise<void>;
+
 export function LoadAnalysisSnapshot(arg1:string):Promise<analyzer.AnalysisReport>;
+
+export function MarkPythonDepsChecked():Promise<void>;
 
 export function RefreshIndustryBaselines():Promise<Record<string, analyzer.IndustryBaseline>>;
 

@@ -769,6 +769,71 @@ export namespace main {
 	        this.cashFlow = source["cashFlow"];
 	    }
 	}
+	export class PythonPackage {
+	    name: string;
+	    moduleName: string;
+	    display: string;
+	    required: boolean;
+	    installed: boolean;
+	    version: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new PythonPackage(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.moduleName = source["moduleName"];
+	        this.display = source["display"];
+	        this.required = source["required"];
+	        this.installed = source["installed"];
+	        this.version = source["version"];
+	    }
+	}
+	export class PythonEnvResult {
+	    pythonFound: boolean;
+	    pythonPath: string;
+	    version: string;
+	    packages: PythonPackage[];
+	    allReady: boolean;
+	    ready: boolean;
+	    missing: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new PythonEnvResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.pythonFound = source["pythonFound"];
+	        this.pythonPath = source["pythonPath"];
+	        this.version = source["version"];
+	        this.packages = this.convertValues(source["packages"], PythonPackage);
+	        this.allReady = source["allReady"];
+	        this.ready = source["ready"];
+	        this.missing = source["missing"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
 	export class StockInfo {
 	    code: string;
 	    name: string;
