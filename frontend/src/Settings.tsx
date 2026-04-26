@@ -153,7 +153,7 @@ export function Settings({
           {activeTab === 'data' && (
             <div className="settings-section">
               {/* 基础数据设置 */}
-              <div className="settings-item">
+              <div className="settings-item settings-item-inline">
                 <label>财报下载年限</label>
                 <div className="settings-input-group">
                   <input type="number" min={3} max={10} value={settings.reportYears} onChange={(e) => updateSetting('reportYears', parseInt(e.target.value) || 5)} />
