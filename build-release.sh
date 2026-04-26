@@ -38,9 +38,9 @@ build_mac() {
   cp -r "$(pwd)/scripts" "$BIN_DIR/"
 
   cd "$BIN_DIR"
-  zip -r "stock-analyzer_macos_universal_v${VERSION}.zip" stock-analyzer.app ml_models/ scripts/
+  zip -r "stockfinlens-macos-universal-v${VERSION}.zip" stockfinlens.app ml_models/ scripts/
   cd - > /dev/null
-  echo "macOS package: ${BIN_DIR}/stock-analyzer_macos_universal_v${VERSION}.zip"
+  echo "macOS package: ${BIN_DIR}/stockfinlens-macos-universal-v${VERSION}.zip"
 }
 
 build_windows() {
@@ -55,9 +55,9 @@ build_windows() {
   cp -r "$(pwd)/scripts" "$BIN_DIR/"
   
   cd "$BIN_DIR"
-  zip -r "stock-analyzer_windows_amd64_v${VERSION}.zip" stock-analyzer.exe ml_models/ scripts/
+  zip -r "stockfinlens-windows-amd64-v${VERSION}.zip" stockfinlens.exe ml_models/ scripts/
   cd - > /dev/null
-  echo "Windows package: ${BIN_DIR}/stock-analyzer_windows_amd64_v${VERSION}.zip"
+  echo "Windows package: ${BIN_DIR}/stockfinlens-windows-amd64-v${VERSION}.zip"
 }
 
 case "$PLATFORM" in

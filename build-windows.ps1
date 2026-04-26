@@ -163,7 +163,7 @@ function Build-Project {
     Copy-Item -Recurse -Force "$ProjectRoot\ml_models" "$BinDir\"
     Copy-Item -Recurse -Force "$ProjectRoot\scripts" "$BinDir\"
     
-    Write-Success "构建完成: $BinDir\stock-analyzer.exe"
+    Write-Success "构建完成: $BinDir\stockfinlens.exe"
 }
 
 function Package-Build {
@@ -171,13 +171,13 @@ function Package-Build {
     
     $wailsJson = Get-Content "$ProjectRoot\wails.json" -Raw | ConvertFrom-Json
     $version = $wailsJson.info.productVersion
-    $zipName = "stock-analyzer-windows-amd64-v${version}.zip"
+    $zipName = "stockfinlens-windows-amd64-v${version}.zip"
     $zipPath = "$BinDir\$zipName"
     
     Build-Project
     
     Write-Info "创建压缩包: $zipName"
-    Compress-Archive -Path "$BinDir\stock-analyzer.exe","$BinDir\ml_models","$BinDir\scripts" -DestinationPath $zipPath -Force
+    Compress-Archive -Path "$BinDir\stockfinlens.exe","$BinDir\ml_models","$BinDir\scripts" -DestinationPath $zipPath -Force
     
     $size = (Get-Item $zipPath).Length / 1MB
     Write-Success "打包完成: $zipPath ($([math]::Round($size, 2)) MB)"
