@@ -116,7 +116,7 @@ export function Settings({
     saveSettings(newSettings)
   }
 
-  const version = '1.3.26'
+  const version = '1.3.25'
 
   return (
     <>
@@ -206,22 +206,6 @@ export function Settings({
                 )}
               </div>
 
-              {/* Python 环境 */}
-              <div className="settings-data-section">
-                <div className="settings-data-title">🐍 Python 环境</div>
-                <div className="settings-data-desc">
-                  检测 ML 推理和数据更新所需的 Python 依赖包
-                </div>
-                {onCheckPythonDeps && (
-                  <button 
-                    className="settings-data-btn" 
-                    onClick={onCheckPythonDeps}
-                  >
-                    🔍 检测 Python 环境
-                  </button>
-                )}
-              </div>
-
               {/* 行业均值数据库 */}
               <div className="settings-data-section">
                 <div className="settings-data-title">🏭 行业均值数据库</div>
@@ -268,6 +252,22 @@ export function Settings({
                       <span className="status-error">{industryActionStatus.message.length > 40 ? industryActionStatus.message.slice(0, 40) + '...' : industryActionStatus.message}</span>
                     )}
                   </div>
+                )}
+              </div>
+
+              {/* Python 环境 */}
+              <div className="settings-data-section">
+                <div className="settings-data-title">🐍 Python 环境</div>
+                <div className="settings-data-desc">
+                  检测 ML 推理和数据更新所需的 Python 依赖包
+                </div>
+                {onCheckPythonDeps && (
+                  <button 
+                    className="settings-data-btn" 
+                    onClick={onCheckPythonDeps}
+                  >
+                    🔍 检测 Python 环境
+                  </button>
                 )}
               </div>
             </div>
