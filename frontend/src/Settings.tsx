@@ -160,13 +160,13 @@ export function Settings({
                   <span>年</span>
                 </div>
               </div>
-              <div className="settings-item">
+              <div className="settings-item settings-item-inline">
                 <label>自动更新行业库</label>
                 <div className="settings-toggle-switch">
                   <label className="switch"><input type="checkbox" checked={settings.autoUpdateIndustryDB} onChange={(e) => updateSetting('autoUpdateIndustryDB', e.target.checked)} /><span className="slider"></span></label>
                 </div>
               </div>
-              <div className="settings-item">
+              <div className="settings-item settings-item-inline">
                 <label>分析完成提示</label>
                 <div className="settings-toggle-switch">
                   <label className="switch"><input type="checkbox" checked={settings.analysisNotification} onChange={(e) => updateSetting('analysisNotification', e.target.checked)} /><span className="slider"></span></label>

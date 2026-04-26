@@ -241,6 +241,18 @@ body.light .settings-input-group span {
   color: #6b7280;
 }
 
+/* 开关行内布局 */
+.settings-item-inline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.settings-item-inline > label {
+  display: inline;
+  margin-bottom: 0;
+}
+
 /* 开关 */
 .settings-toggle-switch {
   display: flex;
