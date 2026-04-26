@@ -2671,3 +2671,50 @@ body.light .risk-radar-empty {
 .unified-chart-container canvas {
   cursor: default !important;
 }
+
+/* Python 依赖检测弹窗 - 深色主题默认 */
+.python-deps-panel {
+  background: #0f1720;
+  border: 1px solid #1f2933;
+  color: #e2e8f0;
+}
+.python-deps-panel code {
+  background: #1e293b;
+  color: #e2e8f0;
+}
+.python-deps-panel a {
+  color: #60a5fa;
+}
+.python-deps-row {
+  border-bottom: 1px solid #1f2933;
+}
+.python-deps-row:last-child {
+  border-bottom: none;
+}
+.python-deps-logs {
+  background: #0f1720;
+  border: 1px solid #1f2933;
+  color: #94a3b8;
+}
+
+/* Python 依赖检测弹窗 - 浅色主题 */
+body.light .python-deps-panel {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  color: #1e293b;
+}
+body.light .python-deps-panel code {
+  background: #e2e8f0;
+  color: #0f172a;
+}
+body.light .python-deps-panel a {
+  color: #2563eb;
+}
+body.light .python-deps-row {
+  border-bottom: 1px solid #e2e8f0;
+}
+body.light .python-deps-logs {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  color: #475569;
+}

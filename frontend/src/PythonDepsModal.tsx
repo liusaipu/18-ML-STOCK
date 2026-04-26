@@ -110,8 +110,7 @@ export function PythonDepsModal({ isOpen, onClose }: PythonDepsModalProps) {
             <p style={{ color: '#f87171' }}>
               ⚠️ 未检测到 Python 环境。本应用的部分功能（ML 预测、数据更新）需要 Python 3.10+ 支持。
             </p>
-            <div style={{
-              background: '#0f1720',
+            <div className="python-deps-panel" style={{
               borderRadius: 8,
               padding: 12,
               marginBottom: 16,
@@ -137,20 +136,18 @@ export function PythonDepsModal({ isOpen, onClose }: PythonDepsModalProps) {
             </p>
 
             {result.packages && result.packages.length > 0 && (
-              <div style={{
-                background: '#0f1720',
+              <div className="python-deps-panel" style={{
                 borderRadius: 8,
                 padding: 12,
                 marginBottom: 16,
                 fontSize: 13,
               }}>
                 {result.packages.map(pkg => (
-                  <div key={pkg.name} style={{
+                  <div key={pkg.name} className="python-deps-row" style={{
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'space-between',
                     padding: '6px 0',
-                    borderBottom: '1px solid #1f2933',
                   }}>
                     <span>
                       {pkg.installed ? (
@@ -192,8 +189,7 @@ export function PythonDepsModal({ isOpen, onClose }: PythonDepsModalProps) {
         )}
 
         {installing && (
-          <div style={{
-            background: '#0f1720',
+          <div className="python-deps-logs" style={{
             borderRadius: 8,
             padding: 12,
             marginBottom: 16,
@@ -203,7 +199,6 @@ export function PythonDepsModal({ isOpen, onClose }: PythonDepsModalProps) {
             fontFamily: 'monospace',
             whiteSpace: 'pre-wrap',
             wordBreak: 'break-all',
-            color: '#94a3b8',
           }}>
             {logs.map((line, i) => (
               <div key={i}>{line}</div>
