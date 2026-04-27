@@ -1589,6 +1589,14 @@ func (a *App) analyzeStockInternal(symbol string, overwriteLatest bool, customRI
 					debugLog("[ML] Engine B failed for %s: %v", symbol, err)
 				}
 			}
+			// Engine D: 风险预警（仅依赖财务数据，独立于 K 线）
+			if dFeatures := analyzer.BuildMLEngineDInput(finData); len(dFeatures) > 0 {
+				if dp, err := analyzer.RunMLEngineD(dFeatures); err == nil {
+					mlLocal.EngineD = dp
+				} else {
+					debugLog("[ML] Engine D failed for %s: %v", symbol, err)
+				}
+			}
 			// Engine A（价格序列始终可用；sentiment 为 nil 时 text_seq 补 0）
 			if len(klines) >= 16 {
 				mlKlines := make([]analyzer.MLKlineData, len(klines))
@@ -1604,14 +1612,6 @@ func (a *App) analyzeStockInternal(symbol string, overwriteLatest bool, customRI
 						mlLocal.Sentiment = sp
 					} else {
 						debugLog("[ML] Engine A failed for %s: %v", symbol, err)
-					}
-				}
-				// Engine D: 风险预警
-				if dFeatures := analyzer.BuildMLEngineDInput(finData); len(dFeatures) > 0 {
-					if dp, err := analyzer.RunMLEngineD(dFeatures); err == nil {
-						mlLocal.EngineD = dp
-					} else {
-						debugLog("[ML] Engine D failed for %s: %v", symbol, err)
 					}
 				}
 			}

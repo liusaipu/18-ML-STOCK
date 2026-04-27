@@ -1026,8 +1026,8 @@ func writeModule9(b *strings.Builder, steps []StepResult, latest, prev string, m
 		b.WriteString(fmt.Sprintf("| 财务健康分 | %.2f / 10 | — | 综合健康度评分 |\n\n", fp.HealthScore))
 	} else {
 		b.WriteString("> **数据缺失**: Engine-B 模型暂不可用。可能原因：\n")
-		b.WriteString("> - ONNX 模型文件未加载（需要 `engine_b_financial.onnx`）\n")
-		b.WriteString("> - 或历史财务数据不足（需要至少 8 个季度数据）\n\n")
+		b.WriteString("> - ONNX 模型文件未加载（需要 `financial_lstm.onnx` + `scaler.pkl`）\n")
+		b.WriteString("> - 或历史财务数据不足（需要至少 1 年财报数据）\n\n")
 	}
 
 	// 引擎A：舆情+价格 - 始终显示10.2章节
@@ -1040,8 +1040,8 @@ func writeModule9(b *strings.Builder, steps []StepResult, latest, prev string, m
 		b.WriteString(fmt.Sprintf("| 异动概率 | %.2f%% | — | 价格异常波动预警 |\n\n", sp.AnomalyProb*100))
 	} else {
 		b.WriteString("> **数据缺失**: Engine-A 模型暂不可用。可能原因：\n")
-		b.WriteString("> - ONNX 模型文件未加载（需要 `engine_a_sentiment.onnx`）\n")
-		b.WriteString("> - 或市场舆情数据获取失败\n\n")
+		b.WriteString("> - ONNX 模型文件未加载（需要 `sentiment_price_fusion.onnx`）\n")
+		b.WriteString("> - 或日 K 线数据不足（需要至少 16 个交易日）\n\n")
 	}
 
 	// 引擎D：风险预警 - 始终显示10.3章节
@@ -1081,8 +1081,8 @@ func writeModule9(b *strings.Builder, steps []StepResult, latest, prev string, m
 		}
 	} else {
 		b.WriteString("> **数据缺失**: Engine-D 模型暂不可用。可能原因：\n")
-		b.WriteString("> - ONNX 模型文件未加载（需要 `engine_d_risk.onnx`）\n")
-		b.WriteString("> - 或基于规则的回退评估也未启用\n\n")
+		b.WriteString("> - 模型文件未加载（需要 `engine_d_model.pkl`）\n")
+		b.WriteString("> - 或财务数据加载失败\n\n")
 	}
 
 	// 如果没有 ML，保留原来的简易推断
