@@ -1748,7 +1748,12 @@ func (a *App) analyzeStockInternal(symbol string, overwriteLatest bool, customRI
 					}
 				}
 			}
+			currentYear := time.Now().Year()
 			for _, y := range years {
+				yearInt, err := strconv.Atoi(y)
+				if err != nil || yearInt < currentYear {
+					continue // 跳过已披露的历史年份，RIM只预测未来
+				}
 				if v, ok := extRIM.EPSForecast[y]; ok && v > 0 {
 					epsSeq = append(epsSeq, v)
 					yearLabels = append(yearLabels, y)

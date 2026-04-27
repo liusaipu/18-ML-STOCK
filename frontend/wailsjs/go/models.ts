@@ -20,6 +20,7 @@ export namespace analyzer {
 	}
 	export class RIMYearDetail {
 	    Year: number;
+	    CalendarYear: number;
 	    EPS: number;
 	    DPS: number;
 	    BPS: number;
@@ -34,6 +35,7 @@ export namespace analyzer {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.Year = source["Year"];
+	        this.CalendarYear = source["CalendarYear"];
 	        this.EPS = source["EPS"];
 	        this.DPS = source["DPS"];
 	        this.BPS = source["BPS"];
@@ -91,6 +93,7 @@ export namespace analyzer {
 	export class RIMForecast {
 	    EPS: number[];
 	    DPS: number[];
+	    Years: string[];
 	
 	    static createFrom(source: any = {}) {
 	        return new RIMForecast(source);
@@ -100,6 +103,7 @@ export namespace analyzer {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.EPS = source["EPS"];
 	        this.DPS = source["DPS"];
+	        this.Years = source["Years"];
 	    }
 	}
 	export class RIMParams {
