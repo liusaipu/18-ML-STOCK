@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
-	"syscall"
+
 )
 
 // MLSentimentPrediction A 舆情+量价高频预警结果
@@ -211,11 +211,7 @@ func callMLInference(engine string, payload map[string]any) (map[string]any, err
 	cmd.Env = append(os.Environ(), "TQDM_DISABLE=1", "PYTHONUNBUFFERED=1")
 	
 	// Windows: 隐藏 CMD 窗口
-	if runtime.GOOS == "windows" {
-		cmd.SysProcAttr = &syscall.SysProcAttr{
-			HideWindow: true,
-		}
-	}
+	setHideWindow(cmd)
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		return nil, err

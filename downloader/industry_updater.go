@@ -7,7 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
-	"syscall"
+
 )
 
 // IndustryUpdateResult 行业数据库更新结果
@@ -48,11 +48,7 @@ func UpdateIndustryDatabase(dataDir string) (*IndustryUpdateResult, error) {
 	cmd.Env = append(os.Environ(), "PYTHONIOENCODING=utf-8")
 	
 	// Windows: 隐藏 CMD 窗口
-	if runtime.GOOS == "windows" {
-		cmd.SysProcAttr = &syscall.SysProcAttr{
-			HideWindow: true,
-		}
-	}
+	setHideWindow(cmd)
 	
 	output, err := cmd.Output()
 	if err != nil {

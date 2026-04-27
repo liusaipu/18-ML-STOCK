@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
-	"syscall"
+
 	"time"
 )
 
@@ -174,11 +174,7 @@ func InstallPythonPackages(python string, packages []string, onOutput func(strin
 	cmd := exec.Command(python, args...)
 	cmd.Env = append(os.Environ(), "PYTHONIOENCODING=utf-8")
 
-	if runtime.GOOS == "windows" {
-		cmd.SysProcAttr = &syscall.SysProcAttr{
-			HideWindow: true,
-		}
-	}
+	setHideWindow(cmd)
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {

@@ -7,7 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
-	"syscall"
+
 )
 
 // RiskCrawlerData 非财务风险爬虫结果
@@ -91,11 +91,7 @@ func FetchRiskCrawlerData(symbol string) (*RiskCrawlerData, error) {
 	cmd.Env = append(os.Environ(), "TQDM_DISABLE=1", "PYTHONUNBUFFERED=1")
 	
 	// Windows: 隐藏 CMD 窗口
-	if runtime.GOOS == "windows" {
-		cmd.SysProcAttr = &syscall.SysProcAttr{
-			HideWindow: true,
-		}
-	}
+	setHideWindow(cmd)
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		return nil, err

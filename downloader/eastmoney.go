@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math/rand"
 	"net/http"
 	"net/url"
 	"os"
@@ -15,7 +16,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"syscall"
+
 	"time"
 
 	"golang.org/x/text/encoding/simplifiedchinese"
@@ -289,21 +290,27 @@ func httpGetWithReferer(url, referer string) ([]byte, error) {
 // httpGetWithRetry 带重试的HTTP GET请求
 func httpGetWithRetry(url, referer string, maxRetries int) ([]byte, error) {
 	var lastErr error
-	
+
 	for attempt := 0; attempt < maxRetries; attempt++ {
 		if attempt > 0 {
-			// 指数退避：1s, 2s, 4s
-			time.Sleep(time.Duration(attempt) * time.Second)
+			// 指数退避 + 随机抖动：避免同步请求风暴，也避免被服务端限流识别为固定节奏
+			baseDelay := time.Duration(1<<attempt) * time.Second // 1s, 2s, 4s, 8s...
+			jitter := time.Duration(rand.Intn(500)+100) * time.Millisecond
+			time.Sleep(baseDelay + jitter)
 		}
-		
+
+		// 禁用 Keep-Alive，避免复用被服务端单方面关闭的陈旧连接导致 EOF
 		client := &http.Client{
-			Timeout: 30 * time.Second, // 增加超时时间
+			Timeout: 30 * time.Second,
+			Transport: &http.Transport{
+				DisableKeepAlives: true,
+			},
 		}
 		req, err := http.NewRequest("GET", url, nil)
 		if err != nil {
 			return nil, err
 		}
-		req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+		req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
 		req.Header.Set("Referer", referer)
 		req.Header.Set("Accept", "application/json, text/plain, */*")
 		req.Header.Set("Accept-Language", "zh-CN,zh;q=0.9,en;q=0.8")
@@ -314,28 +321,28 @@ func httpGetWithRetry(url, referer string, maxRetries int) ([]byte, error) {
 			lastErr = fmt.Errorf("尝试 %d: 请求失败: %w", attempt+1, err)
 			continue
 		}
-		
+
 		body, err := io.ReadAll(resp.Body)
 		resp.Body.Close()
-		
+
 		if err != nil {
 			lastErr = fmt.Errorf("尝试 %d: 读取响应失败: %w", attempt+1, err)
 			continue
 		}
-		
+
 		if resp.StatusCode != http.StatusOK {
 			lastErr = fmt.Errorf("尝试 %d: HTTP %d", attempt+1, resp.StatusCode)
 			continue
 		}
-		
+
 		// 去除可能的 UTF-8 BOM
 		if len(body) >= 3 && body[0] == 0xEF && body[1] == 0xBB && body[2] == 0xBF {
 			body = body[3:]
 		}
-		
+
 		return body, nil
 	}
-	
+
 	return nil, fmt.Errorf("重试 %d 次后仍然失败: %w", maxRetries, lastErr)
 }
 
@@ -932,12 +939,8 @@ func fetchHKProfileFromPython(code string) (*hkProfileResult, error) {
 	cmd.Env = append(os.Environ(), "PYTHONIOENCODING=utf-8")
 	
 	// Windows: 隐藏 CMD 窗口
-	if runtime.GOOS == "windows" {
-		cmd.SysProcAttr = &syscall.SysProcAttr{
-			HideWindow: true,
-		}
-	}
-	
+	setHideWindow(cmd)
+
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return nil, fmt.Errorf("fetch_hk_profile.py 执行失败: %v, output: %s", err, string(output))
@@ -985,12 +988,8 @@ func fetchHKFinancialsFromPython(code string, maxYears int) (*FinancialReportDat
 	cmd := exec.Command(python, script, code, fmt.Sprintf("%d", maxYears))
 	cmd.Env = append(os.Environ(), "PYTHONIOENCODING=utf-8")
 	
-	if runtime.GOOS == "windows" {
-		cmd.SysProcAttr = &syscall.SysProcAttr{
-			HideWindow: true,
-		}
-	}
-	
+	setHideWindow(cmd)
+
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return nil, fmt.Errorf("fetch_hk_financials.py 执行失败: %v, output: %s", err, string(output))
@@ -1089,10 +1088,15 @@ func FetchStockKlines(market, code string, limit int) ([]KlineData, error) {
 
 func parseEastMoneyKlines(lines []string) []KlineData {
 	var result []KlineData
-	// push2his.eastmoney.com 默认返回格式（fields2未生效时）：
-	// 日期,天数计数,开盘,收盘,最低,最高,成交量,成交额,振幅,涨跌幅,涨跌额,换手率
-	// 即所有字段相对于标准格式向后偏移1位
-	const offset = 1
+	if len(lines) == 0 {
+		return result
+	}
+
+	// 自动检测偏移：东方财富 push2his 接口在不同参数下可能返回两种格式
+	// 偏移格式（fields2未生效时）：日期,天数计数,开盘,收盘,最低,最高,成交量,成交额,振幅,涨跌幅,涨跌额,换手率
+	// 标准格式（fields2生效时）：   日期,开盘,收盘,最高,最低,成交量,成交额,振幅,涨跌幅,涨跌额,换手率,总市值
+	// 注意：两种格式中 "最低" 与 "最高" 的相对顺序是相反的！
+	offset := detectEastMoneyOffset(lines[0])
 
 	for _, line := range lines {
 		parts := strings.Split(line, ",")
@@ -1102,8 +1106,17 @@ func parseEastMoneyKlines(lines []string) []KlineData {
 
 		open := parseStrFloat(parts[1+offset])
 		close := parseStrFloat(parts[2+offset])
-		low := parseStrFloat(parts[3+offset])   // push2his默认: parts[4]=最低
-		high := parseStrFloat(parts[4+offset])  // push2his默认: parts[5]=最高
+
+		var low, high float64
+		if offset == 0 {
+			// 标准格式: f54=最高(parts[3]), f55=最低(parts[4])
+			high = parseStrFloat(parts[3])
+			low = parseStrFloat(parts[4])
+		} else {
+			// 偏移格式: parts[4]=最低, parts[5]=最高
+			low = parseStrFloat(parts[4])
+			high = parseStrFloat(parts[5])
+		}
 
 		// 基本数据校验：过滤明显异常的K线（如价格为0、high<low 等）
 		if open <= 0 || close <= 0 || high <= 0 || low <= 0 || high < low {
@@ -1133,9 +1146,29 @@ func parseEastMoneyKlines(lines []string) []KlineData {
 		})
 	}
 	if len(result) > 0 {
-		fmt.Printf("[parseEastMoneyKlines] parsed %d klines, first=%+v\n", len(result), result[0])
+		fmt.Printf("[parseEastMoneyKlines] offset=%d, parsed %d klines, first=%+v\n", offset, len(result), result[0])
 	}
 	return result
+}
+
+// detectEastMoneyOffset 根据首行数据自动检测是否存在"天数计数"偏移列。
+// 偏移格式：parts[1] 为纯整数天数计数，parts[2] 为开盘价（含小数点）
+// 标准格式：parts[1] 为开盘价（含小数点）
+func detectEastMoneyOffset(firstLine string) int {
+	parts := strings.Split(firstLine, ",")
+	if len(parts) < 7 {
+		return 0
+	}
+	// 检查 parts[1] 是否为纯整数（不含小数点）→ 天数计数
+	if !strings.Contains(parts[1], ".") {
+		if _, err := strconv.Atoi(parts[1]); err == nil {
+			// 再确认 parts[2] 包含小数点（开盘价通常有两位小数）
+			if strings.Contains(parts[2], ".") {
+				return 1
+			}
+		}
+	}
+	return 0
 }
 
 func fetchKlinesFromTencent(market, code string, limit int) ([]KlineData, error) {

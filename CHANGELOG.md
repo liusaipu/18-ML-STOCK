@@ -1,6 +1,6 @@
 # Changelog
 
-## [v1.3.25] - 2026-04-25
+## [v1.3.25] - 2026-04-27
 
 ### 新增 (Features)
 - **Python 依赖自动检测与一键安装**
@@ -31,6 +31,27 @@
 - **RSI 指标偏差与单周期问题**
   - 计算方法从简单平均（SMA）改为 Wilder's smoothing（指数平滑），与雪球一致
   - 从单条 RSI(14) 扩展为 RSI6、RSI12、RSI24 三条线，与雪球 RSI(6,12,24) 对齐
+
+### 修复 (Fixes) - 2026-04-27 增补
+- **macOS 构建兼容性**
+  - `syscall.SysProcAttr{HideWindow: true}` 是 Windows 特有字段，macOS 编译直接失败
+  - 为 `main`、`analyzer`、`downloader` 三个包分别创建 `sysproc_windows.go` / `sysproc_other.go`（build tag 隔离）
+  - 8 处 `if runtime.GOOS == "windows" { cmd.SysProcAttr = ... }` 统一替换为 `setHideWindow(cmd)`
+
+- **K 线数据解析错位导致联动图表消失**
+  - 根因：`parseEastMoneyKlines` 固定 `offset=1`，但 `push2his.eastmoney.com` 在 `fields2` 生效时返回标准格式（无偏移）
+  - 更深层问题：标准格式字段顺序为 `开盘,收盘,最高,最低`，偏移格式为 `开盘,收盘,最低,最高`，两者 `low/high` 相对位置相反
+  - 修复：新增 `detectEastMoneyOffset` 自动检测；`offset=0` 时 `high=parts[3], low=parts[4]`，`offset=1` 时 `low=parts[4], high=parts[5]`
+  - 新增单元测试 `downloader/eastmoney_kline_test.go`，用真实 API 数据验证两种格式
+
+- **技术指标联动图 Y 轴刻度重叠**
+  - 5 个子图（K线/换手/MACD/RSI/BOLL）Y 轴均设在左侧同一位置，刻度标签互相覆盖
+  - 修复：非主图（换手/MACD/RSI/BOLL）的 `axisLabel.show` 设为 `false`
+
+- **东方财富 API EOF 错误优化**
+  - `EOF` 根因：HTTP Keep-Alive 连接被服务端单方面关闭后，客户端复用陈旧连接
+  - `httpGetWithRetry` 增加 `DisableKeepAlives: true`，每次请求新建 TCP 连接
+  - 退避策略从固定 `1s, 2s` 改为指数退避 + 随机抖动（`1s+100~600ms`, `2s+...`, `4s+...`）
 
 ### 数据层 (Data)
 - **东方财富 K 线接口适配**

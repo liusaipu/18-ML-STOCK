@@ -18,35 +18,50 @@
 |------|------|
 | 桌面框架 | Wails v2 (Go 1.25 + WebView2) |
 | 后端 | Go 1.25，模块 `github.com/liusaipu/stockfinlens` |
-| 前端 | React 18 + TypeScript + Vite |
-| 图表 | Apache ECharts v6、lightweight-charts v5、recharts |
+| 前端 | React 18 + TypeScript 5 + Vite 5 |
+| 图表 | Apache ECharts v6、lightweight-charts v5、recharts v2 |
 | ML 推理 | Python 3 + ONNX Runtime + scikit-learn + numpy |
 | 数据获取 | 东方财富 API、腾讯财经接口、akshare（港股）、同花顺 CSV/Excel 导入 |
 | Excel/CSV | `github.com/xuri/excelize/v2`、标准库 `encoding/csv` |
 | 通知 | `git.sr.ht/~jackmordaunt/go-toast/v2`（Windows Toast） |
 
+## 关键配置文件
+
+| 文件 | 用途 |
+|------|------|
+| `wails.json` | Wails 应用配置：版本号、前端目录、构建命令、dev server URL (`http://localhost:5173`) |
+| `go.mod` / `go.sum` | Go 依赖管理。核心依赖：`wails/v2 v2.12.0`、`excelize/v2 v2.10.1`、`go-toast/v2 v2.0.3`、`golang.org/x/text v0.35.0` |
+| `frontend/package.json` | 前端依赖：React 18、Vite 5、ECharts 6、lightweight-charts 5.1、recharts 2.10、react-markdown 10 等 |
+| `frontend/tsconfig.json` | TypeScript 配置：ES2020、React JSX、严格模式、`noUnusedLocals: true`、`noUnusedParameters: true` |
+| `frontend/vite.config.ts` | Vite 构建配置：`outDir: 'dist'`、`emptyOutDir: true` |
+| `requirements.txt` | Python 运行时依赖：`pandas>=2.0.0`、`numpy>=1.24.0`、`akshare>=1.12.0`、`requests>=2.31.0`、`openpyxl>=3.1.0`、`tqdm>=4.65.0` |
+| `build-windows.ps1` | Windows 构建/打包/清理脚本，含环境检查、版本一致性校验 |
+| `build-release.sh` | macOS/Windows 发布构建脚本（Bash），同样校验版本一致性 |
+
 ## 项目结构
 
 ```
 stock-analyzer/
-├── main.go                  # Wails 入口，embed 前端资源、股票库、ML 模型
+├── main.go                  # Wails 入口：embed 前端 dist、股票库、ML 模型
 ├── app.go                   # App 结构体，所有 Wails 绑定方法（~2500 行）
 ├── storage.go               # 本地文件存储管理器（JSON 持久化）
 ├── csvparser.go             # 同花顺 CSV/Excel 财报导入解析器
-├── integration_test.go      # 集成测试
+├── integration_test.go      # 端到端集成测试（使用真实 CSV 数据）
+├── storage_test.go          # 存储层单元测试
 ├── wails.json               # Wails 配置（版本号来源之一）
 ├── go.mod / go.sum          # Go 依赖
-├── requirements.txt         # Python 依赖（pandas, numpy, akshare, requests, openpyxl, tqdm）
+├── requirements.txt         # Python 依赖
 ├── build-windows.ps1        # Windows 构建/打包脚本
 ├── build-release.sh         # macOS/Windows 发布构建脚本
 │
-├── analyzer/                # 核心分析引擎
+├── analyzer/                # 核心分析引擎（纯逻辑，无网络 I/O）
 │   ├── engine.go            # 18 步分析主入口（RunAnalysisWithAll 等）
 │   ├── steps.go             # 18 步财务透视具体实现
-│   ├── evaluator.go         # 评分与评级逻辑
-│   ├── report.go            # Markdown 报告生成器（16 个模块）
-│   ├── ascore_module.go     # A-Score 风险评分（M-Score、Z-Score、非财务信号）
+│   ├── evaluator.go         # 评分与评级逻辑（100 分制，A-F 等级）
+│   ├── report.go            # Markdown 报告生成器（16 个模块，~100KB）
+│   ├── ascore_module.go     # A-Score 风险评分报告渲染
 │   ├── risk_analysis.go     # 风险雷达与亮点/风险提取
+│   ├── risk_radar.go        # 风险雷达图数据构建
 │   ├── comparable.go        # 可比公司聚焦分析
 │   ├── industry.go          # 行业均值数据库与横向对比
 │   ├── policy.go            # 十五五政策匹配度评估
@@ -57,9 +72,12 @@ stock-analyzer/
 │   ├── ml_inference.go      # 调用 Python ONNX 推理脚本
 │   ├── data.go              # 财务数据加载与清洗
 │   ├── types.go             # 核心类型定义（CalcTrace、StepResult、AnalysisReport 等）
-│   └── *_test.go            # 单元测试
+│   ├── activity_test.go     # 活跃度计算测试
+│   ├── ascore_validation_test.go # A-Score 验证测试
+│   ├── policy_test.go       # 政策匹配测试
+│   └── report_test.go       # 报告生成测试
 │
-├── downloader/              # 数据下载与爬取层
+├── downloader/              # 数据下载与爬取层（所有网络 I/O）
 │   ├── eastmoney.go         # 东方财富 API（财报、资料、行情、K线）
 │   ├── tencent.go           # 腾讯财经备用数据源
 │   ├── sentiment.go         # 舆情情绪数据抓取
@@ -70,43 +88,71 @@ stock-analyzer/
 │   ├── concept.go           # 股票概念与风口数据
 │   ├── mapping.go           # 科目名映射与标准化
 │   ├── validator.go         # 多源数据校验
-│   └── *_test.go            # 单元测试与集成测试
+│   ├── downloader_test.go   # 下载器单元测试
+│   ├── analyzer_integration_test.go # 下载器与分析器集成测试
+│   └── storage.go           # 下载器侧简单存储辅助
 │
-├── frontend/                # React 前端
-│   ├── package.json         # 前端依赖（echarts, react, vite 等）
+├── frontend/                # React + TypeScript 前端
+│   ├── package.json         # 前端依赖
+│   ├── tsconfig.json        # TS 配置
+│   ├── vite.config.ts       # Vite 配置
 │   ├── src/
 │   │   ├── App.tsx          # 主界面组件（~2700 行，自选股、分析、报告展示）
 │   │   ├── Settings.tsx     # 设置面板（版本号来源之二）
 │   │   ├── UnifiedChart.tsx # K线统一图表组件
 │   │   ├── KlineChart.tsx   # K线图表
 │   │   ├── FinancialTrendDrawer.tsx # 财务趋势抽屉
-│   │   └── stocks.ts        # 内置股票代码库
+│   │   ├── indicatorCharts.tsx # 指标图表组件
+│   │   ├── ModuleCopyButton.tsx # 报告模块复制按钮
+│   │   ├── PythonDepsModal.tsx # Python 依赖安装弹窗
+│   │   ├── ErrorBoundary.tsx # 错误边界
+│   │   ├── main.tsx         # 前端入口
+│   │   ├── stocks.ts        # 内置股票代码库（~600KB）
+│   │   ├── api/             # （预留空目录）
+│   │   └── components/      # （预留空目录）
 │   └── wailsjs/             # Wails 生成的 Go 绑定代码
 │
 ├── ml_models/               # ML 模型与推理脚本（打包时必须包含）
-│   ├── inference.py         # 统一推理入口（Engine A/B/D）
+│   ├── inference.py         # 统一推理入口（Engine A/B/D），Go 通过 stdin/stdout JSON 调用
+│   ├── check_env.py         # Python 环境检测脚本
+│   ├── risk_crawler.py      # 风险爬虫 Python 辅助
 │   ├── engine_a_sentiment/  # 情绪+量价融合 ONNX 模型
 │   ├── engine_b_financial/  # 财务 LSTM ONNX 模型 + scaler.pkl
-│   └── engine_d_risk/       # LightGBM 风险预警模型
+│   └── engine_d_risk/       # LightGBM 风险预警模型（.pkl）
 │
 ├── scripts/                 # Python 数据脚本（打包时必须包含）
 │   ├── fetch_all_industry_data.py   # 全市场行业数据采集
 │   ├── fetch_hk_financials.py       # 港股财报获取
 │   ├── fetch_hk_profile.py          # 港股基本资料获取
 │   ├── fetch_rim_data.py            # RIM 外部数据获取
-│   └── ...
+│   ├── update_industry_database.py  # 行业数据库更新
+│   ├── update_policy_library.py     # 政策库更新
+│   ├── collect_fraud_cases.py       # 欺诈案例收集
+│   ├── prepare_negative_samples.py  # 负样本准备
+│   ├── generate_icons.py            # 图标生成
+│   ├── generate_logo_set.py         # Logo 生成
+│   ├── generate_readme_assets.py    # README 素材生成
+│   ├── create-release.ps1           # 发布辅助脚本
+│   └── test_rim_dinglong.py         # RIM 测试脚本
+│
+├── cmd/
+│   └── validate-activity/   # 活跃度验证 CLI 工具
 │
 ├── data/
 │   └── stocks.json          # 内置 A 股/港股代码库（被 embed）
 │
 └── docs/                    # 文档与截图
+    ├── BUILD.md             # 详细构建指南
+    ├── ML_PREDICTION_DESIGN.md # ML 预测设计文档
+    ├── ml_architecture.png  # 架构图
+    └── screenshots/         # 界面截图
 ```
 
 ## 构建与运行
 
 ### 环境要求
 
-- **Go** >= 1.25
+- **Go** >= 1.25（`go.mod` 指定 `go 1.25.0`）
 - **Node.js** >= 18
 - **Python** 3.10+（运行时必需，用于 ML 推理与数据脚本）
 - **Wails CLI** >= v2.12：`go install github.com/wailsapp/wails/v2/cmd/wails@latest`
@@ -123,7 +169,7 @@ cd frontend && npm install
 
 # Python 依赖（运行时必需）
 pip install -r requirements.txt
-# 核心运行时依赖：onnxruntime, scikit-learn, numpy, pandas
+# 核心运行时额外依赖：onnxruntime, scikit-learn, numpy
 ```
 
 ### 常用命令
@@ -132,14 +178,16 @@ pip install -r requirements.txt
 # 开发模式（热重载前端 + Go）
 wails dev
 
-# 构建生产版本（Windows）
-# 推荐使用脚本，因为它会自动执行版本一致性校验：
+# 构建生产版本（Windows，推荐用脚本以自动校验版本）
 .\build-windows.ps1 build
 
 # 打包为 ZIP（包含 ml_models 和 scripts）
 .\build-windows.ps1 package
 
-# 运行 Go 测试
+# macOS 发布构建
+./build-release.sh mac
+
+# 运行全部 Go 测试
 go test ./...
 
 # 运行特定包测试
@@ -150,7 +198,7 @@ go test ./downloader/...
 ### 构建注意事项
 
 1. **版本号一致性（硬要求）**: `wails.json` 中的 `info.productVersion` 必须与 `frontend/src/Settings.tsx` 中的 `const version` 完全一致。两个构建脚本都会校验此项，不一致会**中断构建**。
-2. **前端 dist 重建**: 如果前端代码有变更，构建前必须确保 `frontend/dist` 是最新的。Wails `build` 在 `dist` 已存在时可能跳过前端构建，导致打包旧代码。
+2. **前端 dist 重建**: 如果前端代码有变更，构建前必须确保 `frontend/dist` 是最新的。Wails `build` 在 `dist` 已存在时可能跳过前端构建，导致打包旧代码。建议手动执行 `cd frontend && npm run build`。
 3. **打包产物必须包含**: `ml_models/` 和 `scripts/` 目录。Go 后端在运行时会从可执行文件同级目录查找这些路径。
 4. **开发模式 vs 生产模式**: `main.go` 中 `readStockJSON()` 优先读取本地 `data/stocks.json`，打包后 fallback 到 `embed.FS`。
 
@@ -209,7 +257,7 @@ go test ./analyzer/...
 go test ./downloader/...
 
 # 集成测试（根目录）
-go test -run TestIntegration
+go test -run TestAnalyze603501
 ```
 
 测试文件分布：
@@ -219,8 +267,48 @@ go test -run TestIntegration
 - `analyzer/report_test.go` — 报告生成测试
 - `downloader/analyzer_integration_test.go` — 下载器与分析器集成测试
 - `downloader/downloader_test.go` — 下载器单元测试
-- `storage_test.go` — 存储层测试
-- `integration_test.go` — 端到端集成测试
+- `storage_test.go` — 存储层测试（归档、清理、历史列表）
+- `integration_test.go` — 端到端集成测试（使用 603501 真实 CSV 数据）
+
+## 代码风格指南
+
+### Go
+- 遵循标准 Go 代码风格，提交前运行 `go fmt ./...`
+- 优先使用项目已有的错误处理方式（返回 `fmt.Errorf("...: %w", err)`）
+- 涉及并发操作时，务必添加 `recover()` 防止 panic 扩散
+- 所有代码注释保持中文
+
+### TypeScript / React
+- 前端使用 React + TypeScript，确保 `npm run build` 无类型错误
+- `tsconfig.json` 启用了 `noUnusedLocals` 和 `noUnusedParameters`，未使用的变量会导致构建失败
+- ECharts 数据处理时避免传入 `null`，统一使用 `'-'` 或 `undefined`
+- 前端状态管理集中在 `App.tsx`（~2700 行单文件大组件），新增功能时优先在现有 hooks 体系内扩展，避免引入额外状态管理库
+
+### Python
+- ML 脚本位于 `ml_models/` 和 `scripts/`，保持与现有推理接口兼容
+- ONNX 模型导出后请验证与 Go 端的推理结果一致
+- `inference.py` 通过 stdin/stdout JSON 与 Go 通信，不要改变该接口格式
+
+### Commit 规范
+建议遵循以下前缀：
+
+| 前缀 | 用途 |
+|------|------|
+| `feat:` | 新功能 |
+| `fix:` | 修复 bug |
+| `docs:` | 文档更新 |
+| `ui:` | 界面/交互优化 |
+| `chore:` | 构建/版本/工具链等杂项 |
+| `refactor:` | 重构（无功能变化） |
+
+## 安全注意事项
+
+- **不要破坏 Wails 绑定**: `app.go` 中导出的方法（首字母大写）会被前端调用，修改签名必须同步更新 `frontend/src/App.tsx` 中的调用。
+- **Python 脚本路径解析**: `ml_models/inference.py` 和 `scripts/*.py` 在开发模式与打包后的路径解析逻辑不同。开发时通过 `runtime.Caller(0)` 向上查找项目根目录；打包后优先使用 `os.Executable()` 所在目录。新增 Python 脚本时请遵循同样模式。
+- **Windows 隐藏窗口**: 所有通过 `exec.Command` 调用 Python 脚本的地方，在 Windows 上必须设置 `syscall.SysProcAttr{HideWindow: true}`，否则会出现 CMD 黑框。
+- **新增 Go 依赖**: 本项目不使用 `vendor`，直接通过 `go mod` 管理。新增依赖后运行 `go mod tidy`。
+- **ML 模型文件**: `main.go` 通过 `//go:embed` 嵌入了部分 ML 模型文件，新增模型文件时需同步更新 embed 指令。
+- **本地数据安全**: 所有用户数据（自选、财报、报告）保存在 `~/.config/stock-analyzer/`，不涉及云端传输。
 
 ## 发布流程
 
@@ -229,16 +317,7 @@ go test -run TestIntegration
 3. **提交并推送**: `git commit`, `git push origin main`
 4. **打标签**: `git tag v1.3.25`, `git push origin v1.3.25`
 5. **构建发布包**:
-   - Windows: `.\build-windows.ps1 package`
+   - Windows: `.uild-windows.ps1 package`
    - macOS: `./build-release.sh mac`
 6. **创建 GitHub Release**: 上传 ZIP，将 `CHANGELOG.md` 对应章节粘贴到 Release Notes。
 7. **版本号递增**: 发布后立刻将两个文件版本号 bump 到下一个未发布版本（如 `1.3.26`）。
-
-## 修改注意事项
-
-- **不要破坏 Wails 绑定**: `app.go` 中导出的方法（首字母大写）会被前端调用，修改签名必须同步更新 `frontend/src/App.tsx` 中的调用。
-- **Python 脚本路径解析**: `ml_models/inference.py` 和 `scripts/*.py` 在开发模式与打包后的路径解析逻辑不同。开发时通过 `runtime.Caller(0)` 向上查找项目根目录；打包后优先使用 `os.Executable()` 所在目录。新增 Python 脚本时请遵循同样模式。
-- **Windows 隐藏窗口**: 所有通过 `exec.Command` 调用 Python 脚本的地方，在 Windows 上必须设置 `syscall.SysProcAttr{HideWindow: true}`，否则会出现 CMD 黑框。
-- **新增 Go 依赖**: 本项目不使用 `vendor`，直接通过 `go mod` 管理。新增依赖后运行 `go mod tidy`。
-- **前端状态管理**: `frontend/src/App.tsx` 是单文件大组件（~2700 行），新增功能时优先在现有 hooks 体系内扩展，避免引入额外状态管理库。
-- **中文注释**: 所有代码注释和文档保持中文。提交信息也建议使用中文。
