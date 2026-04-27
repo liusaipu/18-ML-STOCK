@@ -52,6 +52,12 @@ func fetchRIMScriptPath() string {
 		if _, err := os.Stat(p); err == nil {
 			return p
 		}
+		// macOS .app bundle: scripts 在 Contents/Resources 内部
+		resourcesDir := filepath.Join(exeDir, "..", "Resources")
+		p = filepath.Join(resourcesDir, "scripts", "fetch_rim_data.py")
+		if _, err := os.Stat(p); err == nil {
+			return p
+		}
 	}
 	
 	_, b, _, _ := runtime.Caller(0)
@@ -75,6 +81,12 @@ func resolvePythonExecutable() string {
 		venvPythonWin := filepath.Join(exeDir, ".venv", "Scripts", "python.exe")
 		if _, err := os.Stat(venvPythonWin); err == nil {
 			return venvPythonWin
+		}
+		// macOS .app bundle: .venv 在 Contents/Resources 内部
+		resourcesDir := filepath.Join(exeDir, "..", "Resources")
+		venvPython = filepath.Join(resourcesDir, ".venv", "bin", "python3")
+		if _, err := os.Stat(venvPython); err == nil {
+			return venvPython
 		}
 	}
 	
