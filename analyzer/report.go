@@ -998,7 +998,21 @@ func writeModule9(b *strings.Builder, steps []StepResult, latest, prev string, m
 	hasML := ml != nil && (ml.Financial != nil || ml.Sentiment != nil || ml.EngineD != nil)
 	if !hasML {
 		b.WriteString("> **说明**: 当前版本暂无机器学习模型，以下基于财务趋势做简易方向推断。\n\n")
-		b.WriteString("> 💡 **排查建议**: 如已确认模型文件存在但仍显示此提示，请检查「设置 → 数据 → 🔍 检测 Python 环境」，确保 onnxruntime / scikit-learn / numpy 已正确安装。\n\n")
+		// 如果 Python 推理返回了明确的错误（如缺少依赖包），直接显示
+		if ml != nil && ml.MLError != "" {
+			b.WriteString("> ⚠️ **Python 推理失败**: ")
+			b.WriteString(ml.MLError)
+			b.WriteString("\n\n")
+			if strings.Contains(ml.MLError, "pip3 install") {
+				b.WriteString("> 💻 **解决方法**: 打开终端（Terminal）并运行以下命令安装依赖：\n")
+				b.WriteString("> ```bash\n")
+				b.WriteString("> pip3 install onnxruntime scikit-learn numpy\n")
+				b.WriteString("> ```\n")
+				b.WriteString("> 安装完成后重新启动应用即可。\n\n")
+			}
+		} else {
+			b.WriteString("> 💡 **排查建议**: 如已确认模型文件存在但仍显示此提示，请检查「设置 → 数据 → 🔍 检测 Python 环境」，确保 onnxruntime / scikit-learn / numpy 已正确安装。\n\n")
+		}
 	} else {
 		b.WriteString("> **说明**: 以下预测结果由 ONNX 多引擎模型生成。\n\n")
 	}

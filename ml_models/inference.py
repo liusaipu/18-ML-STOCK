@@ -7,12 +7,21 @@ import json
 import os
 import sys
 import pickle
-import numpy as np
+
+# 追踪缺失的依赖包，用于生成友好的错误提示
+_MISSING_PACKAGES = []
+
+try:
+    import numpy as np
+except ImportError:
+    np = None
+    _MISSING_PACKAGES.append("numpy")
 
 try:
     import onnxruntime as ort
 except ImportError:
     ort = None
+    _MISSING_PACKAGES.append("onnxruntime")
 
 # Engine D imports
 try:
@@ -20,6 +29,20 @@ try:
     ENGINE_D_AVAILABLE = True
 except ImportError:
     ENGINE_D_AVAILABLE = False
+    _MISSING_PACKAGES.append("scikit-learn")
+
+
+def _make_deps_error():
+    """生成依赖缺失的统一错误提示"""
+    if not _MISSING_PACKAGES:
+        return None
+    pkgs = " ".join(sorted(set(_MISSING_PACKAGES)))
+    return {
+        "error": f"缺少 Python 依赖包: {pkgs}。请在终端运行: pip3 install {pkgs}"
+    }
+
+
+_DEPS_ERROR = _make_deps_error()
 
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -72,6 +95,10 @@ def infer_engine_a(payload):
         "price_seq": [[...], ...]  # [16, 24]
     }
     """
+    if _DEPS_ERROR is not None:
+        return _DEPS_ERROR
+    if ort is None:
+        return {"error": "缺少 onnxruntime。请在终端运行: pip3 install onnxruntime"}
     text_seq = np.array(payload["text_seq"], dtype=np.float32)
     price_seq = np.array(payload["price_seq"], dtype=np.float32)
     if text_seq.ndim == 2:
@@ -103,6 +130,10 @@ def infer_engine_b(payload):
         "financial_seq": [[...], ...]  # [8, N_features]
     }
     """
+    if _DEPS_ERROR is not None:
+        return _DEPS_ERROR
+    if ort is None:
+        return {"error": "缺少 onnxruntime。请在终端运行: pip3 install onnxruntime"}
     seq = np.array(payload["financial_seq"], dtype=np.float32)
     if seq.ndim == 2:
         seq = np.expand_dims(seq, 0)
@@ -153,6 +184,8 @@ def infer_engine_d(payload):
         "top_factors": ["ascore", "gm_risk", ...]  # 主要风险因子
     }
     """
+    if _DEPS_ERROR is not None:
+        return _DEPS_ERROR
     model = get_model_d()
     if model is None:
         # 模型未加载，返回基于规则的简单评估

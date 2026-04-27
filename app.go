@@ -1587,6 +1587,9 @@ func (a *App) analyzeStockInternal(symbol string, overwriteLatest bool, customRI
 					mlLocal.Financial = fp
 				} else {
 					debugLog("[ML] Engine B failed for %s: %v", symbol, err)
+					if mlLocal.MLError == "" {
+						mlLocal.MLError = err.Error()
+					}
 				}
 			}
 			// Engine D: 风险预警（仅依赖财务数据，独立于 K 线）
@@ -1595,6 +1598,9 @@ func (a *App) analyzeStockInternal(symbol string, overwriteLatest bool, customRI
 					mlLocal.EngineD = dp
 				} else {
 					debugLog("[ML] Engine D failed for %s: %v", symbol, err)
+					if mlLocal.MLError == "" {
+						mlLocal.MLError = err.Error()
+					}
 				}
 			}
 			// Engine A（价格序列始终可用；sentiment 为 nil 时 text_seq 补 0）
@@ -1612,6 +1618,9 @@ func (a *App) analyzeStockInternal(symbol string, overwriteLatest bool, customRI
 						mlLocal.Sentiment = sp
 					} else {
 						debugLog("[ML] Engine A failed for %s: %v", symbol, err)
+						if mlLocal.MLError == "" {
+							mlLocal.MLError = err.Error()
+						}
 					}
 				}
 			}

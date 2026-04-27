@@ -110,6 +110,7 @@ type MLPredictionData struct {
 	Financial *MLFinancialPrediction `json:"financial,omitempty"`
 	EngineD   *MLDRiskPrediction     `json:"engine_d,omitempty"`
 	Summary   *MLSummary             `json:"summary,omitempty"`
+	MLError   string                 `json:"ml_error,omitempty"` // Python 推理失败的错误信息
 }
 
 // RIMData 剩余收益模型数据
