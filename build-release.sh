@@ -32,13 +32,24 @@ build_mac() {
   echo "Building macOS universal binary..."
   /Users/lobster/go/bin/wails build -platform darwin/universal -clean
 
-  # 复制 ml_models 和 scripts 到构建目录
+  # 复制 ml_models 和 scripts 到构建目录（兼容不移动 .app 的用户）
   echo "Copying ml_models and scripts to build directory..."
   cp -r "$(pwd)/ml_models" "$BIN_DIR/"
   cp -r "$(pwd)/scripts" "$BIN_DIR/"
 
+  # 同时复制到 .app/Contents/Resources/ 内部，防止用户只移动 .app
+  echo "Copying ml_models and scripts into .app/Contents/Resources/..."
+  mkdir -p "$BIN_DIR/stockfinlens.app/Contents/Resources"
+  cp -r "$(pwd)/ml_models" "$BIN_DIR/stockfinlens.app/Contents/Resources/"
+  cp -r "$(pwd)/scripts" "$BIN_DIR/stockfinlens.app/Contents/Resources/"
+
   cd "$BIN_DIR"
-  zip -r "stockfinlens-macos-universal-v${VERSION}.zip" stockfinlens.app ml_models/ scripts/
+  # 使用 ditto 保留 macOS 扩展属性和可执行权限
+  rm -f "stockfinlens-macos-universal-v${VERSION}.zip"
+  mkdir -p /tmp/stockfinlens_pkg
+  cp -R stockfinlens.app ml_models scripts /tmp/stockfinlens_pkg/
+  ditto -c -k --sequesterRsrc /tmp/stockfinlens_pkg "stockfinlens-macos-universal-v${VERSION}.zip"
+  rm -rf /tmp/stockfinlens_pkg
   cd - > /dev/null
   echo "macOS package: ${BIN_DIR}/stockfinlens-macos-universal-v${VERSION}.zip"
 }

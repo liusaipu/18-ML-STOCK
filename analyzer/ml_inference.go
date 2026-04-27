@@ -124,6 +124,12 @@ func mlInferenceScriptPath() string {
 				return p
 			}
 		}
+		// macOS .app bundle: ml_models 在 Contents/Resources 内部
+		resourcesDir := filepath.Join(exeDir, "..", "..", "Resources")
+		p = filepath.Join(resourcesDir, "ml_models", "inference.py")
+		if _, err := os.Stat(p); err == nil {
+			return p
+		}
 	}
 
 	for _, root := range projectRootCandidates() {
@@ -154,11 +160,18 @@ func resolveMLPythonExecutable() string {
 	// macOS .app bundle: 检查 .app 同级目录下的 .venv
 	if exe, err := os.Executable(); err == nil {
 		exe, _ = filepath.EvalSymlinks(exe)
-		if parent := appBundleParentDir(filepath.Dir(exe)); parent != "" {
+		exeDir := filepath.Dir(exe)
+		if parent := appBundleParentDir(exeDir); parent != "" {
 			venvPython := filepath.Join(parent, ".venv", "bin", "python3")
 			if _, err := os.Stat(venvPython); err == nil {
 				return venvPython
 			}
+		}
+		// macOS .app bundle: 检查 Contents/Resources 下的 .venv
+		resourcesDir := filepath.Join(exeDir, "..", "..", "Resources")
+		venvPython := filepath.Join(resourcesDir, ".venv", "bin", "python3")
+		if _, err := os.Stat(venvPython); err == nil {
+			return venvPython
 		}
 	}
 	

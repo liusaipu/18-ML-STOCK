@@ -75,6 +75,12 @@ func riskCrawlerScriptPath() string {
 				}
 			}
 		}
+		// macOS .app bundle: ml_models 在 Contents/Resources 内部
+		resourcesDir := filepath.Join(exeDir, "..", "..", "Resources")
+		p = filepath.Join(resourcesDir, "ml_models", "risk_crawler.py")
+		if _, err := os.Stat(p); err == nil {
+			return p
+		}
 	}
 	
 	_, b, _, _ := runtime.Caller(0)
