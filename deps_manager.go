@@ -43,6 +43,19 @@ var requiredPackages = []PythonPackage{
 	{Name: "openpyxl", ModuleName: "openpyxl", Display: "openpyxl", Required: false},
 }
 
+// appBundleParentDir 检测 macOS .app bundle 结构，返回 .app 的父目录
+func appBundleParentDir(exeDir string) string {
+	contentsDir := filepath.Dir(exeDir)
+	if filepath.Base(contentsDir) != "Contents" {
+		return ""
+	}
+	appDir := filepath.Dir(contentsDir)
+	if !strings.HasSuffix(filepath.Base(appDir), ".app") {
+		return ""
+	}
+	return filepath.Dir(appDir)
+}
+
 // findPythonExecutable 查找系统中可用的 Python 可执行文件
 func findPythonExecutable() string {
 	// 1. 先查找 .venv（开发/打包环境）
@@ -55,6 +68,13 @@ func findPythonExecutable() string {
 		for _, p := range candidates {
 			if _, err := os.Stat(p); err == nil {
 				return p
+			}
+		}
+		// macOS .app bundle: 检查 .app 同级目录下的 .venv
+		if parent := appBundleParentDir(exeDir); parent != "" {
+			venvPython := filepath.Join(parent, ".venv", "bin", "python3")
+			if _, err := os.Stat(venvPython); err == nil {
+				return venvPython
 			}
 		}
 	}
@@ -226,14 +246,18 @@ func depsMarkerPath() string {
 	return filepath.Join(home, ".config", "stock-analyzer", "deps_checked")
 }
 
-// hasCheckedDeps 是否已经检查过依赖
+// hasCheckedDeps 是否已经检查过依赖（标记文件 7 天后过期）
 func hasCheckedDeps() bool {
 	p := depsMarkerPath()
 	if p == "" {
 		return false
 	}
-	_, err := os.Stat(p)
-	return err == nil
+	info, err := os.Stat(p)
+	if err != nil {
+		return false
+	}
+	// 7 天后过期，重新检测
+	return time.Since(info.ModTime()) < 7*24*time.Hour
 }
 
 // markDepsChecked 标记依赖已检查

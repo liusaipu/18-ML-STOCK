@@ -998,6 +998,7 @@ func writeModule9(b *strings.Builder, steps []StepResult, latest, prev string, m
 	hasML := ml != nil && (ml.Financial != nil || ml.Sentiment != nil || ml.EngineD != nil)
 	if !hasML {
 		b.WriteString("> **说明**: 当前版本暂无机器学习模型，以下基于财务趋势做简易方向推断。\n\n")
+		b.WriteString("> 💡 **排查建议**: 如已确认模型文件存在但仍显示此提示，请检查「设置 → 数据 → 🔍 检测 Python 环境」，确保 onnxruntime / scikit-learn / numpy 已正确安装。\n\n")
 	} else {
 		b.WriteString("> **说明**: 以下预测结果由 ONNX 多引擎模型生成。\n\n")
 	}

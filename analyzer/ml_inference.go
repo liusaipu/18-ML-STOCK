@@ -55,6 +55,21 @@ func findProjectRoot(start string) string {
 	return ""
 }
 
+// appBundleParentDir 检测 macOS .app bundle 结构，返回 .app 的父目录
+// exeDir 通常是 .../stockfinlens.app/Contents/MacOS/
+func appBundleParentDir(exeDir string) string {
+	// exeDir -> .../Contents/MacOS/
+	contentsDir := filepath.Dir(exeDir)
+	if filepath.Base(contentsDir) != "Contents" {
+		return ""
+	}
+	appDir := filepath.Dir(contentsDir)
+	if !strings.HasSuffix(filepath.Base(appDir), ".app") {
+		return ""
+	}
+	return filepath.Dir(appDir)
+}
+
 // projectRootCandidates 返回可能的项目根目录候选列表
 func projectRootCandidates() []string {
 	seen := make(map[string]bool)
@@ -81,7 +96,12 @@ func projectRootCandidates() []string {
 	// 3. 可执行文件所在目录
 	if exe, err := os.Executable(); err == nil {
 		exe, _ = filepath.EvalSymlinks(exe)
-		add(findProjectRoot(filepath.Dir(exe)))
+		exeDir := filepath.Dir(exe)
+		add(findProjectRoot(exeDir))
+		// 4. macOS .app bundle 同级目录
+		if parent := appBundleParentDir(exeDir); parent != "" {
+			add(findProjectRoot(parent))
+		}
 	}
 
 	return roots
@@ -96,6 +116,13 @@ func mlInferenceScriptPath() string {
 		p := filepath.Join(exeDir, "ml_models", "inference.py")
 		if _, err := os.Stat(p); err == nil {
 			return p
+		}
+		// macOS .app bundle: ml_models 在 .app 同级目录
+		if parent := appBundleParentDir(exeDir); parent != "" {
+			p = filepath.Join(parent, "ml_models", "inference.py")
+			if _, err := os.Stat(p); err == nil {
+				return p
+			}
 		}
 	}
 
@@ -121,6 +148,17 @@ func resolveMLPythonExecutable() string {
 		venvPythonWin := filepath.Join(root, ".venv", "Scripts", "python.exe")
 		if _, err := os.Stat(venvPythonWin); err == nil {
 			return venvPythonWin
+		}
+	}
+	
+	// macOS .app bundle: 检查 .app 同级目录下的 .venv
+	if exe, err := os.Executable(); err == nil {
+		exe, _ = filepath.EvalSymlinks(exe)
+		if parent := appBundleParentDir(filepath.Dir(exe)); parent != "" {
+			venvPython := filepath.Join(parent, ".venv", "bin", "python3")
+			if _, err := os.Stat(venvPython); err == nil {
+				return venvPython
+			}
 		}
 	}
 	

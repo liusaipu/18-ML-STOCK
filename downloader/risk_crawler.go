@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 
 )
 
@@ -61,6 +62,18 @@ func riskCrawlerScriptPath() string {
 		p := filepath.Join(exeDir, "ml_models", "risk_crawler.py")
 		if _, err := os.Stat(p); err == nil {
 			return p
+		}
+		// macOS .app bundle: ml_models 在 .app 同级目录
+		contentsDir := filepath.Dir(exeDir)
+		if filepath.Base(contentsDir) == "Contents" {
+			appDir := filepath.Dir(contentsDir)
+			if strings.HasSuffix(filepath.Base(appDir), ".app") {
+				parent := filepath.Dir(appDir)
+				p = filepath.Join(parent, "ml_models", "risk_crawler.py")
+				if _, err := os.Stat(p); err == nil {
+					return p
+				}
+			}
 		}
 	}
 	
