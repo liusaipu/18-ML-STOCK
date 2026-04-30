@@ -166,7 +166,7 @@ export function Settings({
     saveSettings(newSettings)
   }
 
-  const version = '1.3.27'
+  const version = '1.3.28'
 
   return (
     <>
