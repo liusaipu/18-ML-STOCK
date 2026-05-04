@@ -192,6 +192,7 @@ func (r *DataRouter) ConvertToFinancialReportData(tfd *TushareFinancialData, sym
 		setVal(result.IncomeStatement, "营业利润", year, item.OperateProfit)
 		setVal(result.IncomeStatement, "利润总额", year, item.TotalProfit)
 		setVal(result.IncomeStatement, "净利润", year, item.NetIncome)
+		setVal(result.IncomeStatement, "归母净利润", year, item.ParentNetIncome)
 		setVal(result.IncomeStatement, "基本每股收益", year, item.EPS)
 	}
 

@@ -234,9 +234,9 @@ export function Settings({
                     onChange={(e) => updateSetting('riskSensitivity', e.target.value as 'strict' | 'standard' | 'loose')}
                     style={{ padding: '4px 8px', borderRadius: 4, border: '1px solid rgba(148,163,184,0.3)', background: 'rgba(15,23,42,0.6)', color: '#e2e8f0', fontSize: 13 }}
                   >
-                    <option value="strict">严格（A-Score≥50即中风险）</option>
+                    <option value="strict">严格</option>
                     <option value="standard">标准（默认）</option>
-                    <option value="loose">宽松（A-Score≥60才中风险）</option>
+                    <option value="loose">宽松</option>
                   </select>
                 </div>
               </div>
@@ -406,21 +406,6 @@ export function Settings({
                 )}
               </div>
 
-              {/* Python 环境 */}
-              <div className="settings-data-section">
-                <div className="settings-data-title">🐍 Python 环境</div>
-                <div className="settings-data-desc">
-                  检测 ML 推理和数据更新所需的 Python 依赖包
-                </div>
-                {onCheckPythonDeps && (
-                  <button 
-                    className="settings-data-btn" 
-                    onClick={onCheckPythonDeps}
-                  >
-                    🔍 检测 Python 环境
-                  </button>
-                )}
-              </div>
             </div>
           )}
 
@@ -431,6 +416,23 @@ export function Settings({
               <div className="about-version">版本 {version}</div>
               <div className="about-desc">穿透财报看真相，自动扫描财务风险，重要指标可溯源。</div>
               <a href="https://github.com/liusaipu/stockfinlens/releases" target="_blank" rel="noopener noreferrer" className="about-link">检查更新</a>
+
+              {/* 运行环境 */}
+              <div className="settings-divider" style={{ margin: '16px 0' }} />
+              <div className="settings-data-section" style={{ textAlign: 'left' }}>
+                <div className="settings-data-title">🖥️ 运行环境</div>
+                <div className="settings-data-desc">
+                  检测 ML 推理和数据更新所需的 Python 依赖包
+                </div>
+                {onCheckPythonDeps && (
+                  <button 
+                    className="settings-data-btn" 
+                    onClick={onCheckPythonDeps}
+                  >
+                    🔍 检测运行环境
+                  </button>
+                )}
+              </div>
             </div>
           )}
         </div>

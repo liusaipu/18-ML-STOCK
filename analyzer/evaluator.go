@@ -271,7 +271,11 @@ func computeDeduction(step StepResult, year string, yd map[string]any) Deduction
 		} else {
 			d.Points = 1
 		}
-		d.Reason = fmt.Sprintf("%s年分红现金支出占比=%.2f%%", year, ratio)
+		if ratio == 0 {
+			d.Reason = fmt.Sprintf("%s年分红数据缺失或未实施现金分红", year)
+		} else {
+			d.Reason = fmt.Sprintf("%s年分红现金支出占比=%.2f%%", year, ratio)
+		}
 	default:
 		d.Reason = fmt.Sprintf("%s年未达标", year)
 	}

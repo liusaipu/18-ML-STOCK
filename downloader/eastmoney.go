@@ -181,6 +181,46 @@ func downloadFromEastMoney(market, code string, maxYears int) (*FinancialReportD
 	return result, nil
 }
 
+// FetchCashFlowDividendFromEastMoney 从东方财富现金流量表获取分红支出数据
+// 用于补充其他数据源（如Tushare）缺失的分红字段
+func FetchCashFlowDividendFromEastMoney(market, code string, maxYears int) (map[string]float64, error) {
+	if maxYears <= 0 {
+		maxYears = 5
+	}
+	fullCode := market + code
+
+	// 1. 确定现金流量表类型
+	cfCT, err := getCompanyTypeForEndpoint("xjllbAjaxNew", fullCode)
+	if err != nil {
+		return nil, fmt.Errorf("无法确定现金流量表类型: %w", err)
+	}
+
+	// 2. 获取年报日期列表
+	dates, err := getAnnualReportDates(code, maxYears)
+	if err != nil {
+		return nil, fmt.Errorf("获取年报日期失败: %w", err)
+	}
+
+	result := make(map[string]float64)
+	for _, d := range dates {
+		data, err := fetchHSF10("xjllbAjaxNew", cfCT, d, fullCode)
+		if err != nil {
+			continue
+		}
+		if v, ok := data["ASSIGN_DIVIDEND_PORFIT"]; ok && v != nil {
+			dividend := extractFloat(v)
+			if dividend != 0 {
+				result[d] = dividend
+			}
+		}
+	}
+
+	if len(result) == 0 {
+		return nil, fmt.Errorf("未找到分红数据")
+	}
+	return result, nil
+}
+
 // getCompanyTypeForEndpoint 尝试多个 companyType 直到指定 endpoint 返回有效数据
 func getCompanyTypeForEndpoint(endpoint, fullCode string) (int, error) {
 	companyTypes := []int{4, 1, 2, 3, 5, 6, 7, 8}

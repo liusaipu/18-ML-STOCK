@@ -15,11 +15,11 @@ var mockConceptBoardJSON = []byte(`{
   "data": {
     "total": 496,
     "diff": [
-      {"f12": "BK1168", "f14": "固态电池", "f2": 1234.56, "f3": 5.23, "f4": 61.34, "f10": 1523000, "f15": 2860000000, "f62": 890000000, "f184": 8.5, "f204": "宁德时代", "f205": "300750"},
-      {"f12": "BK0729", "f14": "人工智能", "f2": 2345.67, "f3": 3.15, "f4": 71.56, "f10": 2100000, "f15": 4500000000, "f62": 1200000000, "f184": 12.3, "f204": "科大讯飞", "f205": "002230"},
-      {"f12": "BK0854", "f14": "光伏设备", "f2": 987.12, "f3": -1.20, "f4": -11.95, "f10": 890000, "f15": 1200000000, "f62": -300000000, "f184": -3.2, "f204": "隆基绿能", "f205": "601012"},
-      {"f12": "BK0912", "f14": "半导体",   "f2": 3456.78, "f3": 1.80, "f4": 61.20, "f10": 1800000, "f15": 3200000000, "f62": 450000000, "f184": 5.1, "f204": "中芯国际", "f205": "688981"},
-      {"f12": "BK1023", "f14": "创新药",   "f2": 876.54, "f3": 0.50, "f4": 4.35, "f10": 450000, "f15": 600000000, "f62": 80000000, "f184": 1.2, "f204": "恒瑞医药", "f205": "600276"}
+      {"f12": "BK1168", "f14": "固态电池", "f2": 1234.56, "f3": 5.23, "f4": 61.34, "f5": 1523000, "f6": 2860000000, "f10": 2.74, "f15": 1260.5, "f62": 890000000, "f184": 8.5, "f204": "宁德时代", "f205": "300750"},
+      {"f12": "BK0729", "f14": "人工智能", "f2": 2345.67, "f3": 3.15, "f4": 71.56, "f5": 2100000, "f6": 4500000000, "f10": 1.85, "f15": 2380.2, "f62": 1200000000, "f184": 12.3, "f204": "科大讯飞", "f205": "002230"},
+      {"f12": "BK0854", "f14": "光伏设备", "f2": 987.12, "f3": -1.20, "f4": -11.95, "f5": 890000, "f6": 1200000000, "f10": 0.92, "f15": 995.8, "f62": -300000000, "f184": -3.2, "f204": "隆基绿能", "f205": "601012"},
+      {"f12": "BK0912", "f14": "半导体",   "f2": 3456.78, "f3": 1.80, "f4": 61.20, "f5": 1800000, "f6": 3200000000, "f10": 1.55, "f15": 3500.1, "f62": 450000000, "f184": 5.1, "f204": "中芯国际", "f205": "688981"},
+      {"f12": "BK1023", "f14": "创新药",   "f2": 876.54, "f3": 0.50, "f4": 4.35, "f5": 450000, "f6": 600000000, "f10": 0.78, "f15": 880.3, "f62": 80000000, "f184": 1.2, "f204": "恒瑞医药", "f205": "600276"}
     ]
   }
 }`)
@@ -30,9 +30,9 @@ var mockConceptConstituentsJSON = []byte(`{
   "data": {
     "total": 45,
     "diff": [
-      {"f12": "300750", "f14": "宁德时代", "f2": 185.20, "f3": 4.52, "f62": 320000000},
-      {"f12": "002074", "f14": "国轩高科", "f2": 21.35, "f3": 3.18, "f62": 85000000},
-      {"f12": "300014", "f14": "亿纬锂能", "f2": 42.10, "f3": -0.85, "f62": -12000000}
+      {"f12": "300750", "f14": "宁德时代", "f2": 185.20, "f3": 4.52, "f20": 800000000000, "f130": 15.8, "f62": 320000000},
+      {"f12": "002074", "f14": "国轩高科", "f2": 21.35, "f3": 3.18, "f20": 120000000000, "f130": 8.5, "f62": 85000000},
+      {"f12": "300014", "f14": "亿纬锂能", "f2": 42.10, "f3": -0.85, "f20": 250000000000, "f130": -5.2, "f62": -12000000}
     ]
   }
 }`)
@@ -54,8 +54,8 @@ func TestParseConceptBoard(t *testing.T) {
 			Name:         parseString(item["f14"]),
 			ChangePct:    parseFloat(item["f3"]),
 			ChangeAmt:    parseFloat(item["f4"]),
-			Volume:       parseFloat(item["f10"]),
-			Turnover:     parseFloat(item["f15"]),
+			Volume:       parseFloat(item["f5"]),
+			Turnover:     parseFloat(item["f6"]),
 			MainInflow:   parseFloat(item["f62"]),
 			MainInRatio:  parseFloat(item["f184"]),
 			TopStock:     parseString(item["f204"]),
@@ -120,7 +120,7 @@ func TestCalcHotScoreWithMockData(t *testing.T) {
 			Code:       parseString(item["f12"]),
 			Name:       parseString(item["f14"]),
 			ChangePct:  parseFloat(item["f3"]),
-			Turnover:   parseFloat(item["f15"]),
+			Turnover:   parseFloat(item["f6"]),
 			MainInflow: parseFloat(item["f62"]),
 		}
 		concepts = append(concepts, c)
@@ -147,9 +147,10 @@ func TestFetchHotConceptBoardWithCache(t *testing.T) {
 
 	// 先写入一个旧缓存（超过4小时）
 	oldBoard := &HotConceptBoard{
-		Date:      time.Now().AddDate(0, 0, -1).Format("2006-01-02"),
-		UpdatedAt: time.Now().Add(-5 * time.Hour).Format("2006-01-02 15:04:05"),
-		Concepts:  []HotConcept{{Name: "旧数据", Score: 10}},
+		Date:         time.Now().AddDate(0, 0, -1).Format("2006-01-02"),
+		UpdatedAt:    time.Now().Add(-5 * time.Hour).Format("2006-01-02 15:04:05"),
+		Concepts:     []HotConcept{{Name: "旧数据", Score: 10}},
+		CacheVersion: hotConceptCacheVer,
 	}
 	_ = saveHotConceptCache(tmpDir, oldBoard)
 
@@ -165,9 +166,10 @@ func TestFetchHotConceptBoardWithCache(t *testing.T) {
 
 	// 写入一个有效缓存
 	validBoard := &HotConceptBoard{
-		Date:      time.Now().Format("2006-01-02"),
-		UpdatedAt: time.Now().Format("2006-01-02 15:04:05"),
-		Concepts:  []HotConcept{{Name: "缓存数据", Score: 99}},
+		Date:         time.Now().Format("2006-01-02"),
+		UpdatedAt:    time.Now().Format("2006-01-02 15:04:05"),
+		Concepts:     []HotConcept{{Name: "缓存数据", Score: 99}},
+		CacheVersion: hotConceptCacheVer,
 	}
 	_ = saveHotConceptCache(tmpDir, validBoard)
 
@@ -227,11 +229,13 @@ func TestParseConceptConstituents(t *testing.T) {
 	result := make([]ConceptConstituent, 0, len(resp.Data.Diff))
 	for _, item := range resp.Data.Diff {
 		c := ConceptConstituent{
-			Code:       parseString(item["f12"]),
-			Name:       parseString(item["f14"]),
-			Price:      parseFloat(item["f2"]),
-			ChangePct:  parseFloat(item["f3"]),
-			MainInflow: parseFloat(item["f62"]),
+			Code:              parseString(item["f12"]),
+			Name:              parseString(item["f14"]),
+			Price:             parseFloat(item["f2"]),
+			ChangePct:         parseFloat(item["f3"]),
+			MarketCap:         parseFloat(item["f20"]),
+			HalfYearChangePct: parseFloat(item["f130"]),
+			MainInflow:        parseFloat(item["f62"]),
 		}
 		result = append(result, c)
 	}

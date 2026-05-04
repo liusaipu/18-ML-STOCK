@@ -357,8 +357,9 @@ type TushareIncomeItem struct {
 	AnnDate       string  `json:"ann_date"`     // 公告日期
 	Revenue       float64 `json:"revenue"`      // 营业收入
 	TotalProfit   float64 `json:"total_profit"` // 利润总额
-	NetIncome     float64 `json:"net_income"`   // 净利润
-	EPS           float64 `json:"eps"`          // 基本每股收益
+	NetIncome      float64 `json:"net_income"`      // 净利润
+	ParentNetIncome float64 `json:"n_income_attr_p"` // 归母净利润
+	EPS            float64 `json:"eps"`             // 基本每股收益
 	OperateProfit float64 `json:"operate_profit"` // 营业利润
 	TotalCogs     float64 `json:"total_cogs"`   // 营业总成本
 	OperateCost   float64 `json:"operate_cost"` // 营业成本
@@ -376,7 +377,7 @@ func (c *TushareClient) FetchIncome(market, code, startDate, endDate string) ([]
 		"start_date": startDate,
 		"end_date":   endDate,
 	}
-	fields := []string{"ts_code", "end_date", "ann_date", "revenue", "total_profit", "n_income", "basic_eps",
+	fields := []string{"ts_code", "end_date", "ann_date", "revenue", "total_profit", "n_income", "n_income_attr_p", "basic_eps",
 		"operate_profit", "total_cogs", "oper_cost", "sell_exp", "admin_exp", "fin_exp", "rd_exp"}
 
 	resp, err := c.query("income", params, fields)
@@ -393,8 +394,9 @@ func (c *TushareClient) FetchIncome(market, code, startDate, endDate string) ([]
 			AnnDate:       getStr(item, idx, "ann_date"),
 			Revenue:       getFloat(item, idx, "revenue"),
 			TotalProfit:   getFloat(item, idx, "total_profit"),
-			NetIncome:     getFloat(item, idx, "n_income"),
-			EPS:           getFloat(item, idx, "basic_eps"),
+			NetIncome:       getFloat(item, idx, "n_income"),
+			ParentNetIncome: getFloat(item, idx, "n_income_attr_p"),
+			EPS:             getFloat(item, idx, "basic_eps"),
 			OperateProfit: getFloat(item, idx, "operate_profit"),
 			TotalCogs:     getFloat(item, idx, "total_cogs"),
 			OperateCost:   getFloat(item, idx, "oper_cost"),

@@ -854,21 +854,31 @@ func step17CAPEX(data *FinancialData) StepResult {
 	return result
 }
 
-// ==================== Step 18: 分红 ====================
+// ==================== 分红分析 ====================
 func step18Dividend(data *FinancialData) StepResult {
 	result := StepResult{StepNum: 18, StepName: "分配股利、利润或偿付利息支付的现金分析", YearlyData: make(map[string]map[string]any), Pass: make(map[string]bool)}
+	allZero := true
 	for _, year := range data.Years {
 		ocf := data.GetValueOrZero(data.CashFlow, "经营活动现金流量净额", year)
 		dividend := data.GetValueOrZero(data.CashFlow, "分配股利、利润或偿付利息支付的现金", year)
+		// 若主字段缺失为0，尝试其中明细字段（部分数据源仅有子项）
+		if dividend == 0 {
+			dividend = data.GetValueOrZero(data.CashFlow, "其中：子公司支付给少数股东的股利、利润", year)
+		}
 		ratio := 0.0
 		if ocf != 0 {
 			ratio = dividend / math.Abs(ocf) * 100
 		}
 		sustainability := "分红能力有问题"
-		if ratio >= 20 && ratio <= 70 {
+		if dividend == 0 && ocf != 0 {
+			sustainability = "分红数据缺失或该年度未实施现金分红"
+		} else if ratio >= 20 && ratio <= 70 {
 			sustainability = "分红可持续"
 		} else if ratio > 70 {
 			sustainability = "分红难持续"
+		}
+		if dividend != 0 {
+			allZero = false
 		}
 		result.YearlyData[year] = map[string]any{"dividend": dividend, "operatingCF": ocf, "ratio": ratio, "sustainability": sustainability}
 		result.Pass[year] = ratio >= 20 && ratio <= 70
@@ -888,6 +898,10 @@ func step18Dividend(data *FinancialData) StepResult {
 		}
 		result.Traces = append(result.Traces, trace)
 	}
-	result.Conclusion = "分红现金支出占经营活动现金流比率在20%~70%之间，说明分红长期可持续性较强。"
+	if allZero {
+		result.Conclusion = "各年度现金流量表中均未找到分红支出数据，可能因数据源未提供该字段（建议重新下载财报或切换数据源）。"
+	} else {
+		result.Conclusion = "分红现金支出占经营活动现金流比率在20%~70%之间，说明分红长期可持续性较强。"
+	}
 	return result
 }

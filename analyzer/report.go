@@ -70,38 +70,35 @@ func GenerateMarkdown(symbol string, years []string, steps []StepResult, scores 
 	// ==================== 模块5: 十五五政策匹配度评估 ====================
 	writeModule5(&b, policy)
 
-	// ==================== 模块6: 实时行情数据 ====================
-	writeModule6(&b, quote)
+	// ==================== 模块6: 剩余收益模型估值(RIM) ====================
+	writeModule6(&b, steps, latest, quote, rim)
 
-	// ==================== 模块7: 剩余收益模型估值(RIM) ====================
-	writeModule7(&b, steps, latest, quote, rim)
-
-	// ==================== 模块8: A-Score 综合风险画像 ====================
+	// ==================== 模块7: A-Score 综合风险画像 ====================
 	writeAScoreProfile(&b, steps, years, latest, comp)
 
-	// ==================== 模块9: 技术面分析 ====================
-	writeModule8(&b, quote, technical, activity, moneyflow)
+	// ==================== 模块8: 技术面分析 ====================
+	writeModule7(&b, quote, technical, activity, moneyflow)
 
-	// ==================== 模块10: ML机器学习预测 ====================
-	writeModule9(&b, steps, latest, prev, ml)
+	// ==================== 模块9: ML机器学习预测 ====================
+	writeModule8(&b, steps, latest, prev, ml)
 
-	// ==================== 模块11: 智能选股7大条件 ====================
-	writeModule10(&b, steps, latest, prev)
+	// ==================== 模块10: 智能选股7大条件 ====================
+	writeModule9(&b, steps, latest, prev)
 
-	// ==================== 模块12: 芒格逆向思维检查 ====================
+	// ==================== 模块11: 芒格逆向思维检查 ====================
+	writeModule10(&b, steps, latest, latestScore)
+
+	// ==================== 模块12: 巴菲特-芒格投资检查清单 ====================
 	writeModule11(&b, steps, latest, latestScore)
 
-	// ==================== 模块13: 巴菲特-芒格投资检查清单 ====================
-	writeModule12(&b, steps, latest, latestScore)
+	// ==================== 模块13: 社交媒体情绪监控 ====================
+	writeModule12(&b, sentiment)
 
-	// ==================== 模块14: 社交媒体情绪监控 ====================
-	writeModule13(&b, sentiment)
+	// ==================== 模块14: 综合投资建议 ====================
+	writeModule13(&b, symbol, steps, latest, latestScore, quote, rim, technical, ml, sentiment)
 
-	// ==================== 模块15: 综合投资建议 ====================
-	writeModule14(&b, symbol, steps, latest, latestScore, quote, rim, technical, ml, sentiment)
-
-	// ==================== 模块16: 结论与附录 ====================
-	writeModule15(&b, symbol, steps, years, latest, latestScore, sentiment)
+	// ==================== 模块15: 结论与附录 ====================
+	writeModule14(&b, symbol, steps, years, latest, latestScore, sentiment)
 
 	b.WriteString("---\n\n")
 	b.WriteString("*报告生成时间：基于最新导入的财务数据*\n")
@@ -233,17 +230,16 @@ func writeTOC(b *strings.Builder) {
 	b.WriteString("- [模块3: 公司基本面分析](#模块3-公司基本面分析)\n")
 	b.WriteString("- [模块4: 行业横向对比分析](#模块4-行业横向对比分析)\n")
 	b.WriteString("- [模块5: 十五五政策匹配度评估](#模块5-十五五政策匹配度评估)\n")
-	b.WriteString("- [模块6: 实时行情数据](#模块6-实时行情数据)\n")
-	b.WriteString("- [模块7: 剩余收益模型估值(RIM)](#模块7-剩余收益模型估值rim)\n")
-	b.WriteString("- [模块8: A-Score 综合风险画像](#模块8-a-score-综合风险画像)\n")
-	b.WriteString("- [模块9: 技术面分析](#模块9-技术面分析)\n")
-	b.WriteString("- [模块10: ML机器学习预测](#模块10-ml机器学习预测)\n")
-	b.WriteString("- [模块11: 智能选股7大条件](#模块11-智能选股7大条件)\n")
-	b.WriteString("- [模块12: 芒格逆向思维检查](#模块12-芒格逆向思维检查)\n")
-	b.WriteString("- [模块13: 巴菲特-芒格投资检查清单](#模块13-巴菲特-芒格投资检查清单)\n")
-	b.WriteString("- [模块14: 社交媒体情绪监控](#模块14-社交媒体情绪监控)\n")
-	b.WriteString("- [模块15: 综合投资建议](#模块15-综合投资建议)\n")
-	b.WriteString("- [模块16: 结论与附录](#模块16-结论与附录)\n")
+	b.WriteString("- [模块6: 剩余收益模型估值(RIM)](#模块6-剩余收益模型估值rim)\n")
+	b.WriteString("- [模块7: A-Score 综合风险画像](#模块7-a-score-综合风险画像)\n")
+	b.WriteString("- [模块8: 技术面分析](#模块8-技术面分析)\n")
+	b.WriteString("- [模块9: ML机器学习预测](#模块9-ml机器学习预测)\n")
+	b.WriteString("- [模块10: 智能选股7大条件](#模块10-智能选股7大条件)\n")
+	b.WriteString("- [模块11: 芒格逆向思维检查](#模块11-芒格逆向思维检查)\n")
+	b.WriteString("- [模块12: 巴菲特-芒格投资检查清单](#模块12-巴菲特-芒格投资检查清单)\n")
+	b.WriteString("- [模块13: 社交媒体情绪监控](#模块13-社交媒体情绪监控)\n")
+	b.WriteString("- [模块14: 综合投资建议](#模块14-综合投资建议)\n")
+	b.WriteString("- [模块15: 结论与附录](#模块15-结论与附录)\n")
 	b.WriteString("\n---\n\n")
 }
 
@@ -264,7 +260,7 @@ func writeEightIndicatorsHighlight(b *strings.Builder, steps []StepResult, lates
 		{"营业利润率", getStepValue(steps, 14, latest, "coreProfitMargin"), "%", getStepValue(steps, 14, latest, "coreProfitMargin") > 20, ">", 20},
 		{"营业收入增长率", getStepValue(steps, 9, latest, "growthRate"), "%", getStepValue(steps, 9, latest, "growthRate") > 10, ">", 10},
 		{"固定资产比率", getStepValue(steps, 6, latest, "ratio"), "%", getStepValue(steps, 6, latest, "ratio") < 40, "<", 40},
-		{"分红率", getStepValue(steps, 18, latest, "ratio"), "%", getStepValue(steps, 18, latest, "ratio") > 30, ">", 30},
+		{"分红占经营现金流比", getStepValue(steps, 18, latest, "ratio"), "%", getStepValue(steps, 18, latest, "ratio") >= 20 && getStepValue(steps, 18, latest, "ratio") <= 70, "20%~", 70},
 	}
 
 	matchCount := 0
@@ -794,54 +790,13 @@ func policySignalSVG(level int) string {
 	return fmt.Sprintf(`<svg width="18" height="10" viewBox="0 0 18 10">%s</svg>`, rects.String())
 }
 
-// ========== 模块6: 实时行情数据 ==========
-func writeModule6(b *strings.Builder, quote *QuoteData) {
-	b.WriteString("# 模块6: 实时行情数据\n\n")
-
-	if quote == nil || quote.CurrentPrice == 0 {
-		b.WriteString("> **说明**: 当前暂无实时行情数据。请在网络畅通时重新选中股票获取行情。\n\n")
-		b.WriteString("---\n\n")
-		return
-	}
-
-	b.WriteString("## 6.1 实时价格与涨跌\n\n")
-	b.WriteString("| 指标 | 数值 |\n")
-	b.WriteString("|------|------|\n")
-	b.WriteString(fmt.Sprintf("| **最新价** | %.2f 元 |\n", quote.CurrentPrice))
-	b.WriteString(fmt.Sprintf("| **涨跌额** | %+.2f 元 |\n", quote.ChangeAmount))
-	b.WriteString(fmt.Sprintf("| **涨跌幅** | %+.2f%% |\n", quote.ChangePercent))
-	b.WriteString(fmt.Sprintf("| **今日最高** | %.2f 元 |\n", quote.High))
-	b.WriteString(fmt.Sprintf("| **今日最低** | %.2f 元 |\n", quote.Low))
-	b.WriteString(fmt.Sprintf("| **今开** | %.2f 元 |\n", quote.Open))
-	b.WriteString(fmt.Sprintf("| **昨收** | %.2f 元 |\n", quote.PreviousClose))
-	b.WriteString(fmt.Sprintf("| **振幅** | %.2f%% |\n", quote.Amplitude))
-	b.WriteString("\n")
-
-	b.WriteString("## 6.2 实时估值指标\n\n")
-	b.WriteString("| 指标 | 数值 |\n")
-	b.WriteString("|------|------|\n")
-	if quote.MarketCap > 0 {
-		b.WriteString(fmt.Sprintf("| **总市值** | %.0f 万元 |\n", quote.MarketCap/1e8))
-	}
-	if quote.CirculatingMarketCap > 0 {
-		b.WriteString(fmt.Sprintf("| **流通市值** | %.0f 万元 |\n", quote.CirculatingMarketCap/1e8))
-	}
-	if quote.PE > 0 {
-		b.WriteString(fmt.Sprintf("| **市盈率(动)** | %.2f |\n", quote.PE))
-	}
-	if quote.PB > 0 {
-		b.WriteString(fmt.Sprintf("| **市净率** | %.2f |\n", quote.PB))
-	}
-	b.WriteString("\n---\n\n")
-}
-
-// ========== 模块7: RIM估值（基于多期预测） ==========
-func writeModule7(b *strings.Builder, steps []StepResult, latest string, quote *QuoteData, rim *RIMData) {
-	b.WriteString(`<h1 id="模块7-剩余收益模型估值rim">模块7: 剩余收益模型估值(RIM) <button class="rim-adjust-btn" style="float:right;margin-top:2px;">调整RIM</button></h1>` + "\n\n")
+// ========== 模块6: RIM估值（基于多期预测） ==========
+func writeModule6(b *strings.Builder, steps []StepResult, latest string, quote *QuoteData, rim *RIMData) {
+	b.WriteString(`<h1 id="模块6-剩余收益模型估值rim">模块6: 剩余收益模型估值(RIM) <button class="rim-adjust-btn" style="float:right;margin-top:2px;">调整RIM</button></h1>` + "\n\n")
 
 	roe := getStepValue(steps, 16, latest, "roe")
 
-	b.WriteString(fmt.Sprintf("## 7.1 模型参数（基于 %s 年报）", latest) + traceTrigger(16) + "\n\n")
+	b.WriteString(fmt.Sprintf("## 6.1 模型参数（基于 %s 年报）", latest) + traceTrigger(16) + "\n\n")
 	b.WriteString("| <span style=\"white-space:nowrap;\">参数</span> | <span style=\"white-space:nowrap;\">符号</span> | 取值 | 说明 |\n")
 	b.WriteString("|------|-----------|------|------|\n")
 	b.WriteString(fmt.Sprintf("| <span style=\"white-space:nowrap;\">**ROE**</span> | ROE | %.2f%% | 年报数据 |\n", roe))
@@ -885,7 +840,7 @@ func writeModule7(b *strings.Builder, steps []StepResult, latest string, quote *
 	}
 	b.WriteString("\n")
 
-	b.WriteString("## 7.2 估值情景\n\n")
+	b.WriteString("## 6.2 估值情景\n\n")
 	if hasRIM {
 		b.WriteString("| 情景 | ROE假设 | 内在价值(元) | 相对现价 | 评级 |\n")
 		b.WriteString("|------|---------|-------------|----------|------|\n")
@@ -904,7 +859,7 @@ func writeModule7(b *strings.Builder, steps []StepResult, latest string, quote *
 
 	// 多期明细
 	if hasRIM && len(rim.Result.Details) > 0 {
-		b.WriteString("## 7.3 多期计算明细\n\n")
+		b.WriteString("## 6.3 多期计算明细\n\n")
 		b.WriteString("| 年度 | EPS(元) | DPS(元) | BPS(元) | RE(元) | 折现率 | RE现值(元) |\n")
 		b.WriteString("|------|---------|---------|---------|--------|--------|------------|\n")
 		runningBPS := 0.0
@@ -965,9 +920,9 @@ func rimSourceDesc(rim *RIMData, quote *QuoteData) string {
 	return "财报股东权益/总股本推算"
 }
 
-// ========== 模块9: 技术面分析 ==========
-func writeModule8(b *strings.Builder, quote *QuoteData, technical *TechnicalData, activity *ActivityData, moneyflow *MoneyflowData) {
-	b.WriteString("# 模块9: 技术面分析\n\n")
+// ========== 模块8: 技术面分析 ==========
+func writeModule7(b *strings.Builder, quote *QuoteData, technical *TechnicalData, activity *ActivityData, moneyflow *MoneyflowData) {
+	b.WriteString("# 模块8: 技术面分析\n\n")
 
 	if quote == nil || quote.CurrentPrice == 0 {
 		b.WriteString("> **说明**: 当前暂无实时行情数据，无法生成技术面分析。请在网络畅通时重新选中股票获取行情。\n\n")
@@ -983,7 +938,7 @@ func writeModule8(b *strings.Builder, quote *QuoteData, technical *TechnicalData
 	tr := quote.TurnoverRate
 	amp := quote.Amplitude
 
-	b.WriteString("## 9.1 日内价格位置\n\n")
+	b.WriteString("## 8.1 日内价格位置\n\n")
 	if high > low {
 		pos := (cp - low) / (high - low) * 100
 		b.WriteString(fmt.Sprintf("- 当前价格处于今日高低点区间的 **%.1f%%** 位置", pos))
@@ -1003,7 +958,7 @@ func writeModule8(b *strings.Builder, quote *QuoteData, technical *TechnicalData
 	}
 	b.WriteString("\n")
 
-	b.WriteString("## 9.2 量价关系简评\n\n")
+	b.WriteString("## 8.2 量价关系简评\n\n")
 	// 优先使用近5日平均换手/振幅判断，避免单日异常导致误判
 	avgTr := tr
 	avgAmp := amp
@@ -1025,7 +980,7 @@ func writeModule8(b *strings.Builder, quote *QuoteData, technical *TechnicalData
 		b.WriteString("- **低换手低振幅**：交投清淡，趋势惯性较强，突破需放量确认。\n")
 	}
 
-	b.WriteString("\n## 9.3 短期技术倾向\n\n")
+	b.WriteString("\n## 8.3 短期技术倾向\n\n")
 	score := 0
 	if quote.ChangePercent > 0 {
 		score++
@@ -1055,7 +1010,7 @@ func writeModule8(b *strings.Builder, quote *QuoteData, technical *TechnicalData
 
 	// 新增：基于历史K线的技术指标分析
 	if technical != nil && technical.Score > 0 {
-		b.WriteString("\n## 9.4 历史K线技术指标分析\n\n")
+		b.WriteString("\n## 8.4 历史K线技术指标分析\n\n")
 		b.WriteString(fmt.Sprintf("| 指标 | 状态 | 说明 |\n"))
 		b.WriteString(fmt.Sprintf("|------|------|------|\n"))
 		b.WriteString(fmt.Sprintf("| 技术评分 | %s | %.0f/100（%s） |\n", scoreToStars(technical.Score), technical.Score, technical.Grade))
@@ -1073,14 +1028,14 @@ func writeModule8(b *strings.Builder, quote *QuoteData, technical *TechnicalData
 	}
 
 	if activity != nil && activity.Score > 0 && activity.PotentialHint != "" {
-		b.WriteString("\n## 9.5 交易活跃度潜力提示\n\n")
+		b.WriteString("\n## 8.5 交易活跃度潜力提示\n\n")
 		b.WriteString(fmt.Sprintf("> **活跃度评级**: %s（%.0f分）\n\n", formatActivityStars(activity.Stars), activity.Score))
 		b.WriteString(fmt.Sprintf("> 💡 **提示**: %s\n\n", activity.PotentialHint))
 	}
 
 	// 新增：资金流向分析
 	if moneyflow != nil && moneyflow.HasData && len(moneyflow.Items) > 0 {
-		b.WriteString("\n## 9.6 资金流向分析\n\n")
+		b.WriteString("\n## 8.6 资金流向分析\n\n")
 		b.WriteString(fmt.Sprintf("> **%s**\n\n", moneyflow.Summary))
 		b.WriteString("| 日期 | 主力净流入 | 超大单 | 大单 | 中单 | 小单 |\n")
 		b.WriteString("|------|-----------|--------|------|------|------|\n")
@@ -1134,7 +1089,7 @@ func writeModule8(b *strings.Builder, quote *QuoteData, technical *TechnicalData
 	b.WriteString("\n---\n\n")
 }
 
-// ========== 模块10: ML机器学习预测（ONNX 双引擎：Engine-A 情绪+价格 / Engine-B 财务 BiLSTM） ==========
+// ========== 模块9: ML机器学习预测（ONNX 双引擎：Engine-A 情绪+价格 / Engine-B 财务 BiLSTM） ==========
 func mlDirectionCN(label string) string {
 	switch label {
 	case "up":
@@ -1148,8 +1103,8 @@ func mlDirectionCN(label string) string {
 	}
 }
 
-func writeModule9(b *strings.Builder, steps []StepResult, latest, prev string, ml *MLPredictionData) {
-	b.WriteString("# 模块10: ML机器学习预测\n\n")
+func writeModule8(b *strings.Builder, steps []StepResult, latest, prev string, ml *MLPredictionData) {
+	b.WriteString("# 模块9: ML机器学习预测\n\n")
 
 	hasML := ml != nil && (ml.Financial != nil || ml.Sentiment != nil || ml.EngineD != nil)
 	if !hasML {
@@ -1186,7 +1141,7 @@ func writeModule9(b *strings.Builder, steps []StepResult, latest, prev string, m
 	}
 
 	// 引擎B：财务LSTM - 始终显示10.1章节
-	b.WriteString("## 10.1 Engine-B 财务趋势预测（BiLSTM+Self-Attention）\n\n")
+	b.WriteString("## 9.1 Engine-B 财务趋势预测（BiLSTM+Self-Attention）\n\n")
 	if ml != nil && ml.Financial != nil {
 		fp := ml.Financial
 		b.WriteString(fmt.Sprintf("| 指标 | 预测方向 | 概率 | 说明 |\n"))
@@ -1202,7 +1157,7 @@ func writeModule9(b *strings.Builder, steps []StepResult, latest, prev string, m
 	}
 
 	// 引擎A：舆情+价格 - 始终显示10.2章节
-	b.WriteString("## 10.2 Engine-A 市场情绪与价格融合预测（Cross-Attention）\n\n")
+	b.WriteString("## 9.2 Engine-A 市场情绪与价格融合预测（Cross-Attention）\n\n")
 	if ml != nil && ml.Sentiment != nil {
 		sp := ml.Sentiment
 		b.WriteString(fmt.Sprintf("| 指标 | 预测结果 | 概率 | 说明 |\n"))
@@ -1216,7 +1171,7 @@ func writeModule9(b *strings.Builder, steps []StepResult, latest, prev string, m
 	}
 
 	// 引擎D：风险预警 - 始终显示10.3章节
-	b.WriteString("## 10.3 Engine-D 风险预警模型（GradientBoosting）\n\n")
+	b.WriteString("## 9.3 Engine-D 风险预警模型（GradientBoosting）\n\n")
 	if ml != nil && ml.EngineD != nil {
 		dp := ml.EngineD
 
@@ -1258,7 +1213,7 @@ func writeModule9(b *strings.Builder, steps []StepResult, latest, prev string, m
 
 	// 如果没有 ML，保留原来的简易推断
 	if !hasML {
-		b.WriteString("## 10.4 负向因子（基于财务指标的简易推断）\n\n")
+		b.WriteString("## 9.4 负向因子（基于财务指标的简易推断）\n\n")
 		var neg, pos []string
 		if g := getStepValue(steps, 9, latest, "growthRate"); g < 10 {
 			neg = append(neg, fmt.Sprintf("- 营收增长率 %.2f%%，低于理想水平", g))
@@ -1286,7 +1241,7 @@ func writeModule9(b *strings.Builder, steps []StepResult, latest, prev string, m
 		}
 		b.WriteString("\n")
 
-		b.WriteString("## 10.4 正向因子\n\n")
+		b.WriteString("## 9.4 正向因子\n\n")
 		if g := getStepValue(steps, 9, latest, "growthRate"); g >= 10 {
 			pos = append(pos, fmt.Sprintf("- 营收增长率 %.2f%%，保持稳健增长", g))
 		}
@@ -1316,7 +1271,7 @@ func writeModule9(b *strings.Builder, steps []StepResult, latest, prev string, m
 		}
 		b.WriteString("\n")
 
-		b.WriteString("## 10.5 简易预测结论\n\n")
+		b.WriteString("## 9.5 简易预测结论\n\n")
 		score := 50.0
 		score -= float64(len(neg)) * 8
 		score += float64(len(pos)) * 8
@@ -1327,10 +1282,10 @@ func writeModule9(b *strings.Builder, steps []StepResult, latest, prev string, m
 	b.WriteString("---\n\n")
 }
 
-// ========== 模块11: 智能选股7大条件 ==========
-func writeModule10(b *strings.Builder, steps []StepResult, latest, prev string) {
-	b.WriteString("# 模块11: 智能选股7大条件\n\n")
-	b.WriteString("## 11.1 条件检查表" + traceTrigger(3, 9, 10, 15, 16) + "\n\n")
+// ========== 模块10: 智能选股7大条件 ==========
+func writeModule9(b *strings.Builder, steps []StepResult, latest, prev string) {
+	b.WriteString("# 模块10: 智能选股7大条件\n\n")
+	b.WriteString("## 10.1 条件检查表" + traceTrigger(3, 9, 10, 15, 16) + "\n\n")
 
 	roe := getStepValue(steps, 16, latest, "roe")
 	gm := getStepValue(steps, 10, latest, "grossMargin")
@@ -1382,11 +1337,11 @@ func writeModule10(b *strings.Builder, steps []StepResult, latest, prev string) 
 	b.WriteString("---\n\n")
 }
 
-// ========== 模块12: 芒格逆向思维检查 ==========
-func writeModule11(b *strings.Builder, steps []StepResult, latest string, score *YearScore) {
-	b.WriteString("# 模块12: 芒格逆向思维检查\n\n")
+// ========== 模块11: 芒格逆向思维检查 ==========
+func writeModule10(b *strings.Builder, steps []StepResult, latest string, score *YearScore) {
+	b.WriteString("# 模块11: 芒格逆向思维检查\n\n")
 
-	b.WriteString("## 12.1 逆向三问\n\n")
+	b.WriteString("## 11.1 逆向三问\n\n")
 
 	b.WriteString("### 问1: 市场忽略了什么负面因素？\n\n")
 	risks := extractRisks(steps, latest)
@@ -1435,7 +1390,7 @@ func writeModule11(b *strings.Builder, steps []StepResult, latest string, score 
 	b.WriteString("4. A-Score 回落至 60 以下\n")
 	b.WriteString("\n")
 
-	b.WriteString("## 12.2 逆向检查评分\n\n")
+	b.WriteString("## 11.2 逆向检查评分\n\n")
 	revScore := reverseScore(steps, latest, score)
 	b.WriteString(fmt.Sprintf("**基础分**: 85分  \n"))
 	b.WriteString(fmt.Sprintf("**扣分合计**: %.0f分  \n", math.Max(0, 85-revScore)))
@@ -1450,10 +1405,10 @@ func writeModule11(b *strings.Builder, steps []StepResult, latest string, score 
 	b.WriteString("---\n\n")
 }
 
-// ========== 模块13: 巴菲特-芒格投资检查清单 ==========
-func writeModule12(b *strings.Builder, steps []StepResult, latest string, score *YearScore) {
-	b.WriteString("# 模块13: 巴菲特-芒格投资检查清单\n\n")
-	b.WriteString("## 13.1 7项核心检查" + traceTrigger(3, 7, 10, 15, 16, 18) + "\n\n")
+// ========== 模块12: 巴菲特-芒格投资检查清单 ==========
+func writeModule11(b *strings.Builder, steps []StepResult, latest string, score *YearScore) {
+	b.WriteString("# 模块12: 巴菲特-芒格投资检查清单\n\n")
+	b.WriteString("## 12.1 7项核心检查" + traceTrigger(3, 7, 10, 15, 16, 18) + "\n\n")
 
 	roe := getStepValue(steps, 16, latest, "roe")
 	gm := getStepValue(steps, 10, latest, "grossMargin")
@@ -1473,7 +1428,12 @@ func writeModule12(b *strings.Builder, steps []StepResult, latest string, score 
 		{"护城河", "15%", "竞争优势（毛利率/ROE）", mapScore(gm, 40, 20, 5), moatComment(gm, roe)},
 		{"能力圈", "10%", "业务可理解（主业专注度）", mapScore(getStepValue(steps, 7, latest, "ratio"), 10, 30, 5), "投资类资产占比反映主业专注度"},
 		{"安全边际", "20%", "估值有折扣（暂缺股价）", 3, "未接入实时股价，无法计算安全边际"},
-		{"长期价值", "10%", "持续经营能力（现金流/分红）", mapScore(divRatio, 45, 70, 5), fmt.Sprintf("分红占比 %.1f%%，分红可持续性待观察", divRatio)},
+		{"长期价值", "10%", "持续经营能力（分红/现金流）", mapScore(divRatio, 45, 70, 5), func() string {
+			if divRatio == 0 {
+				return "分红数据缺失或未实施现金分红"
+			}
+			return fmt.Sprintf("分红占比 %.1f%%，分红可持续性待观察", divRatio)
+		}()},
 		{"管理层", "10%", "诚信可靠（A-Score审计质量）", mapScore(100-getStepValue(steps, 8, latest, "AScore"), 40, 1.0, 5), fmt.Sprintf("A-Score=%.1f%s", getStepValue(steps, 8, latest, "AScore"), auditCommentAScore(getStepValue(steps, 8, latest, "AScore")))},
 		{"财务稳健", "20%", "现金流健康/负债率低", (mapScore(dr, 60, 80, 5) + mapScore(cr, 100, 50, 5)) / 2, fmt.Sprintf("负债率%.1f%%，现金含量%.1f%%", dr, cr)},
 		{"供需格局", "15%", "成长空间（营收增长率）", mapScore(growth, 20, 0, 5), growthComment(steps, latest)},
@@ -1489,7 +1449,7 @@ func writeModule12(b *strings.Builder, steps []StepResult, latest string, score 
 	b.WriteString(fmt.Sprintf("| **总分** | 100%% | - | **%.1f/10** | %s |\n", total/3.5, buffettComment(steps, latest, score)))
 	b.WriteString("\n")
 
-	b.WriteString("## 13.2 关键否决项\n\n")
+	b.WriteString("## 12.2 关键否决项\n\n")
 	if roe < 15 {
 		b.WriteString(fmt.Sprintf("- ❌ ROE>15%%可持续？**存疑**（当前%.2f%%）\n", roe))
 	} else {
@@ -1508,9 +1468,9 @@ func writeModule12(b *strings.Builder, steps []StepResult, latest string, score 
 	b.WriteString("\n---\n\n")
 }
 
-// ========== 模块14: 社交媒体情绪监控 ==========
-func writeModule13(b *strings.Builder, sentiment *SentimentData) {
-	b.WriteString("# 模块14: 社交媒体情绪监控\n\n")
+// ========== 模块13: 社交媒体情绪监控 ==========
+func writeModule12(b *strings.Builder, sentiment *SentimentData) {
+	b.WriteString("# 模块13: 社交媒体情绪监控\n\n")
 
 	if sentiment == nil || !sentiment.HasData {
 		b.WriteString("> **说明**: 当前暂无可用舆情数据（网络受限或该股票近期无相关研报/资讯）。\n\n")
@@ -1519,7 +1479,7 @@ func writeModule13(b *strings.Builder, sentiment *SentimentData) {
 	}
 
 	// 14.1 情绪指标
-	b.WriteString("## 14.1 情绪指标\n\n")
+	b.WriteString("## 13.1 情绪指标\n\n")
 	b.WriteString("| 指标 | 数值 | 说明 |\n")
 	b.WriteString("|------|------|------|\n")
 
@@ -1540,7 +1500,7 @@ func writeModule13(b *strings.Builder, sentiment *SentimentData) {
 
 	// 14.2 关键词云
 	if len(sentiment.PositiveWords) > 0 || len(sentiment.NegativeWords) > 0 {
-		b.WriteString("## 14.2 关键词云\n\n")
+		b.WriteString("## 13.2 关键词云\n\n")
 		if len(sentiment.PositiveWords) > 0 {
 			b.WriteString("**正面关键词**：" + strings.Join(sentiment.PositiveWords, "、") + "\n\n")
 		}
@@ -1551,7 +1511,7 @@ func writeModule13(b *strings.Builder, sentiment *SentimentData) {
 
 	// 14.3 最新舆情摘要
 	if len(sentiment.Summaries) > 0 {
-		b.WriteString("## 14.3 最新舆情摘要\n\n")
+		b.WriteString("## 13.3 最新舆情摘要\n\n")
 		for _, s := range sentiment.Summaries {
 			emoji := "🟡"
 			if s.Sentiment > 0.3 {
@@ -1567,16 +1527,16 @@ func writeModule13(b *strings.Builder, sentiment *SentimentData) {
 	b.WriteString("---\n\n")
 }
 
-// ========== 模块15: 综合投资建议 ==========
-func writeModule14(b *strings.Builder, symbol string, steps []StepResult, latest string, score *YearScore, quote *QuoteData, rim *RIMData, technical *TechnicalData, ml *MLPredictionData, sentiment *SentimentData) {
-	b.WriteString("# 模块15: 综合投资建议\n\n")
+// ========== 模块14: 综合投资建议 ==========
+func writeModule13(b *strings.Builder, symbol string, steps []StepResult, latest string, score *YearScore, quote *QuoteData, rim *RIMData, technical *TechnicalData, ml *MLPredictionData, sentiment *SentimentData) {
+	b.WriteString("# 模块14: 综合投资建议\n\n")
 
 	weighted := 0.0
 	if score != nil {
 		weighted = score.RawScore*0.30 + profitScore(steps, latest)*0.25 + cashScore(steps, latest)*0.20 + growthScore(steps, latest)*0.15 + debtScore(steps, latest)*0.10
 	}
 
-	b.WriteString("## 15.1 综合评分汇总\n\n")
+	b.WriteString("## 14.1 综合评分汇总\n\n")
 	b.WriteString("| 模块 | 权重 | 得分 | 加权分 |\n")
 	b.WriteString("|------|------|------|--------|\n")
 	if score != nil {
@@ -1594,7 +1554,7 @@ func writeModule14(b *strings.Builder, symbol string, steps []StepResult, latest
 	ascore := getStepValue(steps, 8, latest, "AScore")
 	entryRange, stopLoss, target := formatTradeLevels(quote, rim, technical, ml, ascore)
 
-	b.WriteString("## 15.2 投资建议\n\n")
+	b.WriteString("## 14.2 投资建议\n\n")
 	b.WriteString("| 项目 | 建议 |\n")
 	b.WriteString("|------|------|\n")
 	b.WriteString(fmt.Sprintf("| **综合评级** | %s |\n", investmentGrade(weighted)))
@@ -1609,7 +1569,7 @@ func writeModule14(b *strings.Builder, symbol string, steps []StepResult, latest
 	}
 	b.WriteString("\n")
 
-	b.WriteString("## 15.3 操作策略\n\n")
+	b.WriteString("## 14.3 操作策略\n\n")
 	if weighted >= 80 {
 		b.WriteString("**策略A：积极配置（推荐）**\n")
 		b.WriteString("- 基本面健康，可逢低分批建仓\n")
@@ -1740,16 +1700,16 @@ func formatTradeLevels(quote *QuoteData, rim *RIMData, technical *TechnicalData,
 	return
 }
 
-// ========== 模块16: 结论与附录 ==========
-func writeModule15(b *strings.Builder, symbol string, steps []StepResult, years []string, latest string, score *YearScore, sentiment *SentimentData) {
-	b.WriteString("# 模块16: 结论与附录\n\n")
+// ========== 模块15: 结论与附录 ==========
+func writeModule14(b *strings.Builder, symbol string, steps []StepResult, years []string, latest string, score *YearScore, sentiment *SentimentData) {
+	b.WriteString("# 模块15: 结论与附录\n\n")
 
 	weighted := 0.0
 	if score != nil {
 		weighted = score.RawScore*0.30 + profitScore(steps, latest)*0.25 + cashScore(steps, latest)*0.20 + growthScore(steps, latest)*0.15 + debtScore(steps, latest)*0.10
 	}
 
-	b.WriteString("## 16.1 核心结论\n\n")
+	b.WriteString("## 15.1 核心结论\n\n")
 	b.WriteString("> **")
 	b.WriteString(fmt.Sprintf("%s %s年报", symbol, latest))
 	b.WriteString(fmt.Sprintf(" 综合评分 %.0f 分，评级 %s。", weighted, investmentGrade(weighted)))
@@ -1759,7 +1719,7 @@ func writeModule15(b *strings.Builder, symbol string, steps []StepResult, years 
 	}
 	b.WriteString("**\n\n")
 
-	b.WriteString("## 16.2 关键数据速查\n\n")
+	b.WriteString("## 15.2 关键数据速查\n\n")
 	b.WriteString(fmt.Sprintf("| 指标 | %s | 同比 | 评估 |\n", latest))
 	b.WriteString("|------|--------|------|------|\n")
 	rev := getStepValue(steps, 9, latest, "revenue")
@@ -1776,7 +1736,7 @@ func writeModule15(b *strings.Builder, symbol string, steps []StepResult, years 
 	}
 	b.WriteString("\n")
 
-	b.WriteString("## 16.3 投资逻辑总结\n\n")
+	b.WriteString("## 15.3 投资逻辑总结\n\n")
 	b.WriteString("**负面因素**:\n")
 	risks := extractRisks(steps, latest)
 	if len(risks) == 0 {
@@ -1809,7 +1769,7 @@ func writeModule15(b *strings.Builder, symbol string, steps []StepResult, years 
 	}
 	b.WriteString("\n")
 
-	b.WriteString("## 16.4 免责声明\n\n")
+	b.WriteString("## 15.4 免责声明\n\n")
 	b.WriteString("本报告基于公开财务报表数据及财报透视分析模型生成，仅供参考，不构成任何投资建议。投资有风险，入市需谨慎。\n\n")
 }
 

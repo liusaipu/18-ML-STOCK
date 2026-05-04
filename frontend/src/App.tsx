@@ -240,6 +240,7 @@ function App() {
   const [downloadResult, setDownloadResult] = useState<DownloadResult | null>(null)
   const [downloading, setDownloading] = useState(false)
   const [downloadStatus, setDownloadStatus] = useState<{type: 'success' | 'error' | null, message: string}>({type: null, message: ''})
+  const [downloadSuggestion, setDownloadSuggestion] = useState<string>('')
   const [report, setReport] = useState<AnalysisReport | null>(null)
   const [snapshots, setSnapshots] = useState<Record<string, AnalysisReport>>({})
   const [analyzing, setAnalyzing] = useState(false)
@@ -276,6 +277,12 @@ function App() {
   const [quickAnalysisCode, setQuickAnalysisCode] = useState<string | null>(null)
   const [quickAnalysisData, setQuickAnalysisData] = useState<QuickAnalysis | null>(null)
   const [quickAnalysisLoading, setQuickAnalysisLoading] = useState(false)
+  // 快速分析结果缓存: conceptCode -> stockCode -> QuickAnalysis
+  const [quickAnalysisCache, setQuickAnalysisCache] = useState<Record<string, Record<string, QuickAnalysis>>>({})
+  // 缓存日期标记，用于每日首次清理
+  const [quickAnalysisCacheDate, setQuickAnalysisCacheDate] = useState<string>('')
+  // 成分股主力净流入加总: conceptCode -> sum(main_inflow)，用于替代板块指数f62
+  const [conceptMainInflowSum, setConceptMainInflowSum] = useState<Record<string, number>>({})
 
   const [policyLibMeta, setPolicyLibMeta] = useState<{version: string, updatedAt: string} | null>(null)
   const [policyUpdating, setPolicyUpdating] = useState(false)
@@ -338,17 +345,16 @@ function App() {
     { label: '模块3: 公司基本面分析', id: '模块3-公司基本面分析' },
     { label: '模块4: 行业横向对比分析', id: '模块4-行业横向对比分析' },
     { label: '模块5: 十五五政策匹配度评估', id: '模块5-十五五政策匹配度评估' },
-    { label: '模块6: 实时行情数据', id: '模块6-实时行情数据' },
-    { label: '模块7: 剩余收益模型估值(RIM)', id: '模块7-剩余收益模型估值rim' },
-    { label: '模块8: A-Score 综合风险画像', id: '模块8-a-score-综合风险画像' },
-    { label: '模块9: 技术面分析', id: '模块9-技术面分析' },
-    { label: '模块10: ML机器学习预测', id: '模块10-ml机器学习预测' },
-    { label: '模块11: 智能选股7大条件', id: '模块11-智能选股7大条件' },
-    { label: '模块12: 芒格逆向思维检查', id: '模块12-芒格逆向思维检查' },
-    { label: '模块13: 巴菲特-芒格投资检查清单', id: '模块13-巴菲特-芒格投资检查清单' },
-    { label: '模块14: 社交媒体情绪监控', id: '模块14-社交媒体情绪监控' },
-    { label: '模块15: 综合投资建议', id: '模块15-综合投资建议' },
-    { label: '模块16: 结论与附录', id: '模块16-结论与附录' },
+    { label: '模块6: 剩余收益模型估值(RIM)', id: '模块6-剩余收益模型估值rim' },
+    { label: '模块7: A-Score 综合风险画像', id: '模块7-a-score-综合风险画像' },
+    { label: '模块8: 技术面分析', id: '模块8-技术面分析' },
+    { label: '模块9: ML机器学习预测', id: '模块9-ml机器学习预测' },
+    { label: '模块10: 智能选股7大条件', id: '模块10-智能选股7大条件' },
+    { label: '模块11: 芒格逆向思维检查', id: '模块11-芒格逆向思维检查' },
+    { label: '模块12: 巴菲特-芒格投资检查清单', id: '模块12-巴菲特-芒格投资检查清单' },
+    { label: '模块13: 社交媒体情绪监控', id: '模块13-社交媒体情绪监控' },
+    { label: '模块14: 综合投资建议', id: '模块14-综合投资建议' },
+    { label: '模块15: 结论与附录', id: '模块15-结论与附录' },
   ]
 
   const handleTocJump = (id: string) => {
@@ -562,6 +568,25 @@ function App() {
     })
   }, [watchlist.length])
 
+  // 切换热点概念时：清理当前分析结果，若有缓存则恢复第一个
+  useEffect(() => {
+    if (!selectedHotConceptCode) {
+      setQuickAnalysisCode(null)
+      setQuickAnalysisData(null)
+      return
+    }
+    const cached = quickAnalysisCache[selectedHotConceptCode]
+    if (cached && Object.keys(cached).length > 0) {
+      const firstCode = Object.keys(cached)[0]
+      const firstData = cached[firstCode]
+      setQuickAnalysisCode(firstCode)
+      setQuickAnalysisData(firstData)
+    } else {
+      setQuickAnalysisCode(null)
+      setQuickAnalysisData(null)
+    }
+  }, [selectedHotConceptCode, quickAnalysisCache])
+
   // 搜索输入时，若已加自选中有匹配，则高亮并滚动
   useEffect(() => {
     const q = query.trim()
@@ -642,7 +667,7 @@ function App() {
           case 'highReturn':
             return fd.shareholderReturnRate > 0.10
           case 'lowRisk':
-            return fd.aScore > 0 && fd.aScore < 60
+            return fd.aScore > 0 && fd.aScore < 60 && fd.riskLevel === 'low'
           case 'hasData':
             return fd.hasFinancialData
           case 'noData':
@@ -902,6 +927,13 @@ function App() {
   const loadHotConcepts = useCallback(async () => {
     setHotConceptLoading(true)
     setHotConceptError('')
+    // 每日首次进入热点时清理过期缓存
+    const today = new Date().toISOString().split('T')[0]
+    if (quickAnalysisCacheDate !== today) {
+      console.log('[HotConcept] new day, clearing quick analysis cache', quickAnalysisCacheDate, '->', today)
+      setQuickAnalysisCache({})
+      setQuickAnalysisCacheDate(today)
+    }
     try {
       const board = await FetchHotConcepts(20)
       console.log('[HotConcepts] loaded', board?.concepts?.length, 'concepts')
@@ -922,7 +954,7 @@ function App() {
     } finally {
       setHotConceptLoading(false)
     }
-  }, [])
+  }, [quickAnalysisCacheDate])
 
   const loadConceptConstituents = useCallback(async (code: string) => {
     if (!code) return
@@ -931,6 +963,9 @@ function App() {
       const list = await FetchHotConceptConstituents(code)
       console.log('[Constituents] loaded', list?.length, 'stocks for', code)
       setConceptConstituents((prev) => ({ ...prev, [code]: list || [] }))
+      // 计算成分股主力净流入加总，用于替代板块指数f62
+      const sum = (list || []).reduce((acc, s) => acc + (s.main_inflow || 0), 0)
+      setConceptMainInflowSum((prev) => ({ ...prev, [code]: sum }))
     } catch (err: any) {
       console.error('加载成分股失败:', err)
       setConceptConstituents((prev) => ({ ...prev, [code]: [] }))
@@ -938,19 +973,37 @@ function App() {
   }, [])
 
   const loadQuickAnalysis = useCallback(async (code: string, name: string, market: string) => {
+    const conceptCode = selectedHotConceptCode || ''
+    // 优先读取缓存
+    if (conceptCode && quickAnalysisCache[conceptCode]?.[code]) {
+      setQuickAnalysisCode(code)
+      setQuickAnalysisData(quickAnalysisCache[conceptCode][code])
+      setQuickAnalysisLoading(false)
+      return
+    }
     setQuickAnalysisCode(code)
     setQuickAnalysisLoading(true)
     setQuickAnalysisData(null)
     try {
-      const data = await QuickAnalyzeStock(code, name, market, selectedHotConceptCode || '')
+      const data = await QuickAnalyzeStock(code, name, market, conceptCode)
       setQuickAnalysisData(data)
+      // 写入缓存
+      if (conceptCode && data) {
+        setQuickAnalysisCache((prev) => ({
+          ...prev,
+          [conceptCode]: {
+            ...(prev[conceptCode] || {}),
+            [code]: data,
+          },
+        }))
+      }
     } catch (err: any) {
       console.error('快速分析失败:', err)
       setQuickAnalysisData(null)
     } finally {
       setQuickAnalysisLoading(false)
     }
-  }, [selectedHotConceptCode])
+  }, [selectedHotConceptCode, quickAnalysisCache])
 
   const loadComparables = useCallback(async (code: string) => {
     try {
@@ -1020,6 +1073,7 @@ function App() {
       // setKlines([])
       // setKlineError('')
       setDownloadResult(null)
+      setDownloadSuggestion('')
       setReport(null)
       setViewingHistory(null)
       setHistoryContent('')
@@ -1061,6 +1115,7 @@ function App() {
         // setKlineError('')
         setImportResult(null)
         setDownloadResult(null)
+        setDownloadSuggestion('')
         setReport(null)
         setViewingHistory(null)
         setHistoryContent('')
@@ -1101,6 +1156,7 @@ function App() {
     if (!selectedStock) return
     setDownloading(true)
     setDownloadStatus({type: null, message: ''})
+    setDownloadSuggestion('')
     try {
       const maxYears = typeof settings.reportYears === 'number' && settings.reportYears > 0
         ? Math.floor(settings.reportYears)
@@ -1125,6 +1181,7 @@ function App() {
         }
         const msg = `✅ 下载成功${yearStr ? '，包含' + yearStr + '年' : ''}`
         setDownloadStatus({type: 'success', message: msg})
+        setDownloadSuggestion(result.sourceSuggestion || '')
         console.log('[handleDownload] Reloading data history for:', selectedStock.code)
         await loadDataHistory(selectedStock.code)
         const cache = await CheckAnalysisCache(selectedStock.code)
@@ -1166,6 +1223,15 @@ function App() {
     }
   }
 
+  // 根据分析进度返回当前阶段描述
+  const getAnalyzeStageText = (p: number) => {
+    if (p < 25) return '初始化/获取行情...'
+    if (p < 50) return '获取舆情/K线/资金流向...'
+    if (p < 75) return 'ML三引擎推理/风险扫描...'
+    if (p < 90) return '财报透视分析...'
+    return '生成报告中...'
+  }
+
   const runAnalyze = async (overwriteLatest = false) => {
     if (!selectedStock) {
       alert('没有选择股票')
@@ -1176,10 +1242,13 @@ function App() {
     setAnalyzeProgress(5)
     const interval = setInterval(() => {
       setAnalyzeProgress((p) => {
-        if (p >= 85) return 90 // 停在90%，等待网络数据
-        return p + 3
+        if (p >= 90) return 92    // 90-92%：极慢前进后停住
+        if (p >= 75) return p + 1 // 75-90%：慢速（财报透视分析+报告生成）
+        if (p >= 50) return p + 2 // 50-75%：中速（对应ML推理+风险扫描）
+        if (p >= 25) return p + 2 // 25-50%：中速（对应网络数据获取）
+        return p + 3              // 5-25%：快速（初始化阶段）
       })
-    }, 400)
+    }, 500)
     try {
       const result = await AnalyzeStock(selectedStock.code, overwriteLatest)
       setReport(result)
@@ -1752,11 +1821,11 @@ function App() {
       const titleText = children?.toString() || ''
       // 匹配模块标题：模块X: 标题
       const isModuleTitle = /^模块\d+/.test(titleText)
-      const isModule8 = titleText.includes('模块8')
-      // 强制修正模块8的 id，确保 TOC 导航匹配
-      const headingId = isModule8 ? '模块8-a-score-综合风险画像' : id
+      const isModule7 = titleText.includes('模块7')
+      // 强制修正模块7的 id，确保 TOC 导航匹配
+      const headingId = isModule7 ? '模块7-a-score-综合风险画像' : id
       // 过滤掉 children 中的 trace-trigger（旧版后端可能残留）
-      const filteredChildren = isModule8
+      const filteredChildren = isModule7
         ? Children.map(children, (child: any) => {
             if (child && typeof child === 'object' && typeof child.props?.className === 'string' && child.props.className.includes('trace-trigger')) {
               return null
@@ -1766,10 +1835,10 @@ function App() {
         : children
       
       return (
-        <h1 id={headingId} {...props} style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingRight: isModule8 ? '52px' : '32px' }}>
+        <h1 id={headingId} {...props} style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingRight: isModule7 ? '52px' : '32px' }}>
           <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             {filteredChildren}
-            {isModule8 && (
+            {isModule7 && (
               <InlineTooltip
                 title="A-Score 综合风险画像"
                 body="A-Score（0-100分）综合评估企业财务风险，分数越高，潜在隐患越大。基于公开财务报表与监管信息，从六个维度打分：财务造假风险、偿债能力、现金流质量、应收账款健康度、盈利稳定性，以及股权质押/减持/监管问询等非财务信号。其中财务维度适用于 A 股与港股，非财务信号目前主要覆盖 A 股。评判标准：< 40分安全，40-60分低风险，60-70分中风险（需深入核查），≥ 70分高危（建议回避）。"
@@ -2030,6 +2099,7 @@ function App() {
                   // setKlineError('')
                   setImportResult(null)
                   setDownloadResult(null)
+                  setDownloadSuggestion('')
                   setReport(null)
                   setViewingHistory(null)
                   setHistoryContent('')
@@ -2134,15 +2204,16 @@ function App() {
                   gap: 4,
                   padding: '6px 8px',
                   fontSize: 11,
-                  color: '#64748b',
+                  color: 'var(--text-muted)',
                   borderBottom: '1px solid rgba(148,163,184,0.15)',
                   position: 'sticky',
                   top: 0,
-                  background: 'var(--bg-primary, #0f172a)',
+                  background: 'var(--panel-bg)',
                   zIndex: 1,
+                  whiteSpace: 'nowrap',
                 }}>
-                  <span>成交额</span>
-                  <span style={{ textAlign: 'right' }}>主力</span>
+                  <span>成交额(亿)</span>
+                  <span style={{ textAlign: 'right' }}>主力(亿)</span>
                   <span style={{ textAlign: 'right' }}>涨幅</span>
                   <span style={{ textAlign: 'right' }}>得分</span>
                 </div>
@@ -2192,12 +2263,12 @@ function App() {
                         color: '#64748b',
                         fontSize: 11,
                       }}>
-                        <span>{(c.turnover / 1e8).toFixed(2)}亿</span>
+                        <span>{(c.turnover / 1e8).toFixed(2)}</span>
                         <span style={{
                           textAlign: 'right',
-                          color: c.main_inflow > 0 ? '#ef4444' : c.main_inflow < 0 ? '#22c55e' : '#64748b',
+                          color: (conceptMainInflowSum[c.code] !== undefined ? conceptMainInflowSum[c.code] : c.main_inflow) > 0 ? '#ef4444' : (conceptMainInflowSum[c.code] !== undefined ? conceptMainInflowSum[c.code] : c.main_inflow) < 0 ? '#22c55e' : '#64748b',
                         }}>
-                          {(c.main_inflow / 1e8).toFixed(2)}亿
+                          {((conceptMainInflowSum[c.code] !== undefined ? conceptMainInflowSum[c.code] : c.main_inflow) / 1e8).toFixed(2)}
                         </span>
                         <span style={{
                           textAlign: 'right',
@@ -2445,10 +2516,10 @@ function App() {
             {/* 主操作按钮 */}
             <div className="actions">
               <button className="btn primary" onClick={handleDownload} disabled={downloading || loading}>
-                下载财报
+                财报下载
               </button>
               <button className="btn primary" onClick={handleAnalyze} disabled={analyzing || downloading || loading || dataHistory.length === 0 || dataMissing} title={dataHistory.length === 0 || dataMissing ? '请先下载或导入财报数据' : ''}>
-                财报分析
+                财报透镜
               </button>
             </div>
 
@@ -2463,10 +2534,25 @@ function App() {
               )}
               {analyzing && (
                 <span className="status-analyzing">
-                  分析中 {analyzeProgress}%{analyzeProgress >= 90 ? '(获取行情/舆情/ML...)' : ''}
+                  分析中 {analyzeProgress}%（{getAnalyzeStageText(analyzeProgress)}）
                 </span>
               )}
             </div>
+
+            {downloadSuggestion && (
+              <div style={{
+                marginTop: 8,
+                padding: '8px 12px',
+                background: 'rgba(59, 130, 246, 0.12)',
+                borderLeft: '3px solid #3b82f6',
+                borderRadius: '0 6px 6px 0',
+                fontSize: 12,
+                color: '#60a5fa',
+                lineHeight: 1.5,
+              }}>
+                💡 {downloadSuggestion}
+              </div>
+            )}
 
             {importResult && importResult.success && (
               <Collapsible title="📥 导入结果">
@@ -2679,7 +2765,7 @@ function App() {
                     onClick={handleDownloadComparables}
                     disabled={compDownloading || comparables.length === 0}
                   >
-                    {compDownloading ? '下载中...' : '下载财报'}
+                    {compDownloading ? '下载中...' : '财报下载'}
                   </button>
                   {(() => {
                     const compChanged = JSON.stringify([...appliedComparables].sort()) !== JSON.stringify([...comparables].sort())
@@ -2861,6 +2947,8 @@ function App() {
                         <th style={{ padding: '6px 10px' }}>名称</th>
                         <th style={{ padding: '6px 10px', textAlign: 'right' }}>最新价</th>
                         <th style={{ padding: '6px 10px', textAlign: 'right' }}>涨跌幅</th>
+                        <th style={{ padding: '6px 10px', textAlign: 'right' }}>市值</th>
+                        <th style={{ padding: '6px 10px', textAlign: 'right' }}>半年涨幅</th>
                         <th style={{ padding: '6px 10px', textAlign: 'right' }}>主力净流入</th>
                       </tr>
                     </thead>
@@ -2903,7 +2991,21 @@ function App() {
                               {s.change_pct > 0 ? '+' : ''}{s.change_pct?.toFixed(2)}%
                             </td>
                             <td style={{ padding: '6px 10px', textAlign: 'right', fontSize: 12, color: '#64748b' }}>
-                              {s.main_inflow.toFixed(0)}万元
+                              {s.market_cap > 0 ? (s.market_cap / 1e8).toFixed(1) + '亿' : '--'}
+                            </td>
+                            <td style={{
+                              padding: '6px 10px',
+                              textAlign: 'right',
+                              fontWeight: 600,
+                              fontSize: 12,
+                              color: s.half_year_change_pct > 0 ? '#ef4444' : s.half_year_change_pct < 0 ? '#22c55e' : '#94a3b8',
+                            }}>
+                              {s.half_year_change_pct > 0 ? '+' : ''}{s.half_year_change_pct?.toFixed(1)}%
+                            </td>
+                            <td style={{ padding: '6px 10px', textAlign: 'right', fontSize: 12, color: '#64748b' }}>
+                              {Math.abs(s.main_inflow) >= 1e8
+                                ? (s.main_inflow / 1e8).toFixed(2) + '亿'
+                                : (s.main_inflow / 1e4).toFixed(0) + '万'}
                             </td>
                           </tr>
                         )
@@ -2914,7 +3016,7 @@ function App() {
 
                   {/* 快速分析卡片 */}
                   {quickAnalysisCode && (
-                    <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', margin: '8px 10px', borderRadius: 6, border: '1px solid rgba(148,163,184,0.2)', background: '#fff' }}>
+                    <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', margin: '8px 10px', borderRadius: 6, border: '1px solid rgba(148,163,184,0.2)', background: 'var(--panel-bg)' }}>
                       {quickAnalysisLoading && (
                         <div style={{ padding: '20px', textAlign: 'center', color: '#64748b', fontSize: 13 }}>
                           正在分析 {quickAnalysisCode}...
@@ -2971,7 +3073,7 @@ function App() {
                             {/* 基本面 */}
                             <div style={{ padding: '8px 10px', background: 'rgba(59,130,246,0.03)' }}>
                               <div style={{ fontWeight: 600, color: '#3b82f6', marginBottom: 4, fontSize: 11 }}>📊 基本面</div>
-                              <div style={{ color: '#334155', lineHeight: 1.6 }}>
+                              <div style={{ color: 'var(--text-primary)', lineHeight: 1.6 }}>
                                 <div>行业: {quickAnalysisData.industry || '--'}</div>
                                 <div>市值: {quickAnalysisData.market_cap > 0 ? (quickAnalysisData.market_cap / 1e8).toFixed(1) + '亿' : '--'}</div>
                                 <div>PE: {quickAnalysisData.pe > 0 ? quickAnalysisData.pe.toFixed(1) : '--'} · PB: {quickAnalysisData.pb > 0 ? quickAnalysisData.pb.toFixed(1) : '--'}</div>
@@ -2981,7 +3083,7 @@ function App() {
                             {/* 流动性 */}
                             <div style={{ padding: '8px 10px', background: 'rgba(34,197,94,0.03)' }}>
                               <div style={{ fontWeight: 600, color: '#22c55e', marginBottom: 4, fontSize: 11 }}>💧 流动性</div>
-                              <div style={{ color: '#334155', lineHeight: 1.6 }}>
+                              <div style={{ color: 'var(--text-primary)', lineHeight: 1.6 }}>
                                 <div>最新价: {quickAnalysisData.current_price > 0 ? quickAnalysisData.current_price.toFixed(2) : '--'}</div>
                                 <div>涨跌: <span style={{ color: quickAnalysisData.change_percent > 0 ? '#ef4444' : quickAnalysisData.change_percent < 0 ? '#22c55e' : '#94a3b8' }}>{quickAnalysisData.change_percent > 0 ? '+' : ''}{quickAnalysisData.change_percent?.toFixed(2) || '--'}%</span></div>
                                 <div>换手: {quickAnalysisData.turnover_rate > 0 ? quickAnalysisData.turnover_rate.toFixed(2) + '%' : '--'} · 量比: {quickAnalysisData.volume_ratio > 0 ? quickAnalysisData.volume_ratio.toFixed(2) : '--'}</div>
@@ -3003,7 +3105,7 @@ function App() {
                             {/* 舆情 */}
                             <div style={{ padding: '8px 10px', background: 'rgba(168,85,247,0.03)' }}>
                               <div style={{ fontWeight: 600, color: '#a855f7', marginBottom: 4, fontSize: 11 }}>💬 舆情</div>
-                              <div style={{ color: '#334155', lineHeight: 1.6 }}>
+                              <div style={{ color: 'var(--text-primary)', lineHeight: 1.6 }}>
                                 {quickAnalysisData.has_sentiment_data ? (
                                   <>
                                     <div>情绪得分: {quickAnalysisData.sentiment_score > 0 ? '+' : ''}{quickAnalysisData.sentiment_score?.toFixed(1) || '--'}</div>
@@ -3022,7 +3124,7 @@ function App() {
                             {/* 风口关联 */}
                             <div style={{ padding: '8px 10px', background: 'rgba(249,115,22,0.03)' }}>
                               <div style={{ fontWeight: 600, color: '#f97316', marginBottom: 4, fontSize: 11 }}>🌪️ 风口关联</div>
-                              <div style={{ color: '#334155', lineHeight: 1.6 }}>
+                              <div style={{ color: 'var(--text-primary)', lineHeight: 1.6 }}>
                                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3, marginBottom: 4 }}>
                                   {quickAnalysisData.concepts?.slice(0, 5).map((c: string, i: number) => (
                                     <span key={i} style={{ fontSize: 10, background: 'rgba(249,115,22,0.1)', color: '#c2410c', padding: '1px 4px', borderRadius: 3 }}>{c}</span>

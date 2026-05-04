@@ -33,10 +33,11 @@ type HotConcept struct {
 
 // HotConceptBoard 当日热点看板数据
 type HotConceptBoard struct {
-	Date       string       `json:"date"`        // 日期 2026-04-28
-	UpdatedAt  string       `json:"updated_at"`  // 更新时间
-	Concepts   []HotConcept `json:"concepts"`    // 排序后的概念列表
-	DataSource string       `json:"data_source"` // eastmoney
+	Date         string       `json:"date"`          // 日期 2026-04-28
+	UpdatedAt    string       `json:"updated_at"`    // 更新时间
+	Concepts     []HotConcept `json:"concepts"`      // 排序后的概念列表
+	DataSource   string       `json:"data_source"`   // eastmoney
+	CacheVersion int          `json:"cache_version"` // 缓存版本号
 }
 
 // HotConceptHistoryItem 历史热点摘要（用于"连续上榜"标记）
@@ -47,20 +48,23 @@ type HotConceptHistoryItem struct {
 
 // ConceptConstituent 概念板块成分股
 type ConceptConstituent struct {
-	Code       string  `json:"code"`        // 股票代码
-	Name       string  `json:"name"`        // 股票名称
-	Market     string  `json:"market"`      // 市场: SH / SZ / BJ
-	ChangePct  float64 `json:"change_pct"`  // 涨跌幅%
-	Price      float64 `json:"price"`       // 最新价
-	MainInflow float64 `json:"main_inflow"` // 主力净流入
+	Code             string  `json:"code"`               // 股票代码
+	Name             string  `json:"name"`               // 股票名称
+	Market           string  `json:"market"`             // 市场: SH / SZ / BJ
+	ChangePct        float64 `json:"change_pct"`         // 涨跌幅%
+	Price            float64 `json:"price"`              // 最新价
+	MainInflow       float64 `json:"main_inflow"`        // 主力净流入
+	MarketCap        float64 `json:"market_cap"`         // 总市值
+	HalfYearChangePct float64 `json:"half_year_change_pct"` // 近半年涨跌幅%
 }
 
 // ========== 常量 ==========
 
 const (
-	emHotConceptFields = "f12,f14,f2,f3,f4,f10,f15,f62,f184,f204,f205"
-	emFSConcept        = "m:90+t:2" // 概念板块
-	emFSIndustry       = "m:90+t:1" // 行业板块
+	emHotConceptFields    = "f12,f14,f2,f3,f4,f5,f6,f10,f15,f62,f184,f204,f205"
+	emFSConcept           = "m:90+t:2" // 概念板块
+	emFSIndustry          = "m:90+t:1" // 行业板块
+	hotConceptCacheVer    = 3          // 缓存版本号，字段映射/去重逻辑变更时递增使旧缓存失效
 )
 
 // tushareHotConceptClient 用于热点概念降级的数据源客户端（由 app.go 设置）
@@ -107,6 +111,9 @@ func FetchHotConceptBoard(dataDir string, topN int) (*HotConceptBoard, error) {
 	// 5. 综合打分并排序
 	calcHotScore(concepts)
 
+	// 5.5 去重：去掉名称末尾罗马数字后缀（如"体育II"和"体育III"），按基本名称保留得分最高的一个
+	concepts = dedupHotConcepts(concepts)
+
 	// 6. 截取 topN
 	if topN > 0 && len(concepts) > topN {
 		concepts = concepts[:topN]
@@ -115,10 +122,11 @@ func FetchHotConceptBoard(dataDir string, topN int) (*HotConceptBoard, error) {
 	// 7. 组装结果
 	now := time.Now()
 	board := &HotConceptBoard{
-		Date:       now.Format("2006-01-02"),
-		UpdatedAt:  now.Format("2006-01-02 15:04:05"),
-		Concepts:   concepts,
-		DataSource: dataSource,
+		Date:         now.Format("2006-01-02"),
+		UpdatedAt:    now.Format("2006-01-02 15:04:05"),
+		Concepts:     concepts,
+		DataSource:   dataSource,
+		CacheVersion: hotConceptCacheVer,
 	}
 
 	// 8. 保存缓存 + 归档历史
@@ -262,7 +270,7 @@ func FetchHotConceptHistory(dataDir string, days int) ([]HotConceptHistoryItem, 
 // FetchConceptConstituents 获取某概念板块的成分股列表
 func FetchConceptConstituents(conceptCode string) ([]ConceptConstituent, error) {
 	url := fmt.Sprintf(
-		"http://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=200&po=1&np=1&ut=bd1d9ddb04089700cf9c27f6f7426281&fltt=2&invt=2&fid=f3&fs=b:%s&fields=f12,f14,f2,f3,f62&_=%d",
+		"http://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=200&po=1&np=1&ut=bd1d9ddb04089700cf9c27f6f7426281&fltt=2&invt=2&fid=f3&fs=b:%s&fields=f12,f14,f2,f3,f20,f130,f62&_=%d",
 		conceptCode,
 		time.Now().UnixMilli(),
 	)
@@ -302,24 +310,28 @@ func FetchConceptConstituents(conceptCode string) ([]ConceptConstituent, error) 
 		case map[string]interface{}:
 			// 对象格式: {"f12":"300750","f14":"宁德时代","f13":0,...}
 			c = ConceptConstituent{
-				Code:       parseString(item["f12"]),
-				Name:       parseString(item["f14"]),
-				Market:     parseMarket(parseString(item["f13"]), parseString(item["f12"])),
-				Price:      parseFloat(item["f2"]),
-				ChangePct:  parseFloat(item["f3"]),
-				MainInflow: parseFloat(item["f62"]),
+				Code:              parseString(item["f12"]),
+				Name:              parseString(item["f14"]),
+				Market:            parseMarket(parseString(item["f13"]), parseString(item["f12"])),
+				Price:             parseFloat(item["f2"]),
+				ChangePct:         parseFloat(item["f3"]),
+				MarketCap:         parseFloat(item["f20"]),
+				HalfYearChangePct: parseFloat(item["f130"]),
+				MainInflow:        parseFloat(item["f62"]),
 			}
 		case []interface{}:
 			// 数组格式: ["300750","宁德时代",185.2,4.52,320000000]
-			if len(item) >= 5 {
+			if len(item) >= 7 {
 				code := parseString(item[0])
 				c = ConceptConstituent{
-					Code:       code,
-					Name:       parseString(item[1]),
-					Market:     inferMarketFromCode(code),
-					Price:      parseFloat(item[2]),
-					ChangePct:  parseFloat(item[3]),
-					MainInflow: parseFloat(item[4]),
+					Code:              code,
+					Name:              parseString(item[1]),
+					Market:            inferMarketFromCode(code),
+					Price:             parseFloat(item[2]),
+					ChangePct:         parseFloat(item[3]),
+					MarketCap:         parseFloat(item[4]),
+					HalfYearChangePct: parseFloat(item[5]),
+					MainInflow:        parseFloat(item[6]),
 				}
 			}
 		}
@@ -344,25 +356,25 @@ func getMockConstituents(conceptCode string) []ConceptConstituent {
 	// 根据概念代码返回不同的演示数据
 	mocks := map[string][]ConceptConstituent{
 		"BK1168": { // 固态电池
-			{Code: "300750", Name: "宁德时代", Market: "SZ", Price: 185.20, ChangePct: 4.52, MainInflow: 320000000},
-			{Code: "002074", Name: "国轩高科", Market: "SZ", Price: 21.35, ChangePct: 3.18, MainInflow: 85000000},
-			{Code: "300014", Name: "亿纬锂能", Market: "SZ", Price: 42.10, ChangePct: 2.95, MainInflow: 62000000},
-			{Code: "002709", Name: "天赐材料", Market: "SZ", Price: 18.60, ChangePct: 2.30, MainInflow: 45000000},
-			{Code: "603659", Name: "璞泰来", Market: "SH", Price: 15.80, ChangePct: 1.85, MainInflow: 28000000},
+			{Code: "300750", Name: "宁德时代", Market: "SZ", Price: 185.20, ChangePct: 4.52, MarketCap: 185200000000, HalfYearChangePct: 14.04, MainInflow: 320000000},
+			{Code: "002074", Name: "国轩高科", Market: "SZ", Price: 21.35, ChangePct: 3.18, MarketCap: 21350000000, HalfYearChangePct: 11.36, MainInflow: 85000000},
+			{Code: "300014", Name: "亿纬锂能", Market: "SZ", Price: 42.10, ChangePct: 2.95, MarketCap: 42100000000, HalfYearChangePct: 10.9, MainInflow: 62000000},
+			{Code: "002709", Name: "天赐材料", Market: "SZ", Price: 18.60, ChangePct: 2.30, MarketCap: 18600000000, HalfYearChangePct: 9.6, MainInflow: 45000000},
+			{Code: "603659", Name: "璞泰来", Market: "SH", Price: 15.80, ChangePct: 1.85, MarketCap: 15800000000, HalfYearChangePct: 8.7, MainInflow: 28000000},
 		},
 		"BK0729": { // 人工智能
-			{Code: "002230", Name: "科大讯飞", Market: "SZ", Price: 48.50, ChangePct: 3.80, MainInflow: 210000000},
-			{Code: "000938", Name: "中芯国际", Market: "SZ", Price: 52.30, ChangePct: 2.90, MainInflow: 150000000},
-			{Code: "300033", Name: "同花顺", Market: "SZ", Price: 128.00, ChangePct: 2.50, MainInflow: 98000000},
-			{Code: "002415", Name: "海康威视", Market: "SZ", Price: 32.10, ChangePct: 1.80, MainInflow: 65000000},
-			{Code: "000977", Name: "浪潮信息", Market: "SZ", Price: 28.50, ChangePct: 1.20, MainInflow: 42000000},
+			{Code: "002230", Name: "科大讯飞", Market: "SZ", Price: 48.50, ChangePct: 3.80, MarketCap: 48500000000, HalfYearChangePct: 12.6, MainInflow: 210000000},
+			{Code: "000938", Name: "中芯国际", Market: "SZ", Price: 52.30, ChangePct: 2.90, MarketCap: 52300000000, HalfYearChangePct: 10.8, MainInflow: 150000000},
+			{Code: "300033", Name: "同花顺", Market: "SZ", Price: 128.00, ChangePct: 2.50, MarketCap: 128000000000, HalfYearChangePct: 10.0, MainInflow: 98000000},
+			{Code: "002415", Name: "海康威视", Market: "SZ", Price: 32.10, ChangePct: 1.80, MarketCap: 32100000000, HalfYearChangePct: 8.6, MainInflow: 65000000},
+			{Code: "000977", Name: "浪潮信息", Market: "SZ", Price: 28.50, ChangePct: 1.20, MarketCap: 28500000000, HalfYearChangePct: 7.4, MainInflow: 42000000},
 		},
 		"BK0912": { // 半导体
-			{Code: "688981", Name: "中芯国际", Market: "SH", Price: 52.30, ChangePct: 3.50, MainInflow: 180000000},
-			{Code: "002371", Name: "北方华创", Market: "SZ", Price: 245.00, ChangePct: 2.80, MainInflow: 120000000},
-			{Code: "603501", Name: "韦尔股份", Market: "SH", Price: 98.50, ChangePct: 2.10, MainInflow: 85000000},
-			{Code: "688012", Name: "中微公司", Market: "SH", Price: 142.00, ChangePct: 1.60, MainInflow: 55000000},
-			{Code: "300782", Name: "卓胜微", Market: "SZ", Price: 78.20, ChangePct: 0.90, MainInflow: 28000000},
+			{Code: "688981", Name: "中芯国际", Market: "SH", Price: 52.30, ChangePct: 3.50, MarketCap: 52300000000, HalfYearChangePct: 12.0, MainInflow: 180000000},
+			{Code: "002371", Name: "北方华创", Market: "SZ", Price: 245.00, ChangePct: 2.80, MarketCap: 245000000000, HalfYearChangePct: 10.6, MainInflow: 120000000},
+			{Code: "603501", Name: "韦尔股份", Market: "SH", Price: 98.50, ChangePct: 2.10, MarketCap: 98500000000, HalfYearChangePct: 9.2, MainInflow: 85000000},
+			{Code: "688012", Name: "中微公司", Market: "SH", Price: 142.00, ChangePct: 1.60, MarketCap: 142000000000, HalfYearChangePct: 8.2, MainInflow: 55000000},
+			{Code: "300782", Name: "卓胜微", Market: "SZ", Price: 78.20, ChangePct: 0.90, MarketCap: 78200000000, HalfYearChangePct: 6.8, MainInflow: 28000000},
 		},
 	}
 	if list, ok := mocks[conceptCode]; ok {
@@ -370,9 +382,9 @@ func getMockConstituents(conceptCode string) []ConceptConstituent {
 	}
 	// 默认返回一些通用股票
 	return []ConceptConstituent{
-		{Code: "000001", Name: "平安银行", Market: "SZ", Price: 10.50, ChangePct: 0.50, MainInflow: 10000000},
+		{Code: "000001", Name: "平安银行", Market: "SZ", Price: 10.50, ChangePct: 0.50, MarketCap: 10500000000, HalfYearChangePct: 6.0, MainInflow: 10000000},
 		{Code: "000002", Name: "万科A", Market: "SZ", Price: 8.20, ChangePct: -0.30, MainInflow: -5000000},
-		{Code: "600519", Name: "贵州茅台", Market: "SH", Price: 1680.00, ChangePct: 0.80, MainInflow: 25000000},
+		{Code: "600519", Name: "贵州茅台", Market: "SH", Price: 1680.00, ChangePct: 0.80, MarketCap: 1680000000000, HalfYearChangePct: 6.6, MainInflow: 25000000},
 	}
 }
 
@@ -449,8 +461,8 @@ func fetchConceptBoardFromEastMoney() ([]HotConcept, error) {
 			Name:         parseString(item["f14"]),
 			ChangePct:    parseFloat(item["f3"]),
 			ChangeAmt:    parseFloat(item["f4"]),
-			Volume:       parseFloat(item["f10"]),
-			Turnover:     parseFloat(item["f15"]),
+			Volume:       parseFloat(item["f5"]),
+			Turnover:     parseFloat(item["f6"]),
 			MainInflow:   parseFloat(item["f62"]),
 			MainInRatio:  parseFloat(item["f184"]),
 			TopStock:     parseString(item["f204"]),
@@ -526,6 +538,48 @@ func calcHotScore(concepts []HotConcept) {
 	})
 }
 
+// dedupHotConcepts 去掉名称末尾罗马数字后缀的重复概念（如"体育II"和"体育III"），
+// 按基本名称保留得分最高的一个。
+func dedupHotConcepts(concepts []HotConcept) []HotConcept {
+	if len(concepts) == 0 {
+		return concepts
+	}
+	seen := make(map[string]*HotConcept)
+	for i := range concepts {
+		c := &concepts[i]
+		base := stripRomanSuffix(c.Name)
+		if existing, ok := seen[base]; !ok || c.Score > existing.Score {
+			seen[base] = c
+		}
+	}
+	result := make([]HotConcept, 0, len(seen))
+	for _, c := range seen {
+		result = append(result, *c)
+	}
+	// 重新按得分降序排序
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].Score > result[j].Score
+	})
+	return result
+}
+
+// stripRomanSuffix 去掉概念名称末尾的罗马数字/中文数字后缀
+func stripRomanSuffix(name string) string {
+	// 匹配末尾的罗马数字或中文数字：ⅠⅡⅢⅣⅤ一二三四五六七八九十
+	for len(name) > 0 {
+		r := []rune(name)
+		last := r[len(r)-1]
+		if last == 'Ⅰ' || last == 'Ⅱ' || last == 'Ⅲ' || last == 'Ⅳ' || last == 'Ⅴ' ||
+			last == '一' || last == '二' || last == '三' || last == '四' || last == '五' ||
+			last == '六' || last == '七' || last == '八' || last == '九' || last == '十' {
+			name = string(r[:len(r)-1])
+			continue
+		}
+		break
+	}
+	return name
+}
+
 // ========== 内部：缓存与归档 ==========
 
 func hotConceptCachePath(dataDir string) string {
@@ -544,6 +598,11 @@ func loadHotConceptCache(dataDir string) (*HotConceptBoard, bool) {
 	}
 	var board HotConceptBoard
 	if err := json.Unmarshal(data, &board); err != nil {
+		return nil, false
+	}
+	// 版本号不匹配：字段映射变更后旧缓存失效
+	if board.CacheVersion != hotConceptCacheVer {
+		fmt.Printf("[HotConcept] cache version mismatch (%d != %d), ignoring\n", board.CacheVersion, hotConceptCacheVer)
 		return nil, false
 	}
 	// 检查是否过期：4 小时（数据源 ths_hot 限 2 次/天，延长缓存减少 API 调用）

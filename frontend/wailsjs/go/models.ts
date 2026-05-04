@@ -521,6 +521,8 @@ export namespace downloader {
 	    change_pct: number;
 	    price: number;
 	    main_inflow: number;
+	    market_cap: number;
+	    half_year_change_pct: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new ConceptConstituent(source);
@@ -534,6 +536,8 @@ export namespace downloader {
 	        this.change_pct = source["change_pct"];
 	        this.price = source["price"];
 	        this.main_inflow = source["main_inflow"];
+	        this.market_cap = source["market_cap"];
+	        this.half_year_change_pct = source["half_year_change_pct"];
 	    }
 	}
 	export class HotConcept {
@@ -573,6 +577,7 @@ export namespace downloader {
 	    updated_at: string;
 	    concepts: HotConcept[];
 	    data_source: string;
+	    cache_version: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new HotConceptBoard(source);
@@ -584,6 +589,7 @@ export namespace downloader {
 	        this.updated_at = source["updated_at"];
 	        this.concepts = this.convertValues(source["concepts"], HotConcept);
 	        this.data_source = source["data_source"];
+	        this.cache_version = source["cache_version"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -807,6 +813,8 @@ export namespace main {
 	    years: string[];
 	    validation: downloader.ValidationResult[];
 	    sourceName: string;
+	    qualityScore: number;
+	    sourceSuggestion: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new DownloadResult(source);
@@ -819,6 +827,8 @@ export namespace main {
 	        this.years = source["years"];
 	        this.validation = this.convertValues(source["validation"], downloader.ValidationResult);
 	        this.sourceName = source["sourceName"];
+	        this.qualityScore = source["qualityScore"];
+	        this.sourceSuggestion = source["sourceSuggestion"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -1273,6 +1283,7 @@ export namespace main {
 	    industry: string;
 	    shareholderReturnRate: number;
 	    aScore: number;
+	    riskLevel: string;
 	    hasFinancialData: boolean;
 	    hasSnapshot: boolean;
 	    lastAnalyzedAt: string;
@@ -1287,6 +1298,7 @@ export namespace main {
 	        this.industry = source["industry"];
 	        this.shareholderReturnRate = source["shareholderReturnRate"];
 	        this.aScore = source["aScore"];
+	        this.riskLevel = source["riskLevel"];
 	        this.hasFinancialData = source["hasFinancialData"];
 	        this.hasSnapshot = source["hasSnapshot"];
 	        this.lastAnalyzedAt = source["lastAnalyzedAt"];

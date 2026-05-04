@@ -52,13 +52,13 @@ func debugLog(format string, v ...interface{}) {
 
 // App struct
 type App struct {
-	ctx              context.Context
-	storage          *Storage
-	stocks           []StockInfo // 内存中的股票代码库
-	analysisMu       sync.Mutex
-	analysisLocks    map[string]*sync.Mutex
-	dataRouter       *downloader.DataRouter // 数据源路由
-	riskSensitivity  string                   // 风险警示敏感度
+	ctx             context.Context
+	storage         *Storage
+	stocks          []StockInfo // 内存中的股票代码库
+	analysisMu      sync.Mutex
+	analysisLocks   map[string]*sync.Mutex
+	dataRouter      *downloader.DataRouter // 数据源路由
+	riskSensitivity string                 // 风险警示敏感度
 }
 
 // StockInfo 股票基础信息
@@ -86,11 +86,13 @@ type ImportResult struct {
 
 // DownloadResult 网络下载结果
 type DownloadResult struct {
-	Success    bool                          `json:"success"`
-	Message    string                        `json:"message"`
-	Years      []string                      `json:"years"`
-	Validation []downloader.ValidationResult `json:"validation"`
-	SourceName string                        `json:"sourceName"` // 数据来源（StockFinLens / 东方财富 / 腾讯财经）
+	Success          bool                          `json:"success"`
+	Message          string                        `json:"message"`
+	Years            []string                      `json:"years"`
+	Validation       []downloader.ValidationResult `json:"validation"`
+	SourceName       string                        `json:"sourceName"`       // 数据来源（StockFinLens / 东方财富 / 腾讯财经）
+	QualityScore     float64                       `json:"qualityScore"`     // 资产负债表质量得分 0-100
+	SourceSuggestion string                        `json:"sourceSuggestion"` // 数据源切换建议，空字符串表示无建议
 }
 
 // NewApp creates a new App application struct
@@ -295,6 +297,7 @@ type WatchlistFilterItem struct {
 	Industry              string  `json:"industry"`
 	ShareholderReturnRate float64 `json:"shareholderReturnRate"`
 	AScore                float64 `json:"aScore"`
+	RiskLevel             string  `json:"riskLevel"`
 	HasFinancialData      bool    `json:"hasFinancialData"`
 	HasSnapshot           bool    `json:"hasSnapshot"`
 	LastAnalyzedAt        string  `json:"lastAnalyzedAt"`
@@ -342,9 +345,12 @@ func (a *App) GetWatchlistFilterData() ([]WatchlistFilterItem, error) {
 			}
 		}
 
-		// 3. 快照数据（A-Score）
+		// 3. 快照数据（A-Score + 风险等级）
 		if snapshot, err := a.LoadAnalysisSnapshot(item.Code); err == nil && snapshot != nil {
 			result.HasSnapshot = true
+			if snapshot.RiskAlert != nil {
+				result.RiskLevel = snapshot.RiskAlert.Level
+			}
 			if len(snapshot.Years) > 0 {
 				latest := snapshot.Years[0]
 				for _, step := range snapshot.StepResults {
@@ -982,13 +988,87 @@ func (a *App) DownloadReports(symbol string, maxYears int) (*DownloadResult, err
 		}
 	}
 
-	// 2. Fallback 到原有下载链
+	// 2. Fallback 到原有下载链（东方财富）
 	if data == nil {
 		data, err = downloader.DownloadFinancialReports(market, code, maxYears)
 		if err != nil {
 			return nil, fmt.Errorf("下载财报失败: %w", err)
 		}
 		sourceName = "东方财富"
+	}
+
+	// 3. 评估主数据源质量，若质量差则尝试备用源
+	quality := downloader.EvaluateBalanceQuality(data)
+	var sourceSuggestion string
+	if quality != nil && quality.SuggestAlternativeSource(0.05) {
+		fmt.Printf("[DownloadReports] %s 主数据源(%s)质量欠佳: maxDiff=%.2f%%, score=%.1f，尝试备用源\n",
+			symbol, sourceName, quality.MaxDiffRatio*100, quality.Score)
+
+		var altData *downloader.FinancialReportData
+		var altSourceName string
+
+		if sourceName == "东方财富" && a.dataRouter != nil && market != "HK" {
+			// 主源是东财，尝试 StockFinLens
+			tfd, tErr := a.dataRouter.FetchFinancialData(market, code)
+			if tErr == nil && tfd != nil {
+				altData = a.dataRouter.ConvertToFinancialReportData(tfd, symbol)
+				if altData != nil && len(altData.Years) > 0 {
+					altSourceName = "StockFinLens"
+				}
+			}
+		} else if sourceName == "StockFinLens" {
+			// 主源是 StockFinLens，尝试东财
+			altData, _ = downloader.DownloadFinancialReports(market, code, maxYears)
+			if altData != nil && len(altData.Years) > 0 {
+				altSourceName = "东方财富"
+			}
+		}
+
+		if altData != nil && altSourceName != "" {
+			altQuality := downloader.EvaluateBalanceQuality(altData)
+			if altQuality != nil {
+				fmt.Printf("[DownloadReports] %s 备用源(%s)质量: maxDiff=%.2f%%, score=%.1f\n",
+					symbol, altSourceName, altQuality.MaxDiffRatio*100, altQuality.Score)
+				if altQuality.IsBetterThan(quality) {
+					originalSourceName := sourceName
+					originalMaxDiff := quality.MaxDiffRatio
+					fmt.Printf("[DownloadReports] %s 选择备用源(%s)数据，质量更优\n", symbol, altSourceName)
+					data = altData
+					sourceName = altSourceName
+					quality = altQuality
+					sourceSuggestion = fmt.Sprintf("该股票财报数据已从%s切换至%s，资产负债表平衡性更优（差异从%.1f%%降至%.1f%%）",
+						originalSourceName, altSourceName, originalMaxDiff*100, altQuality.MaxDiffRatio*100)
+				}
+			}
+		}
+	}
+
+	// 补充缺失的分红数据：若现金流量表中分红字段全为0，尝试从东财API获取
+	if data != nil && data.CashFlow != nil {
+		allZero := true
+		hasDividendField := false
+		for _, year := range data.Years {
+			if strings.HasSuffix(year, "-12-31") || len(year) == 4 {
+				if row, ok := data.CashFlow["分配股利、利润或偿付利息支付的现金"]; ok {
+					hasDividendField = true
+					if row[year] != 0 {
+						allZero = false
+						break
+					}
+				}
+			}
+		}
+		if allZero && hasDividendField {
+			if dividendMap, err := downloader.FetchCashFlowDividendFromEastMoney(market, code, len(data.Years)); err == nil && len(dividendMap) > 0 {
+				if _, ok := data.CashFlow["分配股利、利润或偿付利息支付的现金"]; !ok {
+					data.CashFlow["分配股利、利润或偿付利息支付的现金"] = make(map[string]float64)
+				}
+				for year, val := range dividendMap {
+					data.CashFlow["分配股利、利润或偿付利息支付的现金"][year] = val
+					fmt.Printf("[DownloadReports] %s 补充分红数据 %s=%.0f\n", symbol, year, val)
+				}
+			}
+		}
 	}
 
 	// 保存到本地
@@ -1011,13 +1091,24 @@ func (a *App) DownloadReports(symbol string, maxYears int) (*DownloadResult, err
 		Years:      data.Years,
 	})
 
-	return &DownloadResult{
+	result := &DownloadResult{
 		Success:    true,
 		Message:    fmt.Sprintf("成功下载 %d 年的年报数据", len(data.Years)),
 		Years:      data.Years,
 		Validation: validation,
 		SourceName: sourceName,
-	}, nil
+	}
+	if quality != nil {
+		result.QualityScore = quality.Score
+	}
+	if sourceSuggestion != "" {
+		result.SourceSuggestion = sourceSuggestion
+	} else if quality != nil && quality.SuggestAlternativeSource(0.05) {
+		// 质量仍不合格但无更优备用源时，提示用户手动处理
+		result.SourceSuggestion = fmt.Sprintf("当前数据源(%s)资产负债表平衡性欠佳（最大差异%.1f%%），建议通过「设置-数据」切换数据源或手动导入CSV财报",
+			sourceName, quality.MaxDiffRatio*100)
+	}
+	return result, nil
 }
 
 // GetComparables 获取某只股票的可比公司列表
@@ -1644,60 +1735,60 @@ func (a *App) analyzeStockInternal(symbol string, overwriteLatest bool, customRI
 			}
 		}
 
-	// 4. 获取资金流向
-	go func() {
-		defer func() {
-			if r := recover(); r != nil {
-				debugLog("[PANIC] moneyflow goroutine: %v", r)
-			}
-			wgNet.Done()
-		}()
-		if a.dataRouter != nil && a.dataRouter.IsUseForMoneyflow() {
-			parts := strings.Split(symbol, ".")
-			if len(parts) == 2 {
-				market := strings.ToUpper(parts[1])
-				code := parts[0]
-				end := time.Now().Format("20060102")
-				start := time.Now().AddDate(0, 0, -5).Format("20060102")
-				items, err := a.dataRouter.FetchMoneyflow(market, code, start, end)
-				if err == nil && len(items) > 0 {
-					mfItems := make([]analyzer.MoneyflowItem, 0, len(items))
-					for _, item := range items {
-						mfItems = append(mfItems, analyzer.MoneyflowItem{
-							Date:         item.TradeDate,
-							MainInflow:   item.BuyLgAmount + item.BuyElgAmount - item.SellLgAmount - item.SellElgAmount,
-							SmNetAmount:  item.BuySmAmount - item.SellSmAmount,
-							MdNetAmount:  item.BuyMdAmount - item.SellMdAmount,
-							LgNetAmount:  item.BuyLgAmount - item.SellLgAmount,
-							ElgNetAmount: item.BuyElgAmount - item.SellElgAmount,
-						})
-					}
-					moneyflowData = &analyzer.MoneyflowData{
-						HasData: true,
-						Items:   mfItems,
-					}
-					var totalMain float64
-					var inflowDays int
-					for _, item := range mfItems {
-						totalMain += item.MainInflow
-						if item.MainInflow > 0 {
-							inflowDays++
+		// 4. 获取资金流向
+		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					debugLog("[PANIC] moneyflow goroutine: %v", r)
+				}
+				wgNet.Done()
+			}()
+			if a.dataRouter != nil && a.dataRouter.IsUseForMoneyflow() {
+				parts := strings.Split(symbol, ".")
+				if len(parts) == 2 {
+					market := strings.ToUpper(parts[1])
+					code := parts[0]
+					end := time.Now().Format("20060102")
+					start := time.Now().AddDate(0, 0, -5).Format("20060102")
+					items, err := a.dataRouter.FetchMoneyflow(market, code, start, end)
+					if err == nil && len(items) > 0 {
+						mfItems := make([]analyzer.MoneyflowItem, 0, len(items))
+						for _, item := range items {
+							mfItems = append(mfItems, analyzer.MoneyflowItem{
+								Date:         item.TradeDate,
+								MainInflow:   item.BuyLgAmount + item.BuyElgAmount - item.SellLgAmount - item.SellElgAmount,
+								SmNetAmount:  item.BuySmAmount - item.SellSmAmount,
+								MdNetAmount:  item.BuyMdAmount - item.SellMdAmount,
+								LgNetAmount:  item.BuyLgAmount - item.SellLgAmount,
+								ElgNetAmount: item.BuyElgAmount - item.SellElgAmount,
+							})
 						}
-					}
-					dayCount := len(mfItems)
-					if inflowDays == dayCount {
-						moneyflowData.Summary = fmt.Sprintf("近%d日主力持续流入，累计 %.2f 亿元", dayCount, totalMain/10000)
-					} else if inflowDays == 0 {
-						moneyflowData.Summary = fmt.Sprintf("近%d日主力持续流出，累计 %.2f 亿元", dayCount, totalMain/10000)
-					} else if totalMain > 0 {
-						moneyflowData.Summary = fmt.Sprintf("近%d日主力%d日流入，累计净流入 %.2f 亿元", dayCount, inflowDays, totalMain/10000)
-					} else {
-						moneyflowData.Summary = fmt.Sprintf("近%d日主力%d日流入，累计净流出 %.2f 亿元", dayCount, inflowDays, -totalMain/10000)
+						moneyflowData = &analyzer.MoneyflowData{
+							HasData: true,
+							Items:   mfItems,
+						}
+						var totalMain float64
+						var inflowDays int
+						for _, item := range mfItems {
+							totalMain += item.MainInflow
+							if item.MainInflow > 0 {
+								inflowDays++
+							}
+						}
+						dayCount := len(mfItems)
+						if inflowDays == dayCount {
+							moneyflowData.Summary = fmt.Sprintf("近%d日主力持续流入，累计 %.2f 亿元", dayCount, totalMain/10000)
+						} else if inflowDays == 0 {
+							moneyflowData.Summary = fmt.Sprintf("近%d日主力持续流出，累计 %.2f 亿元", dayCount, totalMain/10000)
+						} else if totalMain > 0 {
+							moneyflowData.Summary = fmt.Sprintf("近%d日主力%d日流入，累计净流入 %.2f 亿元", dayCount, inflowDays, totalMain/10000)
+						} else {
+							moneyflowData.Summary = fmt.Sprintf("近%d日主力%d日流入，累计净流出 %.2f 亿元", dayCount, inflowDays, -totalMain/10000)
+						}
 					}
 				}
 			}
-		}
-	}()
+		}()
 	}()
 
 	wgNet.Wait()
@@ -1761,6 +1852,40 @@ func (a *App) analyzeStockInternal(symbol string, overwriteLatest bool, customRI
 	var finData *analyzer.FinancialData
 	if fd, err := analyzer.LoadFinancialData(a.storage.DataDir(), symbol); err == nil && fd != nil {
 		finData = fd
+	}
+
+	// 补充缺失的分红数据：若现金流量表中分红字段全为0，尝试从东财API获取
+	if finData != nil {
+		allZero := true
+		hasDividendField := false
+		for _, year := range finData.Years {
+			if strings.HasSuffix(year, "-12-31") || len(year) == 4 {
+				v := finData.GetValueOrZero(finData.CashFlow, "分配股利、利润或偿付利息支付的现金", year)
+				if v != 0 {
+					allZero = false
+					break
+				}
+				hasDividendField = true
+			}
+		}
+		if allZero && hasDividendField {
+			parts := strings.Split(symbol, ".")
+			if len(parts) == 2 {
+				market := strings.ToUpper(parts[1])
+				code := parts[0]
+				if dividendMap, err := downloader.FetchCashFlowDividendFromEastMoney(market, code, len(finData.Years)); err == nil && len(dividendMap) > 0 {
+					for year, val := range dividendMap {
+						if _, ok := finData.CashFlow["分配股利、利润或偿付利息支付的现金"]; !ok {
+							finData.CashFlow["分配股利、利润或偿付利息支付的现金"] = make(map[string]float64)
+						}
+						finData.CashFlow["分配股利、利润或偿付利息支付的现金"][year] = val
+						debugLog("[AnalyzeStock] %s 补充分红数据 %s=%.0f", symbol, year, val)
+					}
+				} else {
+					debugLog("[AnalyzeStock] %s 尝试从东财补充分红数据失败: %v", symbol, err)
+				}
+			}
+		}
 	}
 
 	// ML 双引擎预测 + RIM 外部数据获取 并发执行
@@ -3379,10 +3504,10 @@ func (a *App) VerifyTushareToken(token string) (*TushareVerifyResult, error) {
 // StockMoneyflowItem 单日资金流向数据
 type StockMoneyflowItem struct {
 	Date         string  `json:"date"`
-	MainInflow   float64 `json:"main_inflow"`   // 主力净流入（大单+特大单）
-	SmNetAmount  float64 `json:"sm_net_amount"` // 小单净流入
-	MdNetAmount  float64 `json:"md_net_amount"` // 中单净流入
-	LgNetAmount  float64 `json:"lg_net_amount"` // 大单净流入
+	MainInflow   float64 `json:"main_inflow"`    // 主力净流入（大单+特大单）
+	SmNetAmount  float64 `json:"sm_net_amount"`  // 小单净流入
+	MdNetAmount  float64 `json:"md_net_amount"`  // 中单净流入
+	LgNetAmount  float64 `json:"lg_net_amount"`  // 大单净流入
 	ElgNetAmount float64 `json:"elg_net_amount"` // 特大单净流入
 }
 

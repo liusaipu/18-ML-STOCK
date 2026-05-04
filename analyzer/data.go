@@ -292,10 +292,22 @@ func (fd *FinancialData) validate() {
 			diff := math.Abs(asset - liability - totalEquity)
 			if diff/asset > 0.05 {
 				fd.QualityWarnings = append(fd.QualityWarnings,
-					fmt.Sprintf("%s 资产负债表不平衡: 资产%.0f ≠ 负债%.0f + 总权益%.0f (差异%.1f%%)。此异常通常由东方财富 API 数据源精度/舍入问题导致，不影响核心分析指标（ROE、毛利率等）的准确性",
+					fmt.Sprintf("%s 资产负债表不平衡: 资产%.0f ≠ 负债%.0f + 总权益%.0f (差异%.1f%%)。此异常通常由数据源精度/舍入问题导致，不影响核心分析指标（ROE、毛利率等）的准确性",
 						year, asset, liability, totalEquity, diff/asset*100))
 			}
 		}
+	}
+	// 如果存在资产负债表不平衡，追加数据源切换建议
+	hasBalanceIssue := false
+	for _, w := range fd.QualityWarnings {
+		if strings.Contains(w, "资产负债表不平衡") {
+			hasBalanceIssue = true
+			break
+		}
+	}
+	if hasBalanceIssue {
+		fd.QualityWarnings = append(fd.QualityWarnings,
+			"💡 建议：当前数据可能存在数据源精度问题。如已配置 StockFinLens 数据源，系统会在下载时自动对比并择优选用；也可通过「导入财报」功能手动导入原始 CSV/Excel 财报进行复核。")
 	}
 
 	// 4. 异常值检测

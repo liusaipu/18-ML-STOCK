@@ -8,11 +8,17 @@ body {
     'Helvetica Neue', Arial, sans-serif;
   background: #0f1419;
   color: #e6e6e6;
+  --panel-bg: #141b24;
+  --text-muted: #94a3b8;
+  --text-primary: #e2e8f0;
 }
 
 body.light {
   background: #f3f4f6;
   color: #1f2937;
+  --panel-bg: #ffffff;
+  --text-muted: #6b7280;
+  --text-primary: #334155;
 }
 
 /* 现代风格滚动条 - 全局 */
