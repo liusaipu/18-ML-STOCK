@@ -173,6 +173,8 @@ type AuditorChangeDetail struct {
 	IsBeforeAnnualReport bool   `json:"is_before_annual_report"`
 	AnnualReportDeadline string `json:"annual_report_deadline"`
 	RawTitle             string `json:"raw_title"`
+	IsPolicyCompliance   bool   `json:"is_policy_compliance"` // 是否为政策合规更换（如国企8年强制轮换）
+	IsAbnormal           bool   `json:"is_abnormal"`          // 是否为异常更换（需警惕）
 }
 
 // ExternalRiskData 外部风险数据（审计机构、高管变动、诉讼等）

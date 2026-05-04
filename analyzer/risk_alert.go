@@ -94,60 +94,81 @@ func BuildRiskAlertSummary(steps []StepResult, extras map[string]float64, years 
 		}
 	}
 
-	// 2. 年报前更换审计机构（外部数据）
+	// 2. 审计机构变更（外部数据）
+	// 分层判断：
+	// - 政策合规更换（如国企8年强制轮换）+ 非年报前 → 信息提示，不触发一票否决
+	// - 年报披露期内更换 → 一票否决（强烈异常信号）
+	// - 其他异常更换（无法达成一致、辞任等）→ 一票否决
 	if external != nil && external.AuditorChanged {
-		details := []string{}
-		if len(external.AuditorChangeDetails) > 0 {
-			for i, cd := range external.AuditorChangeDetails {
-				// 变更公告日期
-				if len(external.AuditorChangeDetails) == 1 {
+		var abnormalChanges []AuditorChangeDetail
+		var policyCompliantChanges []AuditorChangeDetail
+
+		for _, cd := range external.AuditorChangeDetails {
+			if cd.IsPolicyCompliance && !cd.IsBeforeAnnualReport {
+				// 政策合规 + 非年报前 = 合规轮换
+				policyCompliantChanges = append(policyCompliantChanges, cd)
+			} else {
+				// 年报前更换 或 非合规原因 = 异常
+				abnormalChanges = append(abnormalChanges, cd)
+			}
+		}
+
+		// 处理异常更换（一票否决）
+		if len(abnormalChanges) > 0 {
+			details := []string{}
+			for i, cd := range abnormalChanges {
+				if len(abnormalChanges) == 1 {
 					details = append(details, fmt.Sprintf("变更公告日期: %s", cd.Date))
 				} else {
 					details = append(details, fmt.Sprintf("变更公告%d日期: %s", i+1, cd.Date))
 				}
-				// 更换前
 				if cd.OldAuditor != "" {
 					details = append(details, fmt.Sprintf("  更换前审计机构: %s", cd.OldAuditor))
-				} else {
-					details = append(details, "  更换前审计机构: 无法从公告标题识别（变更/续聘类公告标题通常不含事务所全称）")
 				}
-				// 更换后
 				if cd.NewAuditor != "" {
 					details = append(details, fmt.Sprintf("  更换后审计机构: %s", cd.NewAuditor))
-				} else if cd.OldAuditor != "" {
-					// 有旧机构但无新机构 = 拟变更/变更未完成
-					details = append(details, "  更换后审计机构: 待披露（仅发布拟变更公告，新机构尚未公布）")
-				} else {
-					details = append(details, "  更换后审计机构: 待披露")
 				}
-				// 年报时间关系
 				if cd.IsBeforeAnnualReport {
 					details = append(details, fmt.Sprintf("  ⚠️ 对应年报截止日: %s（变更公告发布于年报披露期内）", cd.AnnualReportDeadline))
 				} else {
-					details = append(details, fmt.Sprintf("  对应年报截止日: %s（距变更约%d个月）", cd.AnnualReportDeadline, monthsBefore(cd.Date, cd.AnnualReportDeadline)))
+					details = append(details, fmt.Sprintf("  对应年报截止日: %s", cd.AnnualReportDeadline))
 				}
-				// 变更原因
 				details = append(details, fmt.Sprintf("  变更原因: %s", cd.Reason))
+				if cd.IsAbnormal {
+					details = append(details, "  ⚠️ 该变更属于异常信号（辞任/解聘/意见分歧等）")
+				}
 			}
-		}
-		// 兜底：如果结构化详情为空，用旧字段补充
-		if len(details) == 0 || len(external.AuditorChangeDetails) == 0 {
-			if external.AuditorName != "" {
-				details = append(details, fmt.Sprintf("当前审计机构: %s", external.AuditorName))
+			if len(policyCompliantChanges) > 0 {
+				details = append(details, fmt.Sprintf("（另有 %d 次政策合规轮换已排除）", len(policyCompliantChanges)))
 			}
-			details = append(details, "年报前更换审计机构可能是为了掩盖财务问题")
-		} else {
-			details = append(details, "⚠️ 年报前更换审计机构通常是掩盖财务问题的强烈信号")
+			details = append(details, "⚠️ 年报披露期内更换审计机构或异常辞任，通常是掩盖财务问题的强烈信号")
+			summary.Flags = append(summary.Flags, RiskAlertFlag{
+				Code:    "auditor_changed",
+				Name:    "审计机构异常更换",
+				Level:   "high",
+				Source:  "external",
+				Format:  "近3年异常更换审计机构",
+				Details: details,
+			})
+			summary.OneVeto = true
 		}
-		summary.Flags = append(summary.Flags, RiskAlertFlag{
-			Code:    "auditor_changed",
-			Name:    "年报前更换审计机构",
-			Level:   "high",
-			Source:  "external",
-			Format:  "近3年更换审计机构",
-			Details: details,
-		})
-		summary.OneVeto = true
+
+		// 处理政策合规更换（信息提示，不触发一票否决）
+		if len(policyCompliantChanges) > 0 && len(abnormalChanges) == 0 {
+			details := []string{}
+			for _, cd := range policyCompliantChanges {
+				details = append(details, fmt.Sprintf("%s: %s → %s（%s）", cd.Date, cd.OldAuditor, cd.NewAuditor, cd.Reason))
+			}
+			details = append(details, "✓ 该变更为政策合规轮换（如国企8年强制轮换期届满），不属于风险信号")
+			summary.Flags = append(summary.Flags, RiskAlertFlag{
+				Code:    "auditor_rotation",
+				Name:    "审计机构正常轮换",
+				Level:   "info",
+				Source:  "external",
+				Format:  "政策合规轮换",
+				Details: details,
+			})
+		}
 	}
 
 	// 3. 核心财务负责人频繁更换（外部数据）

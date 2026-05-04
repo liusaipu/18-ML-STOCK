@@ -87,6 +87,20 @@ def is_change_announcement(title: str) -> bool:
     return any(kw in title for kw in ["变更", "更换", "改聘", "解聘", "不再续聘", "终止合作"])
 
 
+# 政策合规更换关键词（国企8年强制轮换等）
+POLICY_COMPLIANCE_KEYWORDS = [
+    "轮换期届满", "聘任期限届满", "服务年限届满", "强制轮换",
+    "聘期届满", "合同期限届满", "审计年限届满", "连续服务年限",
+    "达到轮换年限", "轮换期限", "服务期满",
+]
+
+# 异常更换关键词（需警惕）
+ABNORMAL_KEYWORDS = [
+    "无法达成一致", "审计范围受限", "审计意见分歧", "独立性",
+    "辞任", "辞聘", "主动辞任", "被解聘",
+]
+
+
 def infer_change_reason(title: str) -> str:
     """从标题推断变更原因"""
     if "不再续聘" in title or "终止合作" in title:
@@ -102,6 +116,16 @@ def infer_change_reason(title: str) -> str:
     if "更换" in title:
         return "更换审计机构"
     return "审计机构变更"
+
+
+def is_policy_compliance_change(title: str) -> bool:
+    """判断是否为政策合规更换（如国企8年强制轮换）"""
+    return any(kw in title for kw in POLICY_COMPLIANCE_KEYWORDS)
+
+
+def is_abnormal_change(title: str) -> bool:
+    """判断是否为异常更换（需警惕）"""
+    return any(kw in title for kw in ABNORMAL_KEYWORDS)
 
 
 def is_before_annual_report(date_str: str) -> tuple:
@@ -162,6 +186,8 @@ def build_change_details(announcements: list) -> list:
             "is_before_annual_report": is_before,
             "annual_report_deadline": deadline,
             "raw_title": title,
+            "is_policy_compliance": is_policy_compliance_change(title),
+            "is_abnormal": is_abnormal_change(title),
         })
     
     return change_details

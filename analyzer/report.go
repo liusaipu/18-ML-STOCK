@@ -139,7 +139,7 @@ func writeRiskAlertBanner(b *strings.Builder, alert *RiskAlertSummary) {
 	// 标题 + 信息图标（紧跟文字，风格与报告其它 infoIcon 一致）
 	totalFlags := len(alert.Flags)
 	b.WriteString(fmt.Sprintf("### %s（共%d项）", levelTitle, totalFlags))
-	b.WriteString(infoTooltipHTML("风险警示功能说明", "本模块从三大维度检测股票风险：<br>1. <strong>一票否决</strong>（单项即高风险）：审计意见非标、年报前更换审计机构、核心财务负责人频繁更换、资金占用/违规担保/诉讼、经营现金流连续2年为负、资产负债率>85%、营收同比<-30%、大股东质押>70%、一年内监管问询≥3次、毛利率为负。<br>2. <strong>二级指标</strong>（3项及以上中风险）：A-Score 60–69分、M-Score>-1.78、毛利率下降>10百分点、ROE<5%、净利润现金含量<80%、应收+存货占比>40%、营收同比<0%、负债率70%–85%、商誉占比>50%、DEPI>1.1。<br>3. <strong>外部数据</strong>：审计机构变更、高管变动、诉讼担保、大股东减持、股权质押、监管问询等。"))
+	b.WriteString(infoTooltipHTML("风险警示功能说明", "本模块从三大维度检测股票风险：<br>1. <strong>一票否决</strong>（单项即高风险）：审计意见非标、<strong>审计机构异常更换</strong>（年报披露期内更换、非正常辞任/解聘）、核心财务负责人频繁更换、资金占用/违规担保/诉讼、经营现金流连续2年为负、资产负债率>85%、营收同比<-30%、大股东质押>70%、一年内监管问询≥3次、毛利率为负。<br><em>注：国企8年强制轮换期届满等<strong>政策合规更换</strong>不属于风险信号，系统会自动排除。</em><br>2. <strong>二级指标</strong>（3项及以上中风险）：A-Score 60–69分、M-Score>-1.78、毛利率下降>10百分点、ROE<5%、净利润现金含量<80%、应收+存货占比>40%、营收同比<0%、负债率70%–85%、商誉占比>50%、DEPI>1.1。<br>3. <strong>外部数据</strong>：审计机构变更、高管变动、诉讼担保、大股东减持、股权质押、监管问询等。"))
 	b.WriteString("\n\n")
 
 	// 风险项表格
