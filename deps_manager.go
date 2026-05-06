@@ -81,7 +81,15 @@ func findPythonExecutable() string {
 
 	// 2. Windows 常见安装路径
 	if runtime.GOOS == "windows" {
-		pythonPaths := []string{
+		var pythonPaths []string
+		// python.org 官方安装器默认路径（用户级）
+		if home, err := os.UserHomeDir(); err == nil {
+			for _, ver := range []string{"Python314", "Python313", "Python312", "Python311", "Python310", "Python39"} {
+				pythonPaths = append(pythonPaths, filepath.Join(home, "AppData", "Local", "Programs", "Python", ver, "python.exe"))
+			}
+		}
+		// 系统级路径
+		pythonPaths = append(pythonPaths,
 			`C:\Python314\python.exe`,
 			`C:\Python313\python.exe`,
 			`C:\Python312\python.exe`,
@@ -94,25 +102,49 @@ func findPythonExecutable() string {
 			`C:\Program Files\Python311\python.exe`,
 			`C:\Program Files\Python310\python.exe`,
 			`C:\Program Files\Python39\python.exe`,
-		}
+			`C:\Program Files (x86)\Python314\python.exe`,
+			`C:\Program Files (x86)\Python313\python.exe`,
+			`C:\Program Files (x86)\Python312\python.exe`,
+			`C:\Program Files (x86)\Python311\python.exe`,
+			`C:\Program Files (x86)\Python310\python.exe`,
+			`C:\Program Files (x86)\Python39\python.exe`,
+		)
 		for _, p := range pythonPaths {
 			if _, err := os.Stat(p); err == nil {
 				return p
 			}
 		}
 
-		// where 命令查找
+		// where 命令查找，优先非 Windows Store 路径
 		if out, err := exec.Command("where", "python").Output(); err == nil {
 			paths := strings.Split(strings.TrimSpace(string(out)), "\n")
-			if len(paths) > 0 && paths[0] != "" {
-				return strings.TrimSpace(paths[0])
+			var fallback string
+			for _, p := range paths {
+				p = strings.TrimSpace(p)
+				if p == "" {
+					continue
+				}
+				// Windows Store 的 python.exe 是 redirector/shim，
+				// exec.Command 调用时无法正确执行 -m pip，会导致 exit status 9009
+				if strings.Contains(strings.ToLower(p), `windowsapps`) {
+					if fallback == "" {
+						fallback = p
+					}
+					continue
+				}
+				return p
+			}
+			if fallback != "" {
+				return fallback
 			}
 		}
 
-		// PATH 中查找
+		// PATH 中查找，同样过滤 Windows Store
 		for _, name := range []string{"python", "python3", "py"} {
 			if p, err := exec.LookPath(name); err == nil {
-				return p
+				if !strings.Contains(strings.ToLower(p), `windowsapps`) {
+					return p
+				}
 			}
 		}
 		return ""

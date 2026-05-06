@@ -105,6 +105,13 @@ pip install onnxruntime scikit-learn numpy
 pip install akshare
 ```
 
+> **⚠️ Windows 用户注意**
+>
+> 请使用 [python.org](https://www.python.org/downloads/) 官方安装包，**不推荐**使用 Microsoft Store 版本的 Python。
+>
+> Windows Store 版 Python 是一个 redirector/shim，在通过本应用自动安装依赖时可能出现 `exit status 9009` 错误（找不到 pip 模块），导致 ML 预测等 Python 相关功能无法使用。如已安装 Windows Store 版，建议卸载后从 python.org 重新安装（安装时勾选 "Add Python to PATH"）。
+>
+
 ### 启动与使用
 
 1. 添加自选股（支持拼音首字母搜索，如输入"mt"匹配"茅台"）

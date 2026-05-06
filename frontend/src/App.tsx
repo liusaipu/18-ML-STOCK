@@ -2108,7 +2108,7 @@ function App() {
                   loadDataHistory(s.code)
                   loadProfile(s.code).then((p) => loadRiskRadar(s.code, p?.industry || ''))
                   loadConcepts(s.code)
-                  loadMoneyflow(s.code)
+                  loadMoneyflow(s.code + '.' + (s.market || 'SZ'))
                   loadComparables(s.code)
                   loadQuote(s.code)
                   // loadKlines(s.code)

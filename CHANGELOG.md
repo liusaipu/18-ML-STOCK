@@ -1,5 +1,18 @@
 # Changelog
 
+## [v1.3.31] - 2026-05-06
+
+### 修复 (Fixes)
+- **中栏资金流向不显示**
+  - `loadMoneyflow(s.code)` 传入纯代码（如 `300236`），但 `GetStockMoneyflow` 要求 `code.market` 格式
+  - 改为 `loadMoneyflow(s.code + '.' + s.market)`
+- **Windows Store Python 安装依赖失败 (exit status 9009)**
+  - `findPythonExecutable` 优先查找 python.org 官方安装路径，降级 Windows Store redirector/shim
+  - README 新增 Windows Python 安装警告
+- **模块7 A-Score 标题编号错误**
+  - `ascore_module.go` 标题写成了 `# 模块8: A-Score...`，导致 TOC 跳转锚点不匹配
+  - 修正为 `# 模块7: A-Score 综合风险画像`
+
 ## [v1.3.30] - 2026-05-05
 
 ### 品牌隐藏
