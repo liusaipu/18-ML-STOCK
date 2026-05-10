@@ -634,14 +634,14 @@ func writeModule4(b *strings.Builder, steps []StepResult, latest string, comp *C
 	}
 
 	b.WriteString("## 4.2 可比公司明细")
-	b.WriteString(`<details style="display:inline-block;position:relative;margin-left:8px;vertical-align:middle;">`)
-	b.WriteString(`<summary style="cursor:pointer;list-style:none;color:#1890ff;font-size:14px;">ℹ️</summary>`)
-	b.WriteString(`<div style="position:absolute;left:0;top:24px;width:320px;background:#fff;border:1px solid #e8e8e8;border-radius:4px;padding:8px 12px;box-shadow:0 2px 8px rgba(0,0,0,0.15);font-size:12px;color:#333;line-height:1.6;z-index:100;">`)
+	b.WriteString(`<span class="inline-tooltip">`)
+	b.WriteString(`<span class="inline-tooltip-trigger">i</span>`)
+	b.WriteString(`<span class="inline-tooltip-body">`)
 	b.WriteString(`<strong>综合得分计算方式</strong><br/>`)
 	b.WriteString(`在当前公司 + 可比公司池内，对每个指标做 Min-Max 标准化（0~100 分），再按以下权重加权求和：<br/>`)
 	b.WriteString(`ROE 25%、毛利率 20%、营收增长 15%、现金含量 10%、负债率 10%（反向，越低越好）、A-Score 10%（反向，越低越好）、活跃度 10%。<br/>`)
 	b.WriteString(`<em>缺失活跃度时，使用可比池有效样本的中位数替代，标记为 *</em>`)
-	b.WriteString(`</div></details>`)
+	b.WriteString(`</span></span>`)
 	b.WriteString("\n\n")
 	if hasMissingActivity {
 		b.WriteString(`<div class="activity-hint" style="margin:6px 0 10px;font-size:12px;color:#94a3b8;">`)
