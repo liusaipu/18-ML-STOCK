@@ -1031,7 +1031,7 @@ func writeModule7(b *strings.Builder, quote *QuoteData, technical *TechnicalData
 		b.WriteString(fmt.Sprintf("> **综合结论**: %s\n\n", technical.Comment))
 
 		b.WriteString("### 技术指标联动分析图（K线+成交量+MACD+RSI+布林带）\n\n")
-		b.WriteString("*（前端交互图表，导出后请在前端查看）*\n\n")
+		b.WriteString("<div class=\"chart-unified\"></div>\n\n")
 	}
 
 	if activity != nil && activity.Score > 0 && activity.PotentialHint != "" {
