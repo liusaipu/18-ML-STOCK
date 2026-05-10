@@ -598,8 +598,8 @@ func (s *Storage) AddComparable(symbol, comparable string) error {
 			return nil // 已存在
 		}
 	}
-	if len(list) >= 5 {
-		return fmt.Errorf("可比公司最多5家")
+	if len(list) >= 7 {
+		return fmt.Errorf("可比公司最多7家")
 	}
 	config[symbol] = append(list, comparable)
 	return s.SaveComparablesConfig(config)
@@ -937,6 +937,47 @@ func (s *Storage) CleanOldHotConceptHistory(maxDays int) error {
 		}
 	}
 	return nil
+}
+
+// ========== App 配置存储 ==========
+
+// AppConfig 应用级配置（自动更新等）
+type AppConfig struct {
+	AutoCheckUpdate bool   `json:"autoCheckUpdate"` // 默认 true
+	LastCheckDate   string `json:"lastCheckDate"`   // YYYY-MM-DD
+	SkipVersion     string `json:"skipVersion"`     // 用户选择"跳过此版本"
+}
+
+// AppConfigPath 返回 App 配置文件路径
+func (s *Storage) AppConfigPath() string {
+	return filepath.Join(s.dataDir, "app_config.json")
+}
+
+// LoadAppConfig 加载 App 配置
+func (s *Storage) LoadAppConfig() (*AppConfig, error) {
+	path := s.AppConfigPath()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return &AppConfig{AutoCheckUpdate: true}, nil
+		}
+		return nil, err
+	}
+	var cfg AppConfig
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		return nil, fmt.Errorf("解析 App 配置失败: %w", err)
+	}
+	return &cfg, nil
+}
+
+// SaveAppConfig 保存 App 配置
+func (s *Storage) SaveAppConfig(cfg *AppConfig) error {
+	path := s.AppConfigPath()
+	data, err := json.MarshalIndent(cfg, "", "  ")
+	if err != nil {
+		return fmt.Errorf("序列化 App 配置失败: %w", err)
+	}
+	return os.WriteFile(path, data, 0644)
 }
 
 // ========== SFL 配置存储 ==========

@@ -304,18 +304,121 @@ func setVal(target map[string]map[string]float64, account, year string, val floa
 
 // ========== 个股资金流向路由 ==========
 
+// moneyflowSource 资金流向数据源定义
+type moneyflowSource struct {
+	name string
+	fn   func() ([]SFLMoneyflowItem, error)
+}
+
 // FetchMoneyflow 获取个股资金流向，按优先级路由
+// 支持多源 fallback 与结果合并，避免单一源数据缺失（如 SFL 有历史但缺当日）
 func (r *DataRouter) FetchMoneyflow(market, code, startDate, endDate string) ([]SFLMoneyflowItem, error) {
-	// 1. StockFinLens 数据源（如果启用）
+	var sources []moneyflowSource
+
+	// SFL（如果启用）
 	if r.sflEnabled && r.useForMoneyflow && r.sflClient != nil {
-		if mf, err := r.sflClient.FetchMoneyflow(market, code, startDate, endDate); err == nil && len(mf) > 0 {
-			fmt.Printf("[DataRouter] Moneyflow from StockFinLens: %d records for %s.%s\n", len(mf), market, code)
-			return mf, nil
+		sources = append(sources, moneyflowSource{
+			name: "StockFinLens",
+			fn: func() ([]SFLMoneyflowItem, error) {
+				return r.sflClient.FetchMoneyflow(market, code, startDate, endDate)
+			},
+		})
+	}
+
+	// 东方财富（始终作为备选）
+	sources = append(sources, moneyflowSource{
+		name: "EastMoney",
+		fn: func() ([]SFLMoneyflowItem, error) {
+			return fetchMoneyflowFromEastMoney(market, code, startDate, endDate)
+		},
+	})
+
+	if len(sources) == 0 {
+		return nil, fmt.Errorf("资金流向数据暂不可用")
+	}
+
+	// 随机扰乱：打乱数据源尝试顺序，降低单一源被反爬风险
+	shuffleSources(sources)
+
+	// 多源结果合并：遍历所有可用数据源，按日期汇总
+	// 合并策略：
+	//   - 历史日期：第一个提供该日期的数据源优先（SFL 历史数据通常更可靠）
+	//   - 当日日期（endDate）：后提供的数据源可以覆盖（东财当日数据更新更快）
+	merged := make(map[string]SFLMoneyflowItem)
+	var hasAnyData bool
+	var lastErr error
+
+	for _, src := range sources {
+		mf, err := src.fn()
+		if err == nil && len(mf) > 0 {
+			hasAnyData = true
+			fmt.Printf("[DataRouter] Moneyflow from %s: %d records for %s.%s\n", src.name, len(mf), market, code)
+			for _, item := range mf {
+				existing, exists := merged[item.TradeDate]
+				if !exists {
+					// 该日期首次出现，直接保存
+					merged[item.TradeDate] = item
+				} else if item.TradeDate == endDate {
+					// 当日数据：后提供的源可以覆盖（东财通常更新更快）
+					// 但只在已有数据为"空数据"（净流入全为0）时才覆盖
+					if existing.NetMfAmount == 0 && item.NetMfAmount != 0 {
+						merged[item.TradeDate] = item
+					}
+				}
+				// 历史数据：保留第一个源的数据，不覆盖
+			}
+		} else if err != nil {
+			fmt.Printf("[DataRouter] Moneyflow %s failed for %s.%s: %v\n", src.name, market, code, err)
+			lastErr = err
 		}
 	}
 
-	// 2. 当前无其他资金流向数据源
-	return nil, fmt.Errorf("资金流向数据暂不可用")
+	if !hasAnyData {
+		if lastErr != nil {
+			return nil, fmt.Errorf("资金流向获取失败: %w", lastErr)
+		}
+		return nil, fmt.Errorf("资金流向数据暂不可用")
+	}
+
+	// 将合并结果按日期降序排列
+	result := make([]SFLMoneyflowItem, 0, len(merged))
+	for _, item := range merged {
+		result = append(result, item)
+	}
+	// 冒泡排序按 TradeDate 降序
+	for i := 0; i < len(result)-1; i++ {
+		for j := i + 1; j < len(result); j++ {
+			if result[i].TradeDate < result[j].TradeDate {
+				result[i], result[j] = result[j], result[i]
+			}
+		}
+	}
+
+	fmt.Printf("[DataRouter] Moneyflow merged: %d unique dates for %s.%s\n", len(result), market, code)
+	return result, nil
+}
+
+// shuffleSources Fisher-Yates 打乱数据源顺序
+func shuffleSources(sources []moneyflowSource) {
+	// 使用当前纳秒时间戳作为随机种子，确保每次调用可能不同
+	n := len(sources)
+	if n <= 1 {
+		return
+	}
+	// 简单的交换：第一个和最后一个互换（当 n==2 时实现轮换）
+	// 当 n>2 时做完整的 Fisher-Yates shuffle
+	seed := time.Now().UnixNano()
+	for i := n - 1; i > 0; i-- {
+		// xorshift 伪随机数生成
+		seed ^= seed << 13
+		seed ^= seed >> 7
+		seed ^= seed << 17
+		j := int(seed % int64(i+1))
+		if j < 0 {
+			j = -j
+		}
+		sources[i], sources[j] = sources[j], sources[i]
+	}
 }
 
 // ========== 股票基础信息路由 ==========

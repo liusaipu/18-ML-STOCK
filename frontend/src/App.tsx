@@ -6,6 +6,8 @@ import { FinancialTrendDrawer } from './FinancialTrendDrawer'
 import { Settings, loadSettings, AppSettings } from './Settings'
 import { ModuleCopyButton, setGlobalMarkdownContent } from './ModuleCopyButton'
 import { PythonDepsModal } from './PythonDepsModal'
+import { UpdateModal, UpdateInfo } from './UpdateModal'
+import { EventsOn } from '../wailsjs/runtime'
 import { RiskBadge } from './components/RiskBadge'
 import { RiskAlertBanner } from './components/RiskAlertBanner'
 import ReactMarkdown from 'react-markdown'
@@ -93,12 +95,15 @@ function DetailsComponent({ children, ...props }: any) {
 }
 
 function InlineTooltip({ title, body }: { title: string; body: string }) {
+  const formattedBody = body.split('\n').map((line, i) => (
+    <span key={i}>{line}{i < body.split('\n').length - 1 && <br/>}</span>
+  ))
   return (
     <span className="inline-tooltip">
-      <span className="inline-tooltip-trigger">ℹ️</span>
+      <span className="inline-tooltip-trigger">i</span>
       <span className="inline-tooltip-body">
         <strong>{title}</strong><br/>
-        {body}
+        {formattedBody}
       </span>
     </span>
   )
@@ -263,6 +268,7 @@ function App() {
 
   const [concepts, setConcepts] = useState<downloader.StockConcepts | null>(null)
   const [moneyflow, setMoneyflow] = useState<main.StockMoneyflowResult | null>(null)
+  const [todayMoneyflowExpanded, setTodayMoneyflowExpanded] = useState(false)
   const [sflConfig, setSflConfig] = useState<main.SFLConfig | null>(null)
 
   // 加载 SFL 配置
@@ -272,6 +278,19 @@ function App() {
     }).catch(() => {
       setSflConfig(null)
     })
+  }, [])
+
+  // 监听自动更新事件
+  useEffect(() => {
+    const handler = (info: UpdateInfo) => {
+      setUpdateInfo(info)
+      setShowUpdateModal(true)
+    }
+    EventsOn('update:available', handler)
+    return () => {
+      // Wails runtime 没有 EventsOff 针对单个 handler 的便捷方式
+      // 但 EventsOn 返回的 cleanup 在组件卸载时会自动清理
+    }
   }, [])
 
   // 市场热点/风口
@@ -337,6 +356,9 @@ function App() {
   const [downloadMenuOpen, setDownloadMenuOpen] = useState(false)
   // Python 依赖检测弹窗
   const [showPythonDepsModal, setShowPythonDepsModal] = useState(false)
+  // 自动更新弹窗
+  const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null)
+  const [showUpdateModal, setShowUpdateModal] = useState(false)
 
   // RIM 参数弹窗状态
   const [showRIMModal, setShowRIMModal] = useState(false)
@@ -827,13 +849,16 @@ function App() {
 
   const loadMoneyflow = useCallback(async (code: string) => {
     try {
-      const days = sflConfig?.moneyflow_days || 3
+      const cfg = await GetSFLConfig()
+      const days = cfg?.moneyflow_days || 3
       const mf = await GetStockMoneyflow(code, days)
       setMoneyflow(mf || null)
+      setTodayMoneyflowExpanded(false)
     } catch {
       setMoneyflow(null)
+      setTodayMoneyflowExpanded(false)
     }
-  }, [sflConfig])
+  }, [])
 
   // 加载政策库元信息（从 localStorage 或默认值）
   const loadPolicyLibMeta = useCallback(() => {
@@ -1448,7 +1473,29 @@ function App() {
         margin: [10, 10, 10, 10],
         filename: `${selectedStock.code}_投资分析报告.pdf`,
         image: { type: 'jpeg', quality: 0.98 },
-        html2canvas: { scale: 2, useCORS: true },
+        html2canvas: {
+          scale: 2,
+          useCORS: true,
+          backgroundColor: '#ffffff',
+          onclone: (clonedDoc: Document) => {
+            // 在克隆的 DOM 中注入亮色样式，不依赖外部 CSS 是否正确复制
+            const style = clonedDoc.createElement('style')
+            style.textContent = `
+              .markdown-body { color: #1f2937 !important; background: #ffffff !important; }
+              .markdown-body h1, .markdown-body h2, .markdown-body h3, .markdown-body h4, .markdown-body h5, .markdown-body h6 { color: #111827 !important; border-bottom-color: #e5e7eb !important; }
+              .markdown-body p, .markdown-body li, .markdown-body span, .markdown-body div, .markdown-body strong, .markdown-body em, .markdown-body td { color: #1f2937 !important; }
+              .markdown-body th { background: #f3f4f6 !important; color: #111827 !important; }
+              .markdown-body td, .markdown-body tr { background: #ffffff !important; }
+              .markdown-body th, .markdown-body td { border-color: #e5e7eb !important; }
+              .markdown-body a { color: #2563eb !important; }
+              .markdown-body blockquote { background: rgba(59,130,246,0.06) !important; color: #4b5563 !important; }
+              .markdown-body code { background: rgba(0,0,0,0.06) !important; }
+              .markdown-body pre { background: #f9fafb !important; border-color: #e5e7eb !important; }
+              .markdown-body hr { border-top-color: #e5e7eb !important; }
+            `
+            clonedDoc.head.appendChild(style)
+          },
+        },
         jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
       }
       const pdfDataUrl: string = await html2pdf().set(opt).from(markdownBody).outputPdf('datauristring')
@@ -1703,37 +1750,68 @@ function App() {
     setGlobalMarkdownContent(displayContent || '')
   }, [displayContent])
 
-  // Tooltip 统一 hover 定位：报告渲染后为所有 inline-tooltip 绑定 mouseenter，
-  // 计算 trigger 的 viewport 位置并通过 CSS 变量设置 fixed 定位（固定右下，右边界不足则左下）
+  // 报告渲染后：为风险警示表格中有 Details 的风险项添加 inline-tooltip
   useEffect(() => {
     if (!displayContent) return
     const timer = setTimeout(() => {
+      const reportContainer = reportContentRef.current
+      if (!reportContainer) return
+
+      const riskAlert = (report?.riskAlert || currentSnapshot?.riskAlert) as any
+      if (!riskAlert?.flags?.length) return
+
+      const tables = reportContainer.querySelectorAll('table')
+      tables.forEach((table) => {
+        const headers = table.querySelectorAll('th')
+        if (headers.length < 4) return
+        const headerTexts = Array.from(headers).map(h => h.textContent?.trim() || '')
+        if (!headerTexts.includes('风险指标') || !headerTexts.includes('数值说明')) return
+
+        const rows = table.querySelectorAll('tbody tr')
+        rows.forEach((row, rowIdx) => {
+          const cells = row.querySelectorAll('td')
+          if (cells.length < 4) return
+
+          const flag = riskAlert.flags[rowIdx]
+          // 仅高风险项显示信息图标 tooltip
+          if (!flag || flag.level !== 'high' || !flag.details?.length) return
+
+          const valueCell = cells[2] // 数值说明列
+          // 避免重复添加
+          if (valueCell.querySelector('.inline-tooltip')) return
+
+          const tooltipSpan = document.createElement('span')
+          tooltipSpan.className = 'inline-tooltip'
+          const bodyHtml = flag.details.map((d: string) => d.replace(/</g, '&lt;').replace(/>/g, '&gt;')).join('<br/>')
+          tooltipSpan.innerHTML = '<span class="inline-tooltip-trigger">i</span><span class="inline-tooltip-body"><strong>' + flag.name + '</strong><br/>' + bodyHtml + '</span>'
+          valueCell.appendChild(tooltipSpan)
+        })
+      })
+
+      // 为所有 inline-tooltip 绑定智能定位（右侧空间不足时显示在左侧）
       document.querySelectorAll('.inline-tooltip').forEach((el) => {
         const tooltip = el as HTMLElement
-        const body = tooltip.querySelector('.inline-tooltip-body') as HTMLElement | null
-        if (!body) return
         const trigger = tooltip.querySelector('.inline-tooltip-trigger') as HTMLElement | null
         if (!trigger) return
-        // 鼠标进入时计算一次位置（同一个 trigger 位置不变时结果始终一致）
+        if ((trigger as any)._tooltipSmartBound) return
+        ;(trigger as any)._tooltipSmartBound = true
+
         const handleEnter = () => {
           const rect = trigger.getBoundingClientRect()
           const vw = window.innerWidth
           const bodyWidth = 360
-          const offsetX = 28
-          const offsetY = -8
-          let left = rect.left + offsetX
-          // 右边界不足时改为左侧弹出
-          if (left + bodyWidth > vw - 8) {
-            left = rect.right - bodyWidth - offsetX
+          const offset = 8
+          if (rect.right + offset + bodyWidth > vw - 8) {
+            tooltip.classList.add('tooltip-left')
+          } else {
+            tooltip.classList.remove('tooltip-left')
           }
-          tooltip.style.setProperty('--tt-left', `${left}px`)
-          tooltip.style.setProperty('--tt-top', `${rect.top + offsetY}px`)
         }
         trigger.addEventListener('mouseenter', handleEnter)
       })
-    }, 300)
+    }, 3000)
     return () => clearTimeout(timer)
-  }, [displayContent])
+  }, [displayContent, report, currentSnapshot])
 
   // 报告内容滚动时联动更新"跳转章节"下拉框显示
   useEffect(() => {
@@ -1861,6 +1939,22 @@ function App() {
             <ModuleCopyButton moduleId={headingId || ''} moduleTitle={titleText} />
           )}
         </h1>
+      )
+    },
+    // 风险警示标题旁添加信息图标（hover 弹出说明）
+    h3({ children, ...props }: any) {
+      const titleText = children?.toString() || ''
+      const isRiskAlert = /风险警示/.test(titleText)
+      return (
+        <h3 {...props} style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 8 }}>
+          {children}
+          {isRiskAlert && (
+            <InlineTooltip
+              title="风险警示功能说明"
+              body={'本模块从三大维度检测股票风险。\n\n1. 一票否决（单项即高风险）：审计意见非标、审计机构异常更换、核心财务负责人频繁更换、资金占用/违规担保/诉讼、经营现金流连续2年为负、资产负债率>85%、营收同比<-30%、大股东质押>70%、一年内监管问询≥3次、毛利率为负。\n\n注：国企8年强制轮换期届满等政策合规更换不属于风险信号，系统会自动排除。\n\n2. 二级指标（3项及以上中风险）：A-Score 60–69分、M-Score>-1.78、毛利率下降>10百分点、ROE<5%、净利润现金含量<80%、应收+存货占比>40%、营收同比<0%、负债率70%–85%、商誉占比>50%、DEPI>1.1。\n\n3. 外部数据：审计机构变更、高管变动、诉讼担保、大股东减持、股权质押、监管问询等。'}
+            />
+          )}
+        </h3>
       )
     },
   }), [report, selectedStock])
@@ -2477,6 +2571,106 @@ function App() {
                   <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 3, lineHeight: 1.4 }}>
                     主力 = 超大单（&gt;100万）+ 大单（20~100万），按单笔成交金额分档统计，机构可通过拆单规避
                   </div>
+                  {/* 当日流向（展开/收起） */}
+                  <div style={{ marginTop: 6, borderTop: '1px solid rgba(148,163,184,0.06)', paddingTop: 6 }}>
+                    <div
+                      onClick={() => setTodayMoneyflowExpanded(v => !v)}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        cursor: 'pointer',
+                        fontSize: 11,
+                        fontWeight: 600,
+                        color: '#64748b',
+                        userSelect: 'none',
+                      }}
+                    >
+                      <span>当日流向</span>
+                      <span
+                        style={{
+                          fontSize: 12,
+                          color: '#64748b',
+                          display: 'inline-block',
+                          transition: 'transform 0.2s ease',
+                          transform: todayMoneyflowExpanded ? 'rotate(90deg)' : 'rotate(0deg)',
+                        }}
+                      >
+                        ›
+                      </span>
+                    </div>
+                    {todayMoneyflowExpanded && (
+                      <div style={{ marginTop: 5 }}>
+                        {moneyflow.today_item ? (
+                          <>
+                            <div style={{
+                              display: 'grid',
+                              gridTemplateColumns: '32px 52px 52px 50px 50px',
+                              gap: 1,
+                              fontSize: 11,
+                              color: '#94a3b8',
+                              paddingBottom: 3,
+                              borderBottom: '1px solid rgba(148,163,184,0.08)',
+                              marginBottom: 3,
+                            }}>
+                              <span style={{ textAlign: 'left' }}>日期</span>
+                              <span style={{ textAlign: 'right' }}>超大</span>
+                              <span style={{ textAlign: 'right' }}>大</span>
+                              <span style={{ textAlign: 'right' }}>中</span>
+                              <span style={{ textAlign: 'right' }}>小</span>
+                            </div>
+                            <div style={{
+                              display: 'grid',
+                              gridTemplateColumns: '32px 52px 52px 50px 50px',
+                              gap: 1,
+                              fontSize: 11,
+                              alignItems: 'center',
+                            }}>
+                              <span style={{ color: '#64748b', fontFamily: 'monospace', textAlign: 'left', whiteSpace: 'nowrap' }}>
+                                {moneyflow.today_item.date?.slice(4, 6)}/{moneyflow.today_item.date?.slice(6)}
+                              </span>
+                              <span style={{
+                                color: moneyflow.today_item.elg_net_amount > 0 ? '#ef4444' : moneyflow.today_item.elg_net_amount < 0 ? '#22c55e' : '#94a3b8',
+                                textAlign: 'right', whiteSpace: 'nowrap',
+                              }}>
+                                {moneyflow.today_item.elg_net_amount > 0 ? '+' : ''}{(moneyflow.today_item.elg_net_amount/10000).toFixed(2)}
+                              </span>
+                              <span style={{
+                                color: moneyflow.today_item.lg_net_amount > 0 ? '#ef4444' : moneyflow.today_item.lg_net_amount < 0 ? '#22c55e' : '#94a3b8',
+                                textAlign: 'right', whiteSpace: 'nowrap',
+                              }}>
+                                {moneyflow.today_item.lg_net_amount > 0 ? '+' : ''}{(moneyflow.today_item.lg_net_amount/10000).toFixed(2)}
+                              </span>
+                              <span style={{
+                                color: moneyflow.today_item.md_net_amount > 0 ? '#ef4444' : moneyflow.today_item.md_net_amount < 0 ? '#22c55e' : '#94a3b8',
+                                textAlign: 'right', whiteSpace: 'nowrap',
+                              }}>
+                                {moneyflow.today_item.md_net_amount > 0 ? '+' : ''}{(moneyflow.today_item.md_net_amount/10000).toFixed(2)}
+                              </span>
+                              <span style={{
+                                color: moneyflow.today_item.sm_net_amount > 0 ? '#ef4444' : moneyflow.today_item.sm_net_amount < 0 ? '#22c55e' : '#94a3b8',
+                                textAlign: 'right', whiteSpace: 'nowrap',
+                              }}>
+                                {moneyflow.today_item.sm_net_amount > 0 ? '+' : ''}{(moneyflow.today_item.sm_net_amount/10000).toFixed(2)}
+                              </span>
+                            </div>
+                            {moneyflow.today_item.main_inflow !== 0 && (
+                              <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>
+                                主力净流入{' '}
+                                <span style={{ color: moneyflow.today_item.main_inflow > 0 ? '#ef4444' : '#22c55e' }}>
+                                  {moneyflow.today_item.main_inflow > 0 ? '+' : ''}{(moneyflow.today_item.main_inflow/10000).toFixed(2)} 亿元
+                                </span>
+                              </div>
+                            )}
+                          </>
+                        ) : (
+                          <div style={{ fontSize: 11, color: '#94a3b8', padding: '4px 0' }}>
+                            当日数据暂未更新
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
               ) : moneyflow && !moneyflow.has_data && moneyflow.summary ? (
                 <div style={{ padding: '8px 0px', borderTop: '1px solid rgba(148,163,184,0.1)' }}>
@@ -2736,9 +2930,9 @@ function App() {
                 <div className="cp-search">
                   <input
                     type="text"
-                    placeholder="添加可比公司 (3~5家)..."
+                    placeholder="添加可比公司 (3~7家)..."
                     value={compQuery}
-                    disabled={loading || comparables.length >= 5}
+                    disabled={loading || comparables.length >= 7}
                     onChange={(e) => {
                       setCompQuery(e.target.value)
                       setShowCompDropdown(true)
@@ -3541,6 +3735,13 @@ function App() {
       <PythonDepsModal
         isOpen={showPythonDepsModal}
         onClose={() => setShowPythonDepsModal(false)}
+      />
+
+      {/* 自动更新弹窗 */}
+      <UpdateModal
+        isOpen={showUpdateModal}
+        info={updateInfo}
+        onClose={() => setShowUpdateModal(false)}
       />
     </div>
   )

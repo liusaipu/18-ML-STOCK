@@ -1,5 +1,38 @@
 # Changelog
 
+## [v1.3.33] - 2026-05-08
+
+### 新增 (Features)
+- **自动更新功能**
+  - 启动时自动检测 GitHub 最新 Release，发现新版本弹窗提示（可配置关闭，位于「设置 → 关于」）
+  - 支持手动检查更新（「设置 → 关于 → 检查更新」）
+  - 多源下载策略：`gh-proxy.com` 加速镜像优先（实测 ~2.5s/9MB），fallback 到 GitHub 直连
+  - **Windows**：下载 zip → 解压 → 替换文件 → 自动重启
+  - **macOS**：下载 dmg → `open` 打开 → 提示用户拖拽到 Applications
+  - 下载失败时提供「去 GitHub 下载」按钮，打开浏览器到 Release 页面
+  - 支持「跳过此版本」，不再提示该版本
+  - 新增 `updater/` 包（GitHub API 查询、semver 比对、平台 asset 匹配、多源下载）
+- **资金流向当日数据展开**
+  - 右栏资金流向区域新增「当日流向」展开/收起面板
+  - 交易日盘中显示当日实时主力/大单/中单/小单净流入
+  - 非交易日提示「当日数据暂未更新」
+- **资金流向多源合并 + 扰乱**
+  - 新增东财 `push2his.eastmoney.com` 资金流向接口（多 CDN fallback）
+  - `DataRouter.FetchMoneyflow` 改为多源合并：SFL 优先历史数据，东财补当日
+  - `shuffleSources` Fisher-Yates 扰乱，降低单一源反爬风险
+- **可比公司数量上限提升**
+  - 可比公司输入上限从 5 只提升到 7 只
+
+### 优化 (Improvements)
+- **tooltip 默认可见性修复**
+  - `.inline-tooltip .inline-tooltip-body` 基础样式增加 `visibility:hidden` / `opacity:0`
+  - 修复 hover 前 tooltip 直接显示的问题
+
+### 修复 (Fixes)
+- **报告模块 4.2 信息按钮丢失**
+  - `writeModule4` 中 `infoIcon` 返回空字符串导致 ℹ️ 按钮和「获取真实活跃度」链接丢失
+  - 恢复 HTML 输出，重新生成报告后生效
+
 ## [v1.3.32] - 2026-05-07
 
 ### 新增 (Features)

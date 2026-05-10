@@ -62,9 +62,9 @@ type ConceptConstituent struct {
 
 const (
 	emHotConceptFields    = "f12,f14,f2,f3,f4,f5,f6,f10,f15,f62,f184,f204,f205"
-	emFSConcept           = "m:90+t:2" // 概念板块
+	emFSConcept           = "m:90+t:3" // 概念板块（东财 API：t:3=概念，t:1=行业，t:2=其他）
 	emFSIndustry          = "m:90+t:1" // 行业板块
-	hotConceptCacheVer    = 3          // 缓存版本号，字段映射/去重逻辑变更时递增使旧缓存失效
+	hotConceptCacheVer    = 6          // 缓存版本号，字段映射/去重逻辑变更时递增使旧缓存失效
 )
 
 // sflHotConceptClient 用于热点概念降级的数据源客户端（由 app.go 设置）
@@ -269,16 +269,21 @@ func FetchHotConceptHistory(dataDir string, days int) ([]HotConceptHistoryItem, 
 
 // FetchConceptConstituents 获取某概念板块的成分股列表
 func FetchConceptConstituents(conceptCode string) ([]ConceptConstituent, error) {
+	// 演示数据优先：当概念列表使用演示数据时，成分股也用演示数据，
+	// 避免用演示数据的假代码去查东财真API（代码映射不匹配会导致成分股完全错误）
+	if mock := getMockConstituents(conceptCode); len(mock) > 0 {
+		return mock, nil
+	}
+
 	url := fmt.Sprintf(
-		"http://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=200&po=1&np=1&ut=bd1d9ddb04089700cf9c27f6f7426281&fltt=2&invt=2&fid=f3&fs=b:%s&fields=f12,f14,f2,f3,f20,f130,f62&_=%d",
+		"http://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=200&po=1&np=1&ut=bd1d9ddb04089700cf9c27f6f7426281&fltt=2&invt=2&fid=f3&fs=b:%s&fields=f1,f2,f3,f4,f5,f6,f7,f8,f9,f10,f12,f13,f14,f15,f16,f17,f18,f20,f21,f23,f24,f25,f22,f11,f62,f128,f136,f115,f152&_=%d",
 		conceptCode,
 		time.Now().UnixMilli(),
 	)
 
 	body, err := httpGetEastMoney(url)
 	if err != nil {
-		fmt.Printf("[Constituents] API 请求失败 (%v)，使用演示数据\n", err)
-		return getMockConstituents(conceptCode), nil
+		return nil, fmt.Errorf("成分股 API 请求失败: %w", err)
 	}
 
 	// 东财偶尔返回 JSONP，去除 callback 包装
@@ -303,7 +308,6 @@ func FetchConceptConstituents(conceptCode string) ([]ConceptConstituent, error) 
 	}
 
 	result := make([]ConceptConstituent, 0, len(check.Data.Diff))
-
 	for _, raw := range check.Data.Diff {
 		var c ConceptConstituent
 		switch item := raw.(type) {
@@ -400,26 +404,41 @@ func stripJSONP(body []byte) []byte {
 
 // httpGetEastMoney 东财专用 HTTP GET（不禁用 Keep-Alives，避免 EOF）
 func httpGetEastMoney(url string) ([]byte, error) {
+	// 尝试多个东财CDN节点
+	urls := []string{url}
+	// 如果原始URL包含 push2.eastmoney.com，额外尝试 31-50 号CDN
+	if strings.Contains(url, "push2.eastmoney.com") {
+		for i := 31; i <= 50; i++ {
+			urls = append(urls, strings.Replace(url, "push2.eastmoney.com", fmt.Sprintf("%d.push2.eastmoney.com", i), 1))
+		}
+	}
+
 	client := &http.Client{Timeout: 15 * time.Second}
-	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36")
-	req.Header.Set("Referer", "https://quote.eastmoney.com/")
-	req.Header.Set("Accept", "*/*")
-	req.Header.Set("Accept-Language", "zh-CN,zh;q=0.9")
+	for _, u := range urls {
+		req, err := http.NewRequest("GET", u, nil)
+		if err != nil {
+			continue
+		}
+		req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36")
+		req.Header.Set("Referer", "https://quote.eastmoney.com/")
+		req.Header.Set("Accept", "*/*")
+		req.Header.Set("Accept-Language", "zh-CN,zh;q=0.9")
+		req.Header.Set("Connection", "keep-alive")
 
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, err
+		resp, err := client.Do(req)
+		if err != nil {
+			continue
+		}
+		body, err := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if err != nil {
+			continue
+		}
+		if resp.StatusCode == http.StatusOK && len(body) > 0 {
+			return body, nil
+		}
 	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("HTTP %d", resp.StatusCode)
-	}
-	return io.ReadAll(resp.Body)
+	return nil, fmt.Errorf("所有CDN节点请求失败")
 }
 
 // ========== 内部：东财 API 封装 ==========
@@ -456,9 +475,15 @@ func fetchConceptBoardFromEastMoney() ([]HotConcept, error) {
 
 	concepts := make([]HotConcept, 0, len(resp.Data.Diff))
 	for _, item := range resp.Data.Diff {
+		code := parseString(item["f12"])
+		name := parseString(item["f14"])
+		// m:90+t:3 可能返回纯数字，成分股查询 fs=b: 需要 BK 前缀
+		if code != "" && !strings.HasPrefix(code, "BK") {
+			code = "BK" + code
+		}
 		c := HotConcept{
-			Code:         parseString(item["f12"]),
-			Name:         parseString(item["f14"]),
+			Code:         code,
+			Name:         name,
 			ChangePct:    parseFloat(item["f3"]),
 			ChangeAmt:    parseFloat(item["f4"]),
 			Volume:       parseFloat(item["f5"]),

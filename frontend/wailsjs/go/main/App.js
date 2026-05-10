@@ -18,8 +18,16 @@ export function AnalyzeStockWithRIM(arg1, arg2, arg3) {
   return window['go']['main']['App']['AnalyzeStockWithRIM'](arg1, arg2, arg3);
 }
 
+export function ApplyUpdate(arg1) {
+  return window['go']['main']['App']['ApplyUpdate'](arg1);
+}
+
 export function CheckAnalysisCache(arg1) {
   return window['go']['main']['App']['CheckAnalysisCache'](arg1);
+}
+
+export function CheckForUpdate() {
+  return window['go']['main']['App']['CheckForUpdate']();
 }
 
 export function CheckPythonDependencies() {
@@ -44,6 +52,10 @@ export function DownloadReport(arg1, arg2) {
 
 export function DownloadReports(arg1, arg2) {
   return window['go']['main']['App']['DownloadReports'](arg1, arg2);
+}
+
+export function DownloadUpdate(arg1, arg2) {
+  return window['go']['main']['App']['DownloadUpdate'](arg1, arg2);
 }
 
 export function ExportCurrentFinancialData(arg1) {
@@ -82,8 +94,16 @@ export function FetchMissingActivity(arg1) {
   return window['go']['main']['App']['FetchMissingActivity'](arg1);
 }
 
+export function GetAutoCheckUpdate() {
+  return window['go']['main']['App']['GetAutoCheckUpdate']();
+}
+
 export function GetComparables(arg1) {
   return window['go']['main']['App']['GetComparables'](arg1);
+}
+
+export function GetCurrentVersion() {
+  return window['go']['main']['App']['GetCurrentVersion']();
 }
 
 export function GetFinancialTrends(arg1) {
@@ -238,8 +258,16 @@ export function SendNotification(arg1, arg2) {
   return window['go']['main']['App']['SendNotification'](arg1, arg2);
 }
 
+export function SetAutoCheckUpdate(arg1) {
+  return window['go']['main']['App']['SetAutoCheckUpdate'](arg1);
+}
+
 export function SetRiskSensitivity(arg1) {
   return window['go']['main']['App']['SetRiskSensitivity'](arg1);
+}
+
+export function SkipVersion(arg1) {
+  return window['go']['main']['App']['SkipVersion'](arg1);
 }
 
 export function UpdateIndustryDatabase() {

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import './Settings.css'
-import { GetSFLConfig, SaveSFLConfig, VerifySFLToken } from '../wailsjs/go/main/App'
+import { GetSFLConfig, SaveSFLConfig, VerifySFLToken, CheckForUpdate, SetAutoCheckUpdate } from '../wailsjs/go/main/App'
 import type { main } from '../wailsjs/go/models'
 
 export interface AppSettings {
@@ -14,6 +14,7 @@ export interface AppSettings {
   autoUpdateIndustryDB: boolean
   analysisNotification: boolean
   riskSensitivity: 'strict' | 'standard' | 'loose'
+  autoCheckUpdate: boolean
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
@@ -27,6 +28,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   autoUpdateIndustryDB: true,
   analysisNotification: true,
   riskSensitivity: 'standard',
+  autoCheckUpdate: true,
 }
 
 const SETTINGS_KEY = 'stockfinlens-settings-v1'
@@ -105,6 +107,10 @@ export function Settings({
   const [sflVerifyStatus, setSflVerifyStatus] = useState<{type: 'success' | 'error' | null, message: string}>({type: null, message: ''})
   const [sflSaving, setSflSaving] = useState(false)
 
+  // 检查更新状态
+  const [updateChecking, setUpdateChecking] = useState(false)
+  const [updateCheckResult, setUpdateCheckResult] = useState<{type: 'success' | 'info' | 'error' | null, message: string}>({type: null, message: ''})
+
   // 加载数据源配置
   useEffect(() => {
     GetSFLConfig().then((cfg) => {
@@ -171,6 +177,23 @@ export function Settings({
 
   const version = '1.3.33'
 
+  const handleCheckUpdate = useCallback(async () => {
+    setUpdateChecking(true)
+    setUpdateCheckResult({type: null, message: ''})
+    try {
+      const info = await CheckForUpdate()
+      if (info.hasUpdate) {
+        setUpdateCheckResult({type: 'info', message: `发现新版本 ${info.latestVer}`})
+      } else {
+        setUpdateCheckResult({type: 'success', message: '当前已是最新版本'})
+      }
+    } catch (err: any) {
+      setUpdateCheckResult({type: 'error', message: err?.message || '检查失败'})
+    } finally {
+      setUpdateChecking(false)
+    }
+  }, [])
+
   return (
     <>
       <button
@@ -225,7 +248,6 @@ export function Settings({
                   <label className="switch"><input type="checkbox" checked={settings.analysisNotification} onChange={(e) => updateSetting('analysisNotification', e.target.checked)} /><span className="slider"></span></label>
                 </div>
               </div>
-
               {/* 风险警示敏感度 */}
               <div className="settings-item settings-item-inline">
                 <label>风险警示敏感度</label>
@@ -365,25 +387,8 @@ export function Settings({
                           )}
                         </div>
 
-                        <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-                          <button
-                            className="settings-data-btn"
-                            onClick={handleVerifySFL}
-                            disabled={sflLoading || !sflCfg.token}
-                          >
-                            {sflLoading ? '验证中...' : '🔍 验证连通性'}
-                          </button>
-                          <button
-                            className="settings-data-btn"
-                            onClick={handleSaveSFL}
-                            disabled={sflSaving}
-                          >
-                            {sflSaving ? '保存中...' : '💾 保存配置'}
-                          </button>
-                        </div>
-
                         {sflVerifyStatus.type && (
-                          <div className="settings-action-status">
+                          <div className="settings-action-status" style={{ marginTop: 8 }}>
                             {sflVerifyStatus.type === 'success' ? (
                               <span className="status-success">{sflVerifyStatus.message}</span>
                             ) : (
@@ -405,12 +410,12 @@ export function Settings({
                                 <span style={{ display: 'flex', alignItems: 'center', gap: 4, marginLeft: 4 }}>
                                   <input
                                     type="number"
-                                    min={1}
-                                    max={20}
+                                    min={3}
+                                    max={10}
                                     value={sflCfg.moneyflow_days || 3}
                                     onChange={(e) => {
                                       const val = parseInt(e.target.value, 10)
-                                      if (!isNaN(val) && val >= 1 && val <= 20) {
+                                      if (!isNaN(val) && val >= 3 && val <= 10) {
                                         setSflCfg({ ...sflCfg, moneyflow_days: val })
                                       }
                                     }}
@@ -431,6 +436,26 @@ export function Settings({
                             </label>
                           </div>
                         </div>
+
+                        {/* 操作按钮放在启用范围下方 */}
+                        <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+                          <button
+                            className="settings-data-btn"
+                            onClick={handleVerifySFL}
+                            disabled={sflLoading || !sflCfg.token}
+                            style={{ whiteSpace: 'nowrap' }}
+                          >
+                            {sflLoading ? '验证中...' : '🔍 验证连通性'}
+                          </button>
+                          <button
+                            className="settings-data-btn"
+                            onClick={handleSaveSFL}
+                            disabled={sflSaving}
+                            style={{ whiteSpace: 'nowrap' }}
+                          >
+                            {sflSaving ? '保存中...' : '💾 保存配置'}
+                          </button>
+                        </div>
                       </>
                     )}
                   </>
@@ -446,7 +471,47 @@ export function Settings({
               <div className="about-title">股票财报透镜</div>
               <div className="about-version">版本 {version}</div>
               <div className="about-desc">穿透财报看真相，自动扫描财务风险，重要指标可溯源。</div>
-              <a href="https://github.com/liusaipu/stockfinlens/releases" target="_blank" rel="noopener noreferrer" className="about-link">检查更新</a>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16, marginTop: 8 }}>
+                <button
+                  className="about-link"
+                  onClick={handleCheckUpdate}
+                  disabled={updateChecking}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: '#60a5fa',
+                    cursor: updateChecking ? 'not-allowed' : 'pointer',
+                    textDecoration: 'underline',
+                    fontSize: 13,
+                    padding: 0,
+                  }}
+                >
+                  {updateChecking ? '检查中...' : '检查更新'}
+                </button>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#94a3b8', cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={settings.autoCheckUpdate}
+                    onChange={async (e) => {
+                      const checked = e.target.checked
+                      updateSetting('autoCheckUpdate', checked)
+                      try { await SetAutoCheckUpdate(checked) } catch { /* ignore */ }
+                    }}
+                    style={{ cursor: 'pointer' }}
+                  />
+                  启动时自动检查
+                </label>
+              </div>
+              {updateCheckResult.type && (
+                <div style={{
+                  fontSize: 12,
+                  marginTop: 6,
+                  color: updateCheckResult.type === 'success' ? '#4ade80' : updateCheckResult.type === 'error' ? '#f87171' : '#fbbf24',
+                }}>
+                  {updateCheckResult.type === 'success' ? '✓ ' : updateCheckResult.type === 'error' ? '✗ ' : 'ℹ️ '}
+                  {updateCheckResult.message}
+                </div>
+              )}
 
               {/* 运行环境 */}
               <div className="settings-divider" style={{ margin: '16px 0' }} />

@@ -1,0 +1,235 @@
+import { useState, useEffect, useCallback } from 'react'
+import './App.css'
+import {
+  DownloadUpdate,
+  ApplyUpdate,
+  SkipVersion,
+} from '../wailsjs/go/main/App'
+import { EventsOn, EventsOff } from '../wailsjs/runtime'
+import { BrowserOpenURL } from '../wailsjs/runtime'
+
+export interface UpdateInfo {
+  hasUpdate: boolean
+  currentVer: string
+  latestVer: string
+  releaseName: string
+  releaseNote: string
+  publishedAt: string
+  assetURL: string
+  htmlURL: string
+}
+
+interface UpdateModalProps {
+  isOpen: boolean
+  info: UpdateInfo | null
+  onClose: () => void
+}
+
+export function UpdateModal({ isOpen, info, onClose }: UpdateModalProps) {
+  const [downloading, setDownloading] = useState(false)
+  const [downloadProgress, setDownloadProgress] = useState(0)
+  const [downloadError, setDownloadError] = useState('')
+  const [downloadedPath, setDownloadedPath] = useState('')
+  const [applying, setApplying] = useState(false)
+
+  useEffect(() => {
+    if (!downloading) return
+    const handler = (percent: number) => {
+      setDownloadProgress(percent)
+    }
+    EventsOn('update:progress', handler)
+    return () => {
+      EventsOff('update:progress')
+    }
+  }, [downloading])
+
+  const resetState = useCallback(() => {
+    setDownloading(false)
+    setDownloadProgress(0)
+    setDownloadError('')
+    setDownloadedPath('')
+    setApplying(false)
+  }, [])
+
+  useEffect(() => {
+    if (isOpen) {
+      resetState()
+    }
+  }, [isOpen, resetState])
+
+  if (!isOpen || !info) return null
+
+  const handleDownload = async () => {
+    setDownloading(true)
+    setDownloadProgress(0)
+    setDownloadError('')
+    try {
+      const path = await DownloadUpdate(info.assetURL, `v${info.latestVer}`)
+      setDownloadedPath(path)
+      setDownloadProgress(100)
+    } catch (e: any) {
+      setDownloadError('下载失败: ' + (e?.message || String(e)))
+    } finally {
+      setDownloading(false)
+    }
+  }
+
+  const handleApply = async () => {
+    if (!downloadedPath) return
+    setApplying(true)
+    try {
+      await ApplyUpdate(downloadedPath)
+      // Windows 上会 os.Exit(0)，不会执行到这里
+      // macOS 上 ApplyUpdate 只是 open dmg，返回成功
+      // 如果是 macOS，提示用户
+    } catch (e: any) {
+      setDownloadError('安装失败: ' + (e?.message || String(e)))
+      setApplying(false)
+    }
+  }
+
+  const handleSkip = async () => {
+    try {
+      await SkipVersion(info.latestVer)
+    } catch {
+      // ignore
+    }
+    onClose()
+  }
+
+  const handleOpenBrowser = () => {
+    if (info.htmlURL) {
+      BrowserOpenURL(info.htmlURL)
+    }
+  }
+
+  return (
+    <div className="modal-overlay" onClick={e => {
+      if (e.target === e.currentTarget && !downloading && !applying) onClose()
+    }}>
+      <div className="modal-content" style={{ maxWidth: 520, width: '90%' }}>
+        <h4 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span>🚀</span>
+          发现新版本
+        </h4>
+
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ fontSize: 14, color: '#94a3b8', marginBottom: 8 }}>
+            当前版本 <strong style={{ color: '#cbd5e1' }}>{info.currentVer}</strong>
+            {' → '}
+            新版本 <strong style={{ color: '#4ade80' }}>{info.latestVer}</strong>
+          </div>
+          <div style={{ fontSize: 12, color: '#64748b' }}>
+            发布时间: {info.publishedAt}
+          </div>
+        </div>
+
+        {info.releaseNote && (
+          <div style={{
+            background: 'rgba(30,41,59,0.6)',
+            borderRadius: 8,
+            padding: 12,
+            marginBottom: 16,
+            maxHeight: 200,
+            overflowY: 'auto',
+            fontSize: 13,
+            lineHeight: 1.6,
+            whiteSpace: 'pre-wrap',
+          }}>
+            {info.releaseNote}
+          </div>
+        )}
+
+        {downloading && (
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 13, color: '#94a3b8', marginBottom: 6 }}>
+              正在下载更新包... {downloadProgress}%
+            </div>
+            <div style={{
+              height: 6,
+              background: 'rgba(30,41,59,0.8)',
+              borderRadius: 3,
+              overflow: 'hidden',
+            }}>
+              <div style={{
+                height: '100%',
+                width: `${downloadProgress}%`,
+                background: '#3b82f6',
+                borderRadius: 3,
+                transition: 'width 0.3s ease',
+              }} />
+            </div>
+          </div>
+        )}
+
+        {downloadError && (
+          <div style={{
+            background: 'rgba(248,113,113,0.1)',
+            borderRadius: 8,
+            padding: 12,
+            marginBottom: 16,
+            fontSize: 13,
+            color: '#f87171',
+          }}>
+            {downloadError}
+            <div style={{ marginTop: 8 }}>
+              <button
+                className="btn btn-secondary"
+                onClick={handleOpenBrowser}
+                style={{ fontSize: 12, padding: '4px 12px' }}
+              >
+                去 GitHub 下载
+              </button>
+            </div>
+          </div>
+        )}
+
+        {downloadedPath && !downloadError && !applying && (
+          <div style={{
+            background: 'rgba(74,222,128,0.1)',
+            borderRadius: 8,
+            padding: 12,
+            marginBottom: 16,
+            fontSize: 13,
+            color: '#4ade80',
+          }}>
+            ✅ 下载完成
+          </div>
+        )}
+
+        <div className="modal-actions">
+          {!downloading && !applying && !downloadedPath && (
+            <>
+              <button className="btn btn-secondary" onClick={onClose}>
+                稍后提醒
+              </button>
+              <button className="btn btn-secondary" onClick={handleSkip}>
+                跳过此版本
+              </button>
+              <button className="btn btn-primary" onClick={handleDownload}>
+                立即更新
+              </button>
+            </>
+          )}
+
+          {downloadedPath && !downloadError && !applying && (
+            <>
+              <button className="btn btn-secondary" onClick={onClose}>
+                稍后重启
+              </button>
+              <button className="btn btn-primary" onClick={handleApply}>
+                重启应用
+              </button>
+            </>
+          )}
+
+          {(downloading || applying) && (
+            <button className="btn btn-secondary" disabled>
+              {downloading ? '下载中...' : '安装中...'}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}

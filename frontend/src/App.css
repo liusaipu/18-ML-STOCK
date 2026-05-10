@@ -1037,6 +1037,12 @@ body.light .markdown-body blockquote {
   text-align: left;
 }
 
+/* 表格第一列尽量不换行，避免短文字被挤压 */
+.markdown-body th:first-child,
+.markdown-body td:first-child {
+  white-space: nowrap;
+}
+
 body.light .markdown-body th,
 body.light .markdown-body td {
   border-color: #e5e7eb;
@@ -1118,6 +1124,49 @@ body.light .markdown-body hr {
 .markdown-body img {
   max-width: 100%;
   border-radius: 6px;
+}
+
+/* PDF 导出时强制亮色模式（白底黑字），避免暗色模式打印效果差 */
+.markdown-body.pdf-export {
+  color: #1f2937 !important;
+  background: #ffffff !important;
+}
+.markdown-body.pdf-export h1,
+.markdown-body.pdf-export h2,
+.markdown-body.pdf-export h3,
+.markdown-body.pdf-export h4,
+.markdown-body.pdf-export h5,
+.markdown-body.pdf-export h6 {
+  color: #111827 !important;
+  border-bottom-color: #e5e7eb !important;
+}
+.markdown-body.pdf-export th,
+.markdown-body.pdf-export td {
+  border-color: #e5e7eb !important;
+}
+.markdown-body.pdf-export th {
+  background: #f3f4f6 !important;
+  color: #111827 !important;
+}
+.markdown-body.pdf-export tr:nth-child(even) {
+  background: rgba(0, 0, 0, 0.02) !important;
+}
+.markdown-body.pdf-export blockquote {
+  background: rgba(59, 130, 246, 0.06) !important;
+  color: #4b5563 !important;
+}
+.markdown-body.pdf-export a {
+  color: #2563eb !important;
+}
+.markdown-body.pdf-export code {
+  background: rgba(0, 0, 0, 0.06) !important;
+}
+.markdown-body.pdf-export pre {
+  background: #f9fafb !important;
+  border-color: #e5e7eb !important;
+}
+.markdown-body.pdf-export hr {
+  border-top-color: #e5e7eb !important;
 }
 
 .placeholder {
@@ -1351,12 +1400,19 @@ body.light .trace-trigger-btn:hover {
 
 .inline-tooltip-trigger {
   cursor: pointer;
-  color: #3b82f6;
-  font-size: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #3b82f6;
+  color: #fff;
+  font-size: 10px;
+  font-weight: bold;
+  font-style: italic;
   line-height: 1;
   user-select: none;
-  padding: 2px;
-  border-radius: 4px;
   transition: background 0.15s;
 }
 
@@ -1365,9 +1421,10 @@ body.light .trace-trigger-btn:hover {
 }
 
 .inline-tooltip .inline-tooltip-body {
-  position: fixed;
-  left: var(--tt-left, 0);
-  top: var(--tt-top, 0);
+  position: absolute;
+  left: calc(100% + 8px);
+  top: 50%;
+  transform: translateY(-50%);
   width: 360px;
   background: #1e293b;
   border: 1px solid #334155;
@@ -1383,6 +1440,11 @@ body.light .trace-trigger-btn:hover {
   transition: opacity 0.15s, visibility 0.15s;
 }
 
+.inline-tooltip.tooltip-left .inline-tooltip-body {
+  left: auto;
+  right: calc(100% + 8px);
+}
+
 .inline-tooltip:hover .inline-tooltip-body {
   visibility: visible;
   opacity: 1;
@@ -1394,11 +1456,12 @@ body.light .trace-trigger-btn:hover {
 }
 
 body.light .inline-tooltip-trigger {
+  background: rgba(59, 130, 246, 0.12);
   color: #2563eb;
 }
 
 body.light .inline-tooltip-trigger:hover {
-  background: rgba(37, 99, 235, 0.1);
+  background: rgba(59, 130, 246, 0.25);
 }
 
 body.light .inline-tooltip .inline-tooltip-body {

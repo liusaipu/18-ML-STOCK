@@ -18,6 +18,7 @@ import (
 
 	analyzer "github.com/liusaipu/stockfinlens/analyzer"
 	"github.com/liusaipu/stockfinlens/downloader"
+	"github.com/liusaipu/stockfinlens/updater"
 
 	toast "git.sr.ht/~jackmordaunt/go-toast/v2"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
@@ -59,6 +60,8 @@ type App struct {
 	analysisLocks   map[string]*sync.Mutex
 	dataRouter      *downloader.DataRouter // 数据源路由
 	riskSensitivity string                 // 风险警示敏感度
+	appConfig       *AppConfig             // 应用配置（自动更新等）
+	currentVersion  string                 // 当前版本号
 }
 
 // StockInfo 股票基础信息
@@ -132,6 +135,20 @@ func (a *App) startup(ctx context.Context) {
 
 	// 启动后台行业数据采集（如果满足条件）
 	go a.startBackgroundIndustryUpdate()
+
+	// 加载应用配置
+	appCfg, err := a.storage.LoadAppConfig()
+	if err != nil {
+		fmt.Printf("加载应用配置失败: %v\n", err)
+		appCfg = &AppConfig{AutoCheckUpdate: true}
+	}
+	a.appConfig = appCfg
+
+	// 读取当前版本号（从 wails.json）
+	a.currentVersion = readWailsVersion()
+
+	// 启动时自动检查更新（非阻塞，后台执行）
+	go a.checkUpdateOnStartup()
 }
 
 // loadStockDB 从嵌入的资源或数据目录加载股票列表
@@ -141,6 +158,56 @@ func (a *App) loadStockDB() error {
 		return err
 	}
 	return json.Unmarshal(bytes, &a.stocks)
+}
+
+// readWailsVersion 读取 wails.json 中的 productVersion
+func readWailsVersion() string {
+	data, err := os.ReadFile("wails.json")
+	if err != nil {
+		// 打包后尝试从可执行文件同级目录读取
+		if exe, err := os.Executable(); err == nil {
+			data, _ = os.ReadFile(filepath.Join(filepath.Dir(exe), "wails.json"))
+		}
+	}
+	if len(data) == 0 {
+		return "unknown"
+	}
+	var cfg struct {
+		Info struct {
+			ProductVersion string `json:"productVersion"`
+		} `json:"info"`
+	}
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		return "unknown"
+	}
+	return cfg.Info.ProductVersion
+}
+
+// checkUpdateOnStartup 启动时自动检查更新（非阻塞）
+func (a *App) checkUpdateOnStartup() {
+	if a.appConfig == nil || !a.appConfig.AutoCheckUpdate {
+		return
+	}
+	// 避免每次启动都请求：一天最多检查一次
+	today := time.Now().Format("2006-01-02")
+	if a.appConfig.LastCheckDate == today {
+		return
+	}
+	// 延迟 5 秒再检查，避免影响启动速度
+	time.Sleep(5 * time.Second)
+
+	info, err := updater.CheckUpdate(a.currentVersion)
+	if err != nil {
+		fmt.Printf("[AutoUpdate] 检查更新失败: %v\n", err)
+		return
+	}
+	// 记录检查日期（无论是否发现更新）
+	a.appConfig.LastCheckDate = today
+	_ = a.storage.SaveAppConfig(a.appConfig)
+
+	if info.HasUpdate && info.LatestVer != a.appConfig.SkipVersion {
+		runtime.EventsEmit(a.ctx, "update:available", info)
+	}
 }
 
 // fallbackIndustryScriptPath 返回 fetch_all_industry_data.py 绝对路径
@@ -3513,11 +3580,12 @@ type StockMoneyflowItem struct {
 
 // StockMoneyflowResult 个股资金流向查询结果
 type StockMoneyflowResult struct {
-	Symbol  string               `json:"symbol"`
-	Items   []StockMoneyflowItem `json:"items"`
-	HasData bool                 `json:"has_data"`
-	Summary string               `json:"summary"` // 简要分析
-	Days    int                  `json:"days"`    // 查询的交易日数
+	Symbol    string               `json:"symbol"`
+	Items     []StockMoneyflowItem `json:"items"`
+	HasData   bool                 `json:"has_data"`
+	Summary   string               `json:"summary"`    // 简要分析
+	Days      int                  `json:"days"`       // 查询的交易日数
+	TodayItem *StockMoneyflowItem  `json:"today_item"` // 当日实时数据（可能为nil）
 }
 
 // retailSummary 生成散户（小单）流向文案
@@ -3533,6 +3601,7 @@ func retailSummary(totalRetail float64) string {
 }
 
 // GetStockMoneyflow 获取个股近 N 日资金流向（优先数据源）
+// 逻辑：查询范围扩大到 (days+1)*3 天，从中识别当日数据并分离，历史数据固定保留 days 条
 func (a *App) GetStockMoneyflow(symbol string, days int) (*StockMoneyflowResult, error) {
 	if a.dataRouter == nil || !a.dataRouter.IsUseForMoneyflow() {
 		return &StockMoneyflowResult{Symbol: symbol, HasData: false, Summary: "StockFinLens 资金流向未启用"}, nil
@@ -3545,10 +3614,9 @@ func (a *App) GetStockMoneyflow(symbol string, days int) (*StockMoneyflowResult,
 	code := parts[0]
 	market := strings.ToUpper(parts[1])
 
-	// 扩大查询范围：自然日可能包含周末/节假日，实际交易日远少于自然日
-	// 取 3 倍自然日范围确保覆盖足够交易日，返回后前端只取最近 3 条
+	// 扩大查询范围：确保即使当日有数据，也能补足 days 条历史数据
 	end := time.Now().Format("20060102")
-	start := time.Now().AddDate(0, 0, -days*3).Format("20060102")
+	start := time.Now().AddDate(0, 0, -(days+1)*3).Format("20060102")
 
 	items, err := a.dataRouter.FetchMoneyflow(market, code, start, end)
 	if err != nil {
@@ -3560,20 +3628,18 @@ func (a *App) GetStockMoneyflow(symbol string, days int) (*StockMoneyflowResult,
 		return &StockMoneyflowResult{Symbol: symbol, HasData: false, Summary: "暂无资金流向数据（API返回空）"}, nil
 	}
 
-	// API 返回按日期降序排列（最新在前），只取前 days 条与用户配置的展示条数对齐
-	if len(items) > days {
-		items = items[:days]
-	}
-
+	today := time.Now().Format("20060102")
 	result := &StockMoneyflowResult{
 		Symbol:  symbol,
 		HasData: true,
-		Items:   make([]StockMoneyflowItem, 0, len(items)),
+		Items:   make([]StockMoneyflowItem, 0, days),
 	}
 
 	var totalMain float64
 	var totalRetail float64
 	var inflowDays int
+	var todayItem *StockMoneyflowItem
+
 	for _, item := range items {
 		smNet := item.BuySmAmount - item.SellSmAmount
 		mdNet := item.BuyMdAmount - item.SellMdAmount
@@ -3581,26 +3647,40 @@ func (a *App) GetStockMoneyflow(symbol string, days int) (*StockMoneyflowResult,
 		elgNet := item.BuyElgAmount - item.SellElgAmount
 		mainInflow := lgNet + elgNet
 
-		result.Items = append(result.Items, StockMoneyflowItem{
+		mfItem := StockMoneyflowItem{
 			Date:         item.TradeDate,
 			MainInflow:   mainInflow,
 			SmNetAmount:  smNet,
 			MdNetAmount:  mdNet,
 			LgNetAmount:  lgNet,
 			ElgNetAmount: elgNet,
-		})
+		}
 
-		totalMain += mainInflow
-		totalRetail += smNet
-		if mainInflow > 0 {
-			inflowDays++
+		// 当日数据（按日期匹配）分离出来，不加入历史 Items
+		if item.TradeDate == today && todayItem == nil {
+			todayItem = &mfItem
+			continue
+		}
+
+		// 只收集 days 条历史数据
+		if len(result.Items) < days {
+			result.Items = append(result.Items, mfItem)
+			totalMain += mainInflow
+			totalRetail += smNet
+			if mainInflow > 0 {
+				inflowDays++
+			}
 		}
 	}
 
-	// 生成简要分析（统计口径与表格展示完全一致）
-	dayCount := len(items)
+	result.TodayItem = todayItem
+
+	// 生成简要分析（仅基于历史数据）
+	dayCount := len(result.Items)
 	retailText := retailSummary(totalRetail)
-	if inflowDays == dayCount {
+	if dayCount == 0 {
+		result.Summary = ""
+	} else if inflowDays == dayCount {
 		result.Summary = fmt.Sprintf("主力持续流入 %.2f 亿元；%s", totalMain/10000, retailText)
 	} else if inflowDays == 0 {
 		result.Summary = fmt.Sprintf("主力持续流出 %.2f 亿元；%s", -totalMain/10000, retailText)
@@ -3612,4 +3692,67 @@ func (a *App) GetStockMoneyflow(symbol string, days int) (*StockMoneyflowResult,
 	result.Days = days
 
 	return result, nil
+}
+
+
+// ========== 自动更新 Wails 绑定 ==========
+
+// CheckForUpdate 手动检查更新（Wails 绑定）
+func (a *App) CheckForUpdate() (*updater.UpdateInfo, error) {
+	if a.currentVersion == "" || a.currentVersion == "unknown" {
+		a.currentVersion = readWailsVersion()
+	}
+	info, err := updater.CheckUpdate(a.currentVersion)
+	if err != nil {
+		return nil, err
+	}
+	return info, nil
+}
+
+// DownloadUpdate 下载更新包（Wails 绑定）
+// progressFn 通过 Wails Event 推送进度
+func (a *App) DownloadUpdate(assetURL, tag string) (string, error) {
+	updateDir := filepath.Join(a.storage.DataDir(), "update")
+	return updater.DownloadUpdate(assetURL, tag, updateDir, func(percent int) {
+		runtime.EventsEmit(a.ctx, "update:progress", percent)
+	})
+}
+
+// ApplyUpdate 应用已下载的更新包（Wails 绑定）
+func (a *App) ApplyUpdate(localPath string) error {
+	return updater.ApplyUpdate(localPath)
+}
+
+// SetAutoCheckUpdate 设置是否启动时自动检查更新（Wails 绑定）
+func (a *App) SetAutoCheckUpdate(enabled bool) error {
+	if a.appConfig == nil {
+		a.appConfig = &AppConfig{}
+	}
+	a.appConfig.AutoCheckUpdate = enabled
+	return a.storage.SaveAppConfig(a.appConfig)
+}
+
+// GetAutoCheckUpdate 获取是否启动时自动检查更新（Wails 绑定）
+func (a *App) GetAutoCheckUpdate() bool {
+	if a.appConfig == nil {
+		return true
+	}
+	return a.appConfig.AutoCheckUpdate
+}
+
+// SkipVersion 跳过指定版本（不再提示）（Wails 绑定）
+func (a *App) SkipVersion(version string) error {
+	if a.appConfig == nil {
+		a.appConfig = &AppConfig{}
+	}
+	a.appConfig.SkipVersion = version
+	return a.storage.SaveAppConfig(a.appConfig)
+}
+
+// GetCurrentVersion 获取当前版本号（Wails 绑定）
+func (a *App) GetCurrentVersion() string {
+	if a.currentVersion == "" || a.currentVersion == "unknown" {
+		a.currentVersion = readWailsVersion()
+	}
+	return a.currentVersion
 }

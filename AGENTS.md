@@ -64,6 +64,7 @@ stockfinlens/
 ├── build-release.sh              # macOS/Windows 发布构建脚本
 │
 ├── analyzer/                     # 核心分析引擎（纯逻辑，无网络 I/O，25+ 个文件）
+├── updater/                      # 自动更新（GitHub Release 检测、多源下载、跨平台安装）
 │   ├── engine.go                 # 18 步分析主入口（RunAnalysisWithAll 等）
 │   ├── steps.go                  # 18 步财务透视具体实现
 │   ├── evaluator.go              # 评分与评级逻辑（100 分制，A-F 等级）
@@ -91,6 +92,7 @@ stockfinlens/
 │   └── report_test.go            # 报告生成测试
 │
 ├── downloader/                   # 数据下载与爬取层（所有网络 I/O，20+ 个文件）
+│   ├── eastmoney_moneyflow.go    # 东财资金流向接口（多 CDN fallback）
 │   ├── data_router.go            # 数据源路由：StockFinLens(StockFinLens) vs 备用源，按类别切换
 │   ├── eastmoney.go              # 东方财富 API（财报、资料、行情、K线、概念，~1360 行）
 │   ├── sfl_datasource.go                # StockFinLens Pro HTTP JSON API 封装（~800 行）
@@ -242,7 +244,7 @@ go test ./downloader/...
 
 ### 构建注意事项
 
-1. **版本号一致性（硬要求）**: `wails.json` 中的 `info.productVersion` 必须与 `frontend/src/Settings.tsx` 中的 `const version` 完全一致。两个构建脚本都会校验此项，不一致会**中断构建**。当前版本为 `1.3.29`。
+1. **版本号一致性（硬要求）**: `wails.json` 中的 `info.productVersion` 必须与 `frontend/src/Settings.tsx` 中的 `const version` 完全一致。两个构建脚本都会校验此项，不一致会**中断构建**。当前版本为 `1.3.33`。
 2. **前端 dist 重建**: 如果前端代码有变更，构建前必须确保 `frontend/dist` 是最新的。Wails `build` 在 `dist` 已存在时可能跳过前端构建，导致打包旧代码。建议手动执行 `cd frontend && npm run build`。
 3. **打包产物必须包含**: `ml_models/` 和 `scripts/` 目录。Go 后端在运行时会从可执行文件同级目录查找这些路径。
 4. **开发模式 vs 生产模式**: `main.go` 中 `readStockJSON()` 优先读取本地 `data/stocks.json`，打包后 fallback 到 `embed.FS`。
@@ -263,6 +265,7 @@ go test ./downloader/...
 
 1. 用户在 `App.tsx` 选择股票 -> 调用 `AddToWatchlist`
 2. 下载财报：`DownloadReports` -> `downloader.DataRouter` -> 多源获取 -> 保存到 `~/.config/stock-analyzer/data/{symbol}/`
+3. 自动更新：`startup` -> 后台检查 GitHub API -> `update:available` Event -> `UpdateModal` -> `DownloadUpdate`（gh-proxy.com 加速镜像优先）-> `ApplyUpdate`（Windows: bat 替换+重启 / macOS: open dmg）
 3. 执行分析：`AnalyzeStock` -> `analyzer.RunAnalysisWithAll` -> 生成 `AnalysisReport` -> 保存 Markdown 报告与 JSON 快照
 4. 前端读取快照恢复亮点/风险面板，读取 Markdown 渲染报告
 5. 市场热点：用户点击"刷新" -> `FetchHotConcepts` -> `downloader.FetchHotConceptBoard` -> 东财 API -> 综合打分排序 -> 缓存到 `data/hot_concepts/latest.json` + 归档历史 -> 前端展示 Top 20 热门概念及成分股

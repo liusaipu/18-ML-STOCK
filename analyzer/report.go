@@ -123,10 +123,8 @@ func writeRiskAlertBanner(b *strings.Builder, alert *RiskAlertSummary) {
 		}
 	}
 	levelTitle := "🔴 高风险警示"
-	color := "#ef4444"
 	if alert.Level == "medium" {
 		levelTitle = "🟡 中风险警示"
-		color = "#f59e0b"
 	} else if alert.Level == "high" && mediumCount > 0 {
 		levelTitle = "🔴 中高风险警示"
 	}
@@ -134,13 +132,9 @@ func writeRiskAlertBanner(b *strings.Builder, alert *RiskAlertSummary) {
 		levelTitle += "（一票否决）"
 	}
 
-	b.WriteString(fmt.Sprintf("<div style=\"border-left: 4px solid %s; padding: 12px 16px; margin: 16px 0; background: %s08; border-radius: 6px;\">\n\n", color, color))
-
-	// 标题 + 信息图标（紧跟文字，风格与报告其它 infoIcon 一致）
+	// 标题
 	totalFlags := len(alert.Flags)
-	b.WriteString(fmt.Sprintf("### %s（共%d项）", levelTitle, totalFlags))
-	b.WriteString(infoTooltipHTML("风险警示功能说明", "本模块从三大维度检测股票风险：<br>1. <strong>一票否决</strong>（单项即高风险）：审计意见非标、<strong>审计机构异常更换</strong>（年报披露期内更换、非正常辞任/解聘）、核心财务负责人频繁更换、资金占用/违规担保/诉讼、经营现金流连续2年为负、资产负债率>85%、营收同比<-30%、大股东质押>70%、一年内监管问询≥3次、毛利率为负。<br><em>注：国企8年强制轮换期届满等<strong>政策合规更换</strong>不属于风险信号，系统会自动排除。</em><br>2. <strong>二级指标</strong>（3项及以上中风险）：A-Score 60–69分、M-Score>-1.78、毛利率下降>10百分点、ROE<5%、净利润现金含量<80%、应收+存货占比>40%、营收同比<0%、负债率70%–85%、商誉占比>50%、DEPI>1.1。<br>3. <strong>外部数据</strong>：审计机构变更、高管变动、诉讼担保、大股东减持、股权质押、监管问询等。"))
-	b.WriteString("\n\n")
+	b.WriteString(fmt.Sprintf("### %s（共%d项）\n\n", levelTitle, totalFlags))
 
 	// 风险项表格
 	if len(alert.Flags) > 0 {
@@ -153,12 +147,7 @@ func writeRiskAlertBanner(b *strings.Builder, alert *RiskAlertSummary) {
 				flagIcon = "🔴"
 				flagLevel = "高风险"
 			}
-			detailTrigger := ""
-			if len(f.Details) > 0 {
-				body := strings.Join(f.Details, "<br/>")
-				detailTrigger = " " + infoTooltipHTML(f.Name, body)
-			}
-			b.WriteString(fmt.Sprintf("| %s | %s | %s%s | %s |\n", flagIcon, f.Name, f.FormatFlagValue(), detailTrigger, flagLevel))
+				b.WriteString(fmt.Sprintf("| %s | %s | %s | %s |\n", flagIcon, f.Name, f.FormatFlagValue(), flagLevel))
 		}
 		b.WriteString("\n")
 	}
@@ -168,7 +157,6 @@ func writeRiskAlertBanner(b *strings.Builder, alert *RiskAlertSummary) {
 		b.WriteString("> ⚠️ **一票否决**: 该股票触发了排雷检查清单中的铁律指标，建议深入核查后再做投资决策。\n\n")
 	}
 
-	b.WriteString("</div>\n\n")
 	b.WriteString("---\n\n")
 }
 
@@ -304,7 +292,7 @@ func writeEightIndicatorsHighlight(b *strings.Builder, steps []StepResult, lates
 
 	// 添加 A-Score 风险评分
 	ascore := getStepValue(steps, 8, latest, "AScore")
-	b.WriteString("### A-Score 风险评分 " + infoIcon("A-Score 风险评分", "A-Score（0-100分）综合评估企业财务风险，分数越高，潜在隐患越大。<br/>基于公开财务报表与监管信息，从六个维度打分：财务造假风险、偿债能力、现金流质量、应收账款健康度、盈利稳定性，以及股权质押/减持/监管问询等非财务信号。其中财务维度适用于 A 股与港股，非财务信号目前主要覆盖 A 股。<br/><strong>评判标准</strong>：&lt; 40分安全，40-60分低风险，60-70分中风险（需深入核查），≥ 70分高危（建议回避）。<br/><strong>核心价值</strong>：在财报暴雷前发现财务隐患，快速筛掉有明显问题的公司。") + "\n\n")
+	b.WriteString("### A-Score 风险评分\n\n")
 	b.WriteString(fmt.Sprintf("| 指标 | 数值 | 风险等级 | 说明 |\n"))
 	b.WriteString("|------|------|----------|------|\n")
 	if ascore > 0 {
@@ -645,7 +633,16 @@ func writeModule4(b *strings.Builder, steps []StepResult, latest string, comp *C
 		}
 	}
 
-	b.WriteString("## 4.2 可比公司明细" + infoTooltipHTML("综合得分计算方式", `在“当前公司 + 可比公司”池内，对每个指标做 Min-Max 标准化（0~100 分），再按以下权重加权求和：<br/>• ROE 25%　• 毛利率 20%　• 营收增长 15%　• 现金含量 10%<br/>• 负债率 10%（反向，越低越好）<br/>• A-Score 10%（反向，越低越好）<br/>• 活跃度 10%<br/><em>缺失活跃度时，使用可比池有效样本的中位数替代，标记为 *</em>`) + "\n\n")
+	b.WriteString("## 4.2 可比公司明细")
+	b.WriteString(`<details style="display:inline-block;position:relative;margin-left:8px;vertical-align:middle;">`)
+	b.WriteString(`<summary style="cursor:pointer;list-style:none;color:#1890ff;font-size:14px;">ℹ️</summary>`)
+	b.WriteString(`<div style="position:absolute;left:0;top:24px;width:320px;background:#fff;border:1px solid #e8e8e8;border-radius:4px;padding:8px 12px;box-shadow:0 2px 8px rgba(0,0,0,0.15);font-size:12px;color:#333;line-height:1.6;z-index:100;">`)
+	b.WriteString(`<strong>综合得分计算方式</strong><br/>`)
+	b.WriteString(`在当前公司 + 可比公司池内，对每个指标做 Min-Max 标准化（0~100 分），再按以下权重加权求和：<br/>`)
+	b.WriteString(`ROE 25%、毛利率 20%、营收增长 15%、现金含量 10%、负债率 10%（反向，越低越好）、A-Score 10%（反向，越低越好）、活跃度 10%。<br/>`)
+	b.WriteString(`<em>缺失活跃度时，使用可比池有效样本的中位数替代，标记为 *</em>`)
+	b.WriteString(`</div></details>`)
+	b.WriteString("\n\n")
 	if hasMissingActivity {
 		b.WriteString(`<div class="activity-hint" style="margin:6px 0 10px;font-size:12px;color:#94a3b8;">`)
 		b.WriteString(`<span>部分可比公司活跃度使用样本中位数替代，</span>`)
@@ -743,11 +740,10 @@ func writeModule5(b *strings.Builder, policy *PolicyMatchData) {
 	}
 
 	b.WriteString("## 5.2 重点政策方向\n\n")
-	b.WriteString(`<div class="policy-tags">` + "\n")
 	for _, p := range sortedPolicies {
-		b.WriteString(fmt.Sprintf(`  <span class="policy-tag"><span class="policy-name">%s</span><span class="policy-signal">%s</span></span>`+"\n", p.Name, policySignalSVG(p.Level)))
+		b.WriteString(fmt.Sprintf("- **%s** %s\n", p.Name, policySignalSVG(p.Level)))
 	}
-	b.WriteString(`</div>` + "\n\n")
+	b.WriteString("\n")
 
 	b.WriteString("## 5.3 解读摘要\n\n")
 	b.WriteString(fmt.Sprintf("> %s\n\n", policy.Summary))
@@ -762,6 +758,17 @@ func getDiffEmoji(diff float64) string {
 		return "🔴 低于行业"
 	}
 	return "➡️ 与行业接近"
+}
+
+func policySignalText(level int) string {
+	if level < 1 {
+		level = 1
+	}
+	if level > 5 {
+		level = 5
+	}
+	signals := []string{"", "▂", "▂▃", "▂▃▄", "▂▃▄▅", "▂▃▄▅▆"}
+	return signals[level]
 }
 
 func policySignalSVG(level int) string {
@@ -792,14 +799,14 @@ func policySignalSVG(level int) string {
 
 // ========== 模块6: RIM估值（基于多期预测） ==========
 func writeModule6(b *strings.Builder, steps []StepResult, latest string, quote *QuoteData, rim *RIMData) {
-	b.WriteString(`<h1 id="模块6-剩余收益模型估值rim">模块6: 剩余收益模型估值(RIM) <button class="rim-adjust-btn" style="float:right;margin-top:2px;">调整RIM</button></h1>` + "\n\n")
+	b.WriteString("# 模块6: 剩余收益模型估值(RIM)\n\n")
 
 	roe := getStepValue(steps, 16, latest, "roe")
 
 	b.WriteString(fmt.Sprintf("## 6.1 模型参数（基于 %s 年报）", latest) + traceTrigger(16) + "\n\n")
-	b.WriteString("| <span style=\"white-space:nowrap;\">参数</span> | <span style=\"white-space:nowrap;\">符号</span> | 取值 | 说明 |\n")
-	b.WriteString("|------|-----------|------|------|\n")
-	b.WriteString(fmt.Sprintf("| <span style=\"white-space:nowrap;\">**ROE**</span> | ROE | %.2f%% | 年报数据 |\n", roe))
+	b.WriteString("| 参数 | 符号 | 取值 | 说明 |\n")
+	b.WriteString("|------|------|------|------|\n")
+	b.WriteString(fmt.Sprintf("| **ROE** | ROE | %.2f%% | 年报数据 |\n", roe))
 
 	hasRIM := rim != nil && rim.HasData && rim.Result != nil
 	var bps0, ke, gTerminal, currentPrice float64
@@ -809,13 +816,13 @@ func writeModule6(b *strings.Builder, steps []StepResult, latest string, quote *
 		ke = rim.Params.KE
 		gTerminal = rim.Params.GTerminal
 		currentPrice = rim.Params.CurrentPrice
-		b.WriteString(fmt.Sprintf("| <span style=\"white-space:nowrap;\">**每股净资产**</span> | BPS&nbsp; | %.2f元 | %s |\n", bps0, rimSourceDesc(rim, quote)))
-		b.WriteString(fmt.Sprintf("| <span style=\"white-space:nowrap;\">**资本成本**</span> | kE&nbsp; | %.2f%% | CAPM(Rf=%.2f%%, Beta=%.2f, Rm-Rf=%.2f%%) |\n", ke*100, rim.Rf*100, rim.Beta, rim.RmRf*100))
-		b.WriteString(fmt.Sprintf("| <span style=\"white-space:nowrap;\">**永续增长率**</span> | g&nbsp;&nbsp; | %.1f%% | 稳态假设 |\n", gTerminal*100))
+		b.WriteString(fmt.Sprintf("| **每股净资产** | BPS | %.2f元 | %s |\n", bps0, rimSourceDesc(rim, quote)))
+		b.WriteString(fmt.Sprintf("| **资本成本** | kE | %.2f%% | CAPM(Rf=%.2f%%, Beta=%.2f, Rm-Rf=%.2f%%) |\n", ke*100, rim.Rf*100, rim.Beta, rim.RmRf*100))
+		b.WriteString(fmt.Sprintf("| **永续增长率** | g | %.1f%% | 稳态假设 |\n", gTerminal*100))
 		if currentPrice > 0 {
-			b.WriteString(fmt.Sprintf("| <span style=\"white-space:nowrap;\">**当前股价**</span> | P&nbsp;&nbsp; | %.2f元 | 实时行情 |\n", currentPrice))
+			b.WriteString(fmt.Sprintf("| **当前股价** | P | %.2f元 | 实时行情 |\n", currentPrice))
 		} else {
-			b.WriteString("| <span style=\"white-space:nowrap;\">**当前股价**</span> | P&nbsp;&nbsp; | - | 待接入实时行情 |\n")
+			b.WriteString("| **当前股价** | P | - | 待接入实时行情 |\n")
 		}
 		// 显示预测期 EPS
 		if len(rim.Result.Details) > 0 {
@@ -830,13 +837,13 @@ func writeModule6(b *strings.Builder, steps []StepResult, latest string, quote *
 				}
 				epsLine += fmt.Sprintf("%s %.2f", yearLabel, d.EPS)
 			}
-			b.WriteString(fmt.Sprintf("| <span style=\"white-space:nowrap;\">**预测期 EPS**</span> | -&nbsp; | %s | 机构一致预期 |\n", epsLine))
+			b.WriteString(fmt.Sprintf("| **预测期 EPS** | - | %s | 机构一致预期 |\n", epsLine))
 		}
 	} else {
-		b.WriteString("| <span style=\"white-space:nowrap;\">**每股净资产**</span> | BPS&nbsp; | 待计算 | 需接入实时行情与财报 |\n")
-		b.WriteString("| <span style=\"white-space:nowrap;\">**资本成本**</span> | kE&nbsp; | 7.0% | 假设值 |\n")
-		b.WriteString("| <span style=\"white-space:nowrap;\">**永续增长率**</span> | g&nbsp;&nbsp; | 3.0% | 假设值 |\n")
-		b.WriteString("| <span style=\"white-space:nowrap;\">**当前股价**</span> | P&nbsp;&nbsp; | - | 待接入实时行情 |\n")
+		b.WriteString("| **每股净资产** | BPS | 待计算 | 需接入实时行情与财报 |\n")
+		b.WriteString("| **资本成本** | kE | 7.0% | 假设值 |\n")
+		b.WriteString("| **永续增长率** | g | 3.0% | 假设值 |\n")
+		b.WriteString("| **当前股价** | P | - | 待接入实时行情 |\n")
 	}
 	b.WriteString("\n")
 
@@ -1024,7 +1031,7 @@ func writeModule7(b *strings.Builder, quote *QuoteData, technical *TechnicalData
 		b.WriteString(fmt.Sprintf("> **综合结论**: %s\n\n", technical.Comment))
 
 		b.WriteString("### 技术指标联动分析图（K线+成交量+MACD+RSI+布林带）\n\n")
-		b.WriteString("<div class=\"chart-unified\"></div>\n\n")
+		b.WriteString("*（前端交互图表，导出后请在前端查看）*\n\n")
 	}
 
 	if activity != nil && activity.Score > 0 && activity.PotentialHint != "" {
@@ -2343,28 +2350,18 @@ func fmtVal(v float64, unit string) string {
 	return fmt.Sprintf("%.3f", v)
 }
 
+// infoTooltipHTML 已废弃，不再在 Markdown 中输出 HTML（前端交互组件）
 func infoTooltipHTML(title, body string) string {
-	return fmt.Sprintf(`<span class="inline-tooltip"><span class="inline-tooltip-trigger">ℹ️</span><span class="inline-tooltip-body"><strong>%s</strong><br/>%s</span></span>`, title, body)
+	return ""
 }
 
 func infoIcon(title, body string) string {
-	return infoTooltipHTML(title, body)
+	return ""
 }
 
+// traceTrigger 溯源问号图标（前端交互用，导出 Markdown 时不需要）
 func traceTrigger(stepNums ...int) string {
-	if len(stepNums) == 0 {
-		return ""
-	}
-	var sb strings.Builder
-	sb.WriteString(` <span class="trace-trigger" data-steps="`)
-	for i, n := range stepNums {
-		if i > 0 {
-			sb.WriteString(",")
-		}
-		sb.WriteString(fmt.Sprintf("%d", n))
-	}
-	sb.WriteString(`">❓</span>`)
-	return sb.String()
+	return ""
 }
 
 func yoyFmt(cur, prev float64) string {
@@ -2770,23 +2767,7 @@ func ExtractHighlightsAndRisks(steps []StepResult, years []string) HighlightRisk
 	return HighlightRisk{Highlights: highlights, Risks: risks}
 }
 
-// aScoreTooltip 返回 A-Score 指标说明的 Markdown 折叠块
-func aScoreTooltip() string {
-	return `<details>
-<summary>ℹ️ A-Score 是什么？</summary>
 
-**A-Score（0-100分）综合评估企业财务风险，分数越高，潜在隐患越大。**
-
-基于公开财务报表与监管信息，从六个维度打分：**财务造假风险、偿债能力、现金流质量、应收账款健康度、盈利稳定性**，以及**股权质押/减持/监管问询**等非财务信号。其中财务维度适用于 A 股与港股，非财务信号目前主要覆盖 A 股。
-
-**评判标准**：< 40分安全，40-60分低风险，60-70分中风险（需深入核查），≥ 70分高危（建议回避）。
-
-**核心价值**：在财报暴雷前发现财务隐患，快速筛掉有明显问题的公司。
-
-</details>
-
-`
-}
 
 // writeDataQualityWarnings 在报告中显示数据质量警告
 func writeDataQualityWarnings(b *strings.Builder, warnings []string) {
@@ -2805,7 +2786,6 @@ func writeDataQualityWarnings(b *strings.Builder, warnings []string) {
 		}
 	}
 
-	b.WriteString("<div style=\"border-left: 4px solid #f59e0b; padding: 12px 16px; margin: 16px 0; background: #fef3c708; border-radius: 6px;\">\n\n")
 	b.WriteString("## ⚠️ 数据质量提示\n\n")
 	b.WriteString("> 财务数据来自东方财富 API（免费数据源），部分科目存在精度/舍入差异，属第三方数据源限制，非分析模型错误。\n\n")
 

@@ -1192,6 +1192,7 @@ export namespace main {
 	    has_data: boolean;
 	    summary: string;
 	    days: number;
+	    today_item?: StockMoneyflowItem;
 	
 	    static createFrom(source: any = {}) {
 	        return new StockMoneyflowResult(source);
@@ -1204,6 +1205,7 @@ export namespace main {
 	        this.has_data = source["has_data"];
 	        this.summary = source["summary"];
 	        this.days = source["days"];
+	        this.today_item = this.convertValues(source["today_item"], StockMoneyflowItem);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -1322,6 +1324,37 @@ export namespace main {
 	        this.code = source["code"];
 	        this.name = source["name"];
 	        this.market = source["market"];
+	    }
+	}
+
+}
+
+export namespace updater {
+	
+	export class UpdateInfo {
+	    hasUpdate: boolean;
+	    currentVer: string;
+	    latestVer: string;
+	    releaseName: string;
+	    releaseNote: string;
+	    publishedAt: string;
+	    assetURL: string;
+	    htmlURL: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new UpdateInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.hasUpdate = source["hasUpdate"];
+	        this.currentVer = source["currentVer"];
+	        this.latestVer = source["latestVer"];
+	        this.releaseName = source["releaseName"];
+	        this.releaseNote = source["releaseNote"];
+	        this.publishedAt = source["publishedAt"];
+	        this.assetURL = source["assetURL"];
+	        this.htmlURL = source["htmlURL"];
 	    }
 	}
 
