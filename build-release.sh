@@ -28,6 +28,10 @@ echo "Building release packages for version: $VERSION"
 
 export PATH=$PATH:/usr/local/go/bin
 
+# 强制重新构建前端 dist，防止 Wails 跳过前端构建导致版本号不一致
+echo "Rebuilding frontend dist..."
+cd frontend && npm run build && cd ..
+
 build_mac() {
   echo "Building macOS universal binary..."
   /Users/lobster/go/bin/wails build -platform darwin/universal -clean
@@ -68,7 +72,7 @@ build_windows() {
   echo "Building Windows amd64 binary..."
   # Windows 构建需要 CGO 来支持 WebView2，但交叉编译时可能有限制
   # 使用默认设置，让 Wails 自动处理
-  /Users/lobster/go/bin/wails build -platform windows/amd64
+  /Users/lobster/go/bin/wails build -platform windows/amd64 -clean
   
   # 复制 ml_models 和 scripts 到构建目录（Windows 需要这些文件）
   echo "Copying ml_models and scripts to build directory..."

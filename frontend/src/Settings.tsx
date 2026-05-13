@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import './Settings.css'
 import { GetSFLConfig, SaveSFLConfig, VerifySFLToken, CheckForUpdate, SetAutoCheckUpdate } from '../wailsjs/go/main/App'
 import type { main } from '../wailsjs/go/models'
+import { UpdateModal } from './UpdateModal'
 
 export interface AppSettings {
   theme: 'dark' | 'light' | 'system'
@@ -110,6 +111,8 @@ export function Settings({
   // 检查更新状态
   const [updateChecking, setUpdateChecking] = useState(false)
   const [updateCheckResult, setUpdateCheckResult] = useState<{type: 'success' | 'info' | 'error' | null, message: string}>({type: null, message: ''})
+  const [showUpdateModal, setShowUpdateModal] = useState(false)
+  const [foundUpdateInfo, setFoundUpdateInfo] = useState<any>(null)
 
   // 加载数据源配置
   useEffect(() => {
@@ -175,7 +178,7 @@ export function Settings({
     saveSettings(newSettings)
   }
 
-  const version = '1.3.36'
+  const version = '1.3.35'
 
   const handleCheckUpdate = useCallback(async () => {
     setUpdateChecking(true)
@@ -184,6 +187,8 @@ export function Settings({
       const info = await CheckForUpdate()
       if (info.hasUpdate) {
         setUpdateCheckResult({type: 'info', message: `发现新版本 ${info.latestVer}`})
+        setFoundUpdateInfo(info)
+        setShowUpdateModal(true)
       } else {
         setUpdateCheckResult({type: 'success', message: '当前已是最新版本'})
       }
@@ -204,6 +209,12 @@ export function Settings({
       >
         ⚙️
       </button>
+
+      <UpdateModal
+        isOpen={showUpdateModal}
+        info={foundUpdateInfo}
+        onClose={() => setShowUpdateModal(false)}
+      />
 
       {isOpen && (
         <div ref={dropdownRef} className="settings-dropdown">

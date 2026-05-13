@@ -148,6 +148,16 @@ function Build-Project {
     Write-Info "构建 Windows 版本 $wailsVersion ($Platform)..."
     Install-FrontendDeps
     
+    # 强制重新构建前端 dist，防止 Wails 跳过前端构建导致版本号不一致
+    Write-Info "Rebuilding frontend dist..."
+    Set-Location $FrontendDir
+    npm run build
+    if (-not $?) {
+        Write-Error "前端构建失败"
+        exit 1
+    }
+    Set-Location $ProjectRoot
+    
     New-Item -ItemType Directory -Force -Path $BinDir | Out-Null
     
     $env:CGO_ENABLED = "1"

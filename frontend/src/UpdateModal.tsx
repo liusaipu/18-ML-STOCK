@@ -31,6 +31,7 @@ export function UpdateModal({ isOpen, info, onClose }: UpdateModalProps) {
   const [downloadError, setDownloadError] = useState('')
   const [downloadedPath, setDownloadedPath] = useState('')
   const [applying, setApplying] = useState(false)
+  const [macOSInstallOpened, setMacOSInstallOpened] = useState(false)
 
   useEffect(() => {
     if (!downloading) return
@@ -49,6 +50,7 @@ export function UpdateModal({ isOpen, info, onClose }: UpdateModalProps) {
     setDownloadError('')
     setDownloadedPath('')
     setApplying(false)
+    setMacOSInstallOpened(false)
   }, [])
 
   useEffect(() => {
@@ -81,7 +83,8 @@ export function UpdateModal({ isOpen, info, onClose }: UpdateModalProps) {
       await ApplyUpdate(downloadedPath)
       // Windows 上会 os.Exit(0)，不会执行到这里
       // macOS 上 ApplyUpdate 只是 open dmg，返回成功
-      // 如果是 macOS，提示用户
+      setApplying(false)
+      setMacOSInstallOpened(true)
     } catch (e: any) {
       setDownloadError('安装失败: ' + (e?.message || String(e)))
       setApplying(false)
@@ -184,7 +187,7 @@ export function UpdateModal({ isOpen, info, onClose }: UpdateModalProps) {
           </div>
         )}
 
-        {downloadedPath && !downloadError && !applying && (
+        {downloadedPath && !downloadError && !applying && !macOSInstallOpened && (
           <div style={{
             background: 'rgba(74,222,128,0.1)',
             borderRadius: 8,
@@ -197,8 +200,21 @@ export function UpdateModal({ isOpen, info, onClose }: UpdateModalProps) {
           </div>
         )}
 
+        {macOSInstallOpened && (
+          <div style={{
+            background: 'rgba(74,222,128,0.1)',
+            borderRadius: 8,
+            padding: 12,
+            marginBottom: 16,
+            fontSize: 13,
+            color: '#4ade80',
+          }}>
+            ✅ 已打开 DMG 安装包，请拖拽到 Applications 文件夹覆盖旧版本
+          </div>
+        )}
+
         <div className="modal-actions">
-          {!downloading && !applying && !downloadedPath && (
+          {!downloading && !applying && !downloadedPath && !macOSInstallOpened && (
             <>
               <button className="btn btn-secondary" onClick={onClose}>
                 稍后提醒
@@ -212,7 +228,7 @@ export function UpdateModal({ isOpen, info, onClose }: UpdateModalProps) {
             </>
           )}
 
-          {downloadedPath && !downloadError && !applying && (
+          {downloadedPath && !downloadError && !applying && !macOSInstallOpened && (
             <>
               <button className="btn btn-secondary" onClick={onClose}>
                 稍后重启
@@ -221,6 +237,12 @@ export function UpdateModal({ isOpen, info, onClose }: UpdateModalProps) {
                 重启应用
               </button>
             </>
+          )}
+
+          {macOSInstallOpened && (
+            <button className="btn btn-secondary" onClick={onClose}>
+              关闭
+            </button>
           )}
 
           {(downloading || applying) && (
