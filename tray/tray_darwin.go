@@ -8,6 +8,11 @@ package tray
 #include <stdlib.h>
 void setupTrayIcon(const char* iconPath, const char* tooltip);
 void updateTrayTitle(const char* title, double changePercent);
+void setTrayQuotes(const char* json);
+void setTrayScrollEnabled(int enabled);
+void setTrayIconVisible(int visible);
+int isTrayScrollEnabled();
+int isTrayIconVisible();
 */
 import "C"
 import (
@@ -67,6 +72,44 @@ func updateTrayTitle(title string, changePercent float64) {
 	cTitle := C.CString(title)
 	defer C.free(unsafe.Pointer(cTitle))
 	C.updateTrayTitle(cTitle, C.double(changePercent))
+}
+
+// setTrayQuotesJSON 平台特定实现：设置滚动显示的股票数据
+func setTrayQuotesJSON(json string) {
+	cJSON := C.CString(json)
+	defer C.free(unsafe.Pointer(cJSON))
+	C.setTrayQuotes(cJSON)
+}
+
+func setTrayScrollEnabled(enabled bool) {
+	if enabled {
+		C.setTrayScrollEnabled(1)
+	} else {
+		C.setTrayScrollEnabled(0)
+	}
+}
+
+func setTrayIconVisible(visible bool) {
+	if visible {
+		C.setTrayIconVisible(1)
+	} else {
+		C.setTrayIconVisible(0)
+	}
+}
+
+func isTrayScrollEnabled() bool {
+	return C.isTrayScrollEnabled() != 0
+}
+
+func isTrayIconVisible() bool {
+	return C.isTrayIconVisible() != 0
+}
+
+//export trayMenuStateChanged
+func trayMenuStateChanged(scrollEnabled C.int, iconVisible C.int) {
+	if menuStateChangeCallback != nil {
+		menuStateChangeCallback(scrollEnabled != 0, iconVisible != 0)
+	}
 }
 
 func quitTray() {

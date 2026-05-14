@@ -2629,28 +2629,28 @@ function App() {
                           textAlign: 'right',
                           whiteSpace: 'nowrap',
                         }}>
-                          {item.elg_net_amount > 0 ? '+' : ''}{(item.elg_net_amount/10000).toFixed(2)}
+                          {item.elg_net_amount > 0 ? '+' : ''}{(item.elg_net_amount/1e8).toFixed(2)}
                         </span>
                         <span style={{
                           color: item.lg_net_amount > 0 ? '#ef4444' : item.lg_net_amount < 0 ? '#22c55e' : '#94a3b8',
                           textAlign: 'right',
                           whiteSpace: 'nowrap',
                         }}>
-                          {item.lg_net_amount > 0 ? '+' : ''}{(item.lg_net_amount/10000).toFixed(2)}
+                          {item.lg_net_amount > 0 ? '+' : ''}{(item.lg_net_amount/1e8).toFixed(2)}
                         </span>
                         <span style={{
                           color: item.md_net_amount > 0 ? '#ef4444' : item.md_net_amount < 0 ? '#22c55e' : '#94a3b8',
                           textAlign: 'right',
                           whiteSpace: 'nowrap',
                         }}>
-                          {item.md_net_amount > 0 ? '+' : ''}{(item.md_net_amount/10000).toFixed(2)}
+                          {item.md_net_amount > 0 ? '+' : ''}{(item.md_net_amount/1e8).toFixed(2)}
                         </span>
                         <span style={{
                           color: item.sm_net_amount > 0 ? '#ef4444' : item.sm_net_amount < 0 ? '#22c55e' : '#94a3b8',
                           textAlign: 'right',
                           whiteSpace: 'nowrap',
                         }}>
-                          {item.sm_net_amount > 0 ? '+' : ''}{(item.sm_net_amount/10000).toFixed(2)}
+                          {item.sm_net_amount > 0 ? '+' : ''}{(item.sm_net_amount/1e8).toFixed(2)}
                         </span>
                       </div>
                     ))}
@@ -2725,32 +2725,32 @@ function App() {
                                 color: moneyflow.today_item.elg_net_amount > 0 ? '#ef4444' : moneyflow.today_item.elg_net_amount < 0 ? '#22c55e' : '#94a3b8',
                                 textAlign: 'right', whiteSpace: 'nowrap',
                               }}>
-                                {moneyflow.today_item.elg_net_amount > 0 ? '+' : ''}{(moneyflow.today_item.elg_net_amount/10000).toFixed(2)}
+                                {moneyflow.today_item.elg_net_amount > 0 ? '+' : ''}{(moneyflow.today_item.elg_net_amount/1e8).toFixed(2)}
                               </span>
                               <span style={{
                                 color: moneyflow.today_item.lg_net_amount > 0 ? '#ef4444' : moneyflow.today_item.lg_net_amount < 0 ? '#22c55e' : '#94a3b8',
                                 textAlign: 'right', whiteSpace: 'nowrap',
                               }}>
-                                {moneyflow.today_item.lg_net_amount > 0 ? '+' : ''}{(moneyflow.today_item.lg_net_amount/10000).toFixed(2)}
+                                {moneyflow.today_item.lg_net_amount > 0 ? '+' : ''}{(moneyflow.today_item.lg_net_amount/1e8).toFixed(2)}
                               </span>
                               <span style={{
                                 color: moneyflow.today_item.md_net_amount > 0 ? '#ef4444' : moneyflow.today_item.md_net_amount < 0 ? '#22c55e' : '#94a3b8',
                                 textAlign: 'right', whiteSpace: 'nowrap',
                               }}>
-                                {moneyflow.today_item.md_net_amount > 0 ? '+' : ''}{(moneyflow.today_item.md_net_amount/10000).toFixed(2)}
+                                {moneyflow.today_item.md_net_amount > 0 ? '+' : ''}{(moneyflow.today_item.md_net_amount/1e8).toFixed(2)}
                               </span>
                               <span style={{
                                 color: moneyflow.today_item.sm_net_amount > 0 ? '#ef4444' : moneyflow.today_item.sm_net_amount < 0 ? '#22c55e' : '#94a3b8',
                                 textAlign: 'right', whiteSpace: 'nowrap',
                               }}>
-                                {moneyflow.today_item.sm_net_amount > 0 ? '+' : ''}{(moneyflow.today_item.sm_net_amount/10000).toFixed(2)}
+                                {moneyflow.today_item.sm_net_amount > 0 ? '+' : ''}{(moneyflow.today_item.sm_net_amount/1e8).toFixed(2)}
                               </span>
                             </div>
                             {moneyflow.today_item.main_inflow !== 0 && (
                               <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>
                                 主力净流入{' '}
                                 <span style={{ color: moneyflow.today_item.main_inflow > 0 ? '#ef4444' : '#22c55e' }}>
-                                  {moneyflow.today_item.main_inflow > 0 ? '+' : ''}{(moneyflow.today_item.main_inflow/10000).toFixed(2)} 亿元
+                                  {moneyflow.today_item.main_inflow > 0 ? '+' : ''}{(moneyflow.today_item.main_inflow/1e8).toFixed(2)} 亿元
                                 </span>
                               </div>
                             )}
@@ -3395,16 +3395,16 @@ function App() {
                                 <div>换手: {quickAnalysisData.turnover_rate > 0 ? quickAnalysisData.turnover_rate.toFixed(2) + '%' : '--'} · 量比: {quickAnalysisData.volume_ratio > 0 ? quickAnalysisData.volume_ratio.toFixed(2) : '--'}</div>
                                 {quickAnalysisData.has_moneyflow_data ? (
                                   <>
-                                    <div style={{ fontWeight: 600 }}>主力净流入: <span style={{ color: quickAnalysisData.main_inflow > 0 ? '#ef4444' : quickAnalysisData.main_inflow < 0 ? '#22c55e' : '#94a3b8' }}>{quickAnalysisData.main_inflow > 0 ? '+' : ''}{quickAnalysisData.main_inflow.toFixed(0)}万元</span></div>
+                                    <div style={{ fontWeight: 600 }}>主力净流入: <span style={{ color: quickAnalysisData.main_inflow > 0 ? '#ef4444' : quickAnalysisData.main_inflow < 0 ? '#22c55e' : '#94a3b8' }}>{quickAnalysisData.main_inflow > 0 ? '+' : ''}{formatTraceValue(quickAnalysisData.main_inflow)}</span></div>
                                     <div style={{ fontSize: 10, color: '#64748b', display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                                      <span>超大单: <span style={{ color: quickAnalysisData.elg_net_amount > 0 ? '#ef4444' : '#22c55e' }}>{quickAnalysisData.elg_net_amount > 0 ? '+' : ''}{quickAnalysisData.elg_net_amount.toFixed(0)}万元</span></span>
-                                      <span>大单: <span style={{ color: quickAnalysisData.lg_net_amount > 0 ? '#ef4444' : '#22c55e' }}>{quickAnalysisData.lg_net_amount > 0 ? '+' : ''}{quickAnalysisData.lg_net_amount.toFixed(0)}万元</span></span>
-                                      <span>中单: <span style={{ color: quickAnalysisData.md_net_amount > 0 ? '#ef4444' : '#22c55e' }}>{quickAnalysisData.md_net_amount > 0 ? '+' : ''}{quickAnalysisData.md_net_amount.toFixed(0)}万元</span></span>
-                                      <span>小单: <span style={{ color: quickAnalysisData.sm_net_amount > 0 ? '#ef4444' : '#22c55e' }}>{quickAnalysisData.sm_net_amount > 0 ? '+' : ''}{quickAnalysisData.sm_net_amount.toFixed(0)}万元</span></span>
+                                      <span>超大单: <span style={{ color: quickAnalysisData.elg_net_amount > 0 ? '#ef4444' : '#22c55e' }}>{quickAnalysisData.elg_net_amount > 0 ? '+' : ''}{formatTraceValue(quickAnalysisData.elg_net_amount)}</span></span>
+                                      <span>大单: <span style={{ color: quickAnalysisData.lg_net_amount > 0 ? '#ef4444' : '#22c55e' }}>{quickAnalysisData.lg_net_amount > 0 ? '+' : ''}{formatTraceValue(quickAnalysisData.lg_net_amount)}</span></span>
+                                      <span>中单: <span style={{ color: quickAnalysisData.md_net_amount > 0 ? '#ef4444' : '#22c55e' }}>{quickAnalysisData.md_net_amount > 0 ? '+' : ''}{formatTraceValue(quickAnalysisData.md_net_amount)}</span></span>
+                                      <span>小单: <span style={{ color: quickAnalysisData.sm_net_amount > 0 ? '#ef4444' : '#22c55e' }}>{quickAnalysisData.sm_net_amount > 0 ? '+' : ''}{formatTraceValue(quickAnalysisData.sm_net_amount)}</span></span>
                                     </div>
                                   </>
                                 ) : (
-                                  <div>主力净流入: {quickAnalysisData.main_inflow > 0 ? (quickAnalysisData.main_inflow/10000).toFixed(2) + '亿元' : '--'}<span style={{ fontSize: 10, color: '#94a3b8', marginLeft: 4 }}>(估算)</span></div>
+                                  <div>主力净流入: {quickAnalysisData.main_inflow > 0 ? (quickAnalysisData.main_inflow/1e8).toFixed(2) + '亿元' : '--'}<span style={{ fontSize: 10, color: '#94a3b8', marginLeft: 4 }}>(估算)</span></div>
                                 )}
                               </div>
                             </div>

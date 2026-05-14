@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
 后台全市场行业数据采集脚本（fallback 数据源）
 使用 akshare 的 stock_yjbb_em 接口获取 A 股业绩快报（年报/三季报）

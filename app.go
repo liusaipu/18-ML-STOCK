@@ -1,6 +1,7 @@
 package main
 
 import (
+	_ "embed"
 	"archive/zip"
 	"context"
 	"encoding/base64"
@@ -22,6 +23,7 @@ import (
 	"github.com/liusaipu/stockfinlens/updater"
 
 	toast "git.sr.ht/~jackmordaunt/go-toast/v2"
+	"github.com/wailsapp/wails/v2/pkg/menu"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 	"github.com/xuri/excelize/v2"
 )
@@ -63,6 +65,22 @@ type App struct {
 	riskSensitivity string                 // 风险警示敏感度
 	appConfig       *AppConfig             // 应用配置（自动更新等）
 	currentVersion  string                 // 当前版本号
+
+	// tray 滚动显示
+	trayQuotes []trayQuoteItem // 缓存的自选股价格数据
+	trayMu     sync.Mutex      // tray 数据锁
+
+	// 应用菜单项引用（用于动态更新标题）
+	appMenuScrollItem *menu.MenuItem
+	appMenuIconItem   *menu.MenuItem
+}
+
+// trayQuoteItem tray 滚动显示用的股票数据
+type trayQuoteItem struct {
+	Name          string
+	Code          string
+	CurrentPrice  float64
+	ChangePercent float64
 }
 
 // StockInfo 股票基础信息
@@ -156,7 +174,68 @@ func (a *App) startup(ctx context.Context) {
 
 	// 启动 tray 股价轮询（每 30 秒更新一次自选股首只价格）
 	go a.startTrayQuoteUpdater()
+
+	// 设置 macOS 应用菜单（顶部菜单栏）
+	a.setupApplicationMenu()
+
+	// 注册 tray 状态变更回调，用于控制左侧「显示」菜单项的可用状态
+	tray.SetMenuStateChangeCallback(func(scrollEnabled, iconVisible bool) {
+		if a.appMenuScrollItem != nil {
+			if iconVisible {
+				a.appMenuScrollItem.Enable()
+			} else {
+				a.appMenuScrollItem.Disable()
+			}
+		}
+	})
 }
+
+// setupApplicationMenu 设置 macOS 顶部应用菜单
+func (a *App) setupApplicationMenu() {
+	appMenu := menu.NewMenu()
+
+	// macOS 应用标准菜单（About, Hide, Quit 等）
+	appMenu.Append(menu.AppMenu())
+
+	// 显示菜单
+	displayMenu := appMenu.AddSubmenu("显示")
+
+	a.appMenuScrollItem = menu.Text("显示/关闭 滚动字幕", nil, func(cd *menu.CallbackData) {
+		enabled := !tray.IsScrollEnabled()
+		tray.SetScrollEnabled(enabled)
+	})
+	displayMenu.Append(a.appMenuScrollItem)
+
+	a.appMenuIconItem = menu.Text("显示/隐藏 菜单图标", nil, func(cd *menu.CallbackData) {
+		visible := !tray.IsIconVisible()
+		tray.SetIconVisible(visible)
+	})
+	displayMenu.Append(a.appMenuIconItem)
+
+	// 如果 tray 图标当前隐藏，禁用滚动字幕选项（无图标则无滚动意义）
+	if !tray.IsIconVisible() {
+		a.appMenuScrollItem.Disable()
+	}
+
+	// 窗口菜单
+	windowItem := menu.WindowMenu()
+	windowItem.Label = "窗口"
+	appMenu.Append(windowItem)
+
+	// 关于菜单
+	aboutMenu := appMenu.AddSubmenu("关于")
+	aboutMenu.Append(menu.Text("关于 StockFinLens", nil, func(cd *menu.CallbackData) {
+		runtime.MessageDialog(a.ctx, runtime.MessageDialogOptions{
+			Type:    runtime.InfoDialog,
+			Title:   "关于 StockFinLens",
+			Message: "版本 " + a.currentVersion,
+		})
+	}))
+
+	runtime.MenuSetApplicationMenu(a.ctx, appMenu)
+}
+
+
 
 // loadStockDB 从嵌入的资源或数据目录加载股票列表
 func (a *App) loadStockDB() error {
@@ -167,16 +246,12 @@ func (a *App) loadStockDB() error {
 	return json.Unmarshal(bytes, &a.stocks)
 }
 
+//go:embed wails.json
+var wailsJSONBytes []byte
+
 // readWailsVersion 读取 wails.json 中的 productVersion
 func readWailsVersion() string {
-	data, err := os.ReadFile("wails.json")
-	if err != nil {
-		// 打包后尝试从可执行文件同级目录读取
-		if exe, err := os.Executable(); err == nil {
-			data, _ = os.ReadFile(filepath.Join(filepath.Dir(exe), "wails.json"))
-		}
-	}
-	if len(data) == 0 {
+	if len(wailsJSONBytes) == 0 {
 		return "unknown"
 	}
 	var cfg struct {
@@ -184,7 +259,7 @@ func readWailsVersion() string {
 			ProductVersion string `json:"productVersion"`
 		} `json:"info"`
 	}
-	if err := json.Unmarshal(data, &cfg); err != nil {
+	if err := json.Unmarshal(wailsJSONBytes, &cfg); err != nil {
 		return "unknown"
 	}
 	return cfg.Info.ProductVersion
@@ -217,82 +292,105 @@ func (a *App) checkUpdateOnStartup() {
 	}
 }
 
-// startTrayQuoteUpdater 后台轮询自选股首只价格并更新 macOS tray
+// startTrayQuoteUpdater 后台轮询自选股价格并更新 macOS tray
+// 每 30 秒刷新一次所有自选股的价格，推送到 tray 进行滚动字幕显示
 func (a *App) startTrayQuoteUpdater() {
 	// 稍等启动完成
 	time.Sleep(3 * time.Second)
 
-	ticker := time.NewTicker(30 * time.Second)
-	defer ticker.Stop()
+	// 立即刷新一次
+	a.refreshTrayQuotes()
 
-	// 立即执行一次
-	a.updateTrayQuote()
+	// 价格刷新 ticker：每 30 秒
+	refreshTicker := time.NewTicker(30 * time.Second)
+	defer refreshTicker.Stop()
 
 	for {
 		select {
-		case <-ticker.C:
-			a.updateTrayQuote()
+		case <-refreshTicker.C:
+			a.refreshTrayQuotes()
 		case <-a.ctx.Done():
 			return
 		}
 	}
 }
 
-// updateTrayQuote 获取自选股首只价格并更新 tray
-func (a *App) updateTrayQuote() {
+// refreshTrayQuotes 并发获取所有自选股的实时价格并缓存
+func (a *App) refreshTrayQuotes() {
 	if a.storage == nil {
+		a.trayMu.Lock()
+		a.trayQuotes = nil
+		a.trayMu.Unlock()
 		tray.UpdateTitle("SFL", 0)
 		return
 	}
 
 	watchlist, err := a.storage.LoadWatchlist()
 	if err != nil || len(watchlist) == 0 {
+		a.trayMu.Lock()
+		a.trayQuotes = nil
+		a.trayMu.Unlock()
 		tray.UpdateTitle("SFL", 0)
 		return
 	}
 
-	// 取首只自选股
-	item := watchlist[0]
-	market := item.Market
-	if market == "" {
-		market = "SZ"
-	}
-	symbol := item.Code + "." + market
+	items := make([]trayQuoteItem, len(watchlist))
+	var wg sync.WaitGroup
 
-	quote, err := a.GetStockQuote(symbol)
-	if err != nil || quote == nil || quote.CurrentPrice <= 0 {
-		// 获取失败时显示名称或代码
-		name := item.Name
-		if name == "" {
-			name = item.Code
-		}
-		tray.UpdateTitle(name, 0)
-		return
+	for i, w := range watchlist {
+		wg.Add(1)
+		go func(idx int, item WatchlistItem) {
+			defer wg.Done()
+			market := item.Market
+			if market == "" {
+				market = "SZ"
+			}
+			symbol := item.Code
+			if !strings.Contains(item.Code, ".") {
+				symbol = item.Code + "." + market
+			}
+			quote, err := a.GetStockQuote(symbol)
+			name := item.Name
+			if name == "" {
+				name = item.Code
+			}
+			runes := []rune(name)
+			if len(runes) > 4 {
+				name = string(runes[:4])
+			}
+			if err != nil || quote == nil || quote.CurrentPrice <= 0 {
+				price := 0.0
+				if quote != nil {
+					price = quote.CurrentPrice
+				}
+				debugLog("[refreshTrayQuotes] %s fetch failed or no price: err=%v price=%.2f", symbol, err, price)
+				items[idx] = trayQuoteItem{
+					Name: name,
+					Code: item.Code,
+				}
+				return
+			}
+			debugLog("[refreshTrayQuotes] %s fetched price=%.2f change=%.2f%%", symbol, quote.CurrentPrice, quote.ChangePercent)
+			items[idx] = trayQuoteItem{
+				Name:          name,
+				Code:          item.Code,
+				CurrentPrice:  quote.CurrentPrice,
+				ChangePercent: quote.ChangePercent,
+			}
+		}(i, w)
 	}
 
-	// 格式化显示：代码 价格 涨跌幅（menu bar 空间有限，尽量精简）
-	changeStr := ""
-	if quote.ChangePercent > 0 {
-		changeStr = fmt.Sprintf(" +%.2f%%", quote.ChangePercent)
-	} else if quote.ChangePercent < 0 {
-		changeStr = fmt.Sprintf(" %.2f%%", quote.ChangePercent)
-	} else {
-		changeStr = " 0.00%"
-	}
+	wg.Wait()
 
-	name := item.Name
-	if name == "" {
-		name = item.Code
-	}
+	a.trayMu.Lock()
+	a.trayQuotes = items
+	a.trayMu.Unlock()
 
-	// 截断名称以节省空间（最多4个汉字）
-	runes := []rune(name)
-	if len(runes) > 4 {
-		name = string(runes[:4])
+	// 序列化为 JSON 推送到 tray（macOS Objective-C 端处理滚动动画）
+	jsonData, err := json.Marshal(items)
+	if err == nil {
+		tray.SetQuotesJSON(string(jsonData))
 	}
-
-	title := fmt.Sprintf("%s ¥%.2f%s", name, quote.CurrentPrice, changeStr)
-	tray.UpdateTitle(title, quote.ChangePercent)
 }
 
 // fallbackIndustryScriptPath 返回 fetch_all_industry_data.py 绝对路径
@@ -362,9 +460,9 @@ func (a *App) startBackgroundIndustryUpdate() {
 		return
 	}
 
-	python := "python"
-	if _, err := exec.LookPath("python"); err != nil {
-		python = "python3"
+	python := "python3"
+	if _, err := exec.LookPath("python3"); err != nil {
+		python = "python"
 	}
 
 	fmt.Printf("启动后台行业数据采集: %s\n", script)
@@ -1929,13 +2027,13 @@ func (a *App) analyzeStockInternal(symbol string, overwriteLatest bool, customRI
 						}
 						dayCount := len(mfItems)
 						if inflowDays == dayCount {
-							moneyflowData.Summary = fmt.Sprintf("近%d日主力持续流入，累计 %.2f 亿元", dayCount, totalMain/10000)
+							moneyflowData.Summary = fmt.Sprintf("近%d日主力持续流入，累计 %.2f 亿元", dayCount, totalMain/1e8)
 						} else if inflowDays == 0 {
-							moneyflowData.Summary = fmt.Sprintf("近%d日主力持续流出，累计 %.2f 亿元", dayCount, totalMain/10000)
+							moneyflowData.Summary = fmt.Sprintf("近%d日主力持续流出，累计 %.2f 亿元", dayCount, totalMain/1e8)
 						} else if totalMain > 0 {
-							moneyflowData.Summary = fmt.Sprintf("近%d日主力%d日流入，累计净流入 %.2f 亿元", dayCount, inflowDays, totalMain/10000)
+							moneyflowData.Summary = fmt.Sprintf("近%d日主力%d日流入，累计净流入 %.2f 亿元", dayCount, inflowDays, totalMain/1e8)
 						} else {
-							moneyflowData.Summary = fmt.Sprintf("近%d日主力%d日流入，累计净流出 %.2f 亿元", dayCount, inflowDays, -totalMain/10000)
+							moneyflowData.Summary = fmt.Sprintf("近%d日主力%d日流入，累计净流出 %.2f 亿元", dayCount, inflowDays, -totalMain/1e8)
 						}
 					}
 				}
@@ -3677,10 +3775,10 @@ type StockMoneyflowResult struct {
 // 当主力流出、散户流入时，用"散户接盘"表述，更直观
 func retailSummary(totalRetail float64) string {
 	if totalRetail > 0 {
-		return fmt.Sprintf("散户接盘 %.2f 亿元", totalRetail/10000)
+		return fmt.Sprintf("散户接盘 %.2f 亿元", totalRetail/1e8)
 	}
 	if totalRetail < 0 {
-		return fmt.Sprintf("散户净流出 %.2f 亿元", -totalRetail/10000)
+		return fmt.Sprintf("散户净流出 %.2f 亿元", -totalRetail/1e8)
 	}
 	return "散户无进出"
 }
@@ -3766,13 +3864,13 @@ func (a *App) GetStockMoneyflow(symbol string, days int) (*StockMoneyflowResult,
 	if dayCount == 0 {
 		result.Summary = ""
 	} else if inflowDays == dayCount {
-		result.Summary = fmt.Sprintf("主力持续流入 %.2f 亿元；%s", totalMain/10000, retailText)
+		result.Summary = fmt.Sprintf("主力持续流入 %.2f 亿元；%s", totalMain/1e8, retailText)
 	} else if inflowDays == 0 {
-		result.Summary = fmt.Sprintf("主力持续流出 %.2f 亿元；%s", -totalMain/10000, retailText)
+		result.Summary = fmt.Sprintf("主力持续流出 %.2f 亿元；%s", -totalMain/1e8, retailText)
 	} else if totalMain > 0 {
-		result.Summary = fmt.Sprintf("主力%d日流入，累计净流入 %.2f 亿元；%s", inflowDays, totalMain/10000, retailText)
+		result.Summary = fmt.Sprintf("主力%d日流入，累计净流入 %.2f 亿元；%s", inflowDays, totalMain/1e8, retailText)
 	} else {
-		result.Summary = fmt.Sprintf("主力%d日流入，累计净流出 %.2f 亿元；%s", inflowDays, -totalMain/10000, retailText)
+		result.Summary = fmt.Sprintf("主力%d日流入，累计净流出 %.2f 亿元；%s", inflowDays, -totalMain/1e8, retailText)
 	}
 	result.Days = days
 
