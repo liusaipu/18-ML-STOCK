@@ -3254,6 +3254,68 @@ func (a *App) RecommendComparables(symbol string) ([]analyzer.ComparableRecommen
 		finData = fd
 	}
 
-	recommendations := analyzer.RecommendComparables(symbol, profile, finData, a.storage.DataDir(), 5)
+	// 根据目标股票市场过滤候选池（A股只推荐A股，港股只推荐港股）
+	targetMarket := marketFromSymbol(symbol)
+	var allSymbols []string
+	for _, s := range a.stocks {
+		if s.Code != symbol && marketFromSymbol(s.Code) == targetMarket {
+			allSymbols = append(allSymbols, s.Code)
+		}
+	}
+
+	// 批量补充候选资料的本地缓存（优先本地，缺失的通过网络并发获取）
+	a.batchFetchCandidateProfiles(allSymbols, 200)
+
+	recommendations := analyzer.RecommendComparables(symbol, profile, finData, a.storage.DataDir(), allSymbols, 5)
 	return recommendations, nil
+}
+
+// marketFromSymbol 从代码后缀判断市场：A股 / 港股 / 其它
+func marketFromSymbol(symbol string) string {
+	if strings.HasSuffix(symbol, ".HK") {
+		return "HK"
+	}
+	if strings.HasSuffix(symbol, ".SH") || strings.HasSuffix(symbol, ".SZ") || strings.HasSuffix(symbol, ".BJ") {
+		return "A"
+	}
+	return "OTHER"
+}
+
+// batchFetchCandidateProfiles 批量获取候选股票的 profile.json（本地优先，缺失的网络补充）
+// maxFetch: 最多网络获取的数量，避免太慢
+func (a *App) batchFetchCandidateProfiles(allSymbols []string, maxFetch int) {
+	if a.storage == nil {
+		return
+	}
+	dataDir := a.storage.DataDir()
+
+	// 筛选出没有本地 profile.json 的候选
+	var missing []string
+	for _, sym := range allSymbols {
+		path := filepath.Join(dataDir, "data", sym, "profile.json")
+		if _, err := os.Stat(path); os.IsNotExist(err) {
+			missing = append(missing, sym)
+		}
+		if len(missing) >= maxFetch {
+			break
+		}
+	}
+	if len(missing) == 0 {
+		return
+	}
+
+	// 并发获取（限制并发数 10）
+	var wg sync.WaitGroup
+	sem := make(chan struct{}, 10)
+	for _, sym := range missing {
+		wg.Add(1)
+		sem <- struct{}{}
+		go func(s string) {
+			defer wg.Done()
+			defer func() { <-sem }()
+			// GetStockProfile 内部有 7 天缓存，会自动保存到本地
+			_, _ = a.GetStockProfile(s)
+		}(sym)
+	}
+	wg.Wait()
 }

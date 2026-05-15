@@ -1125,6 +1125,9 @@ function App() {
       setViewingHistory(null)
       setHistoryContent('')
       setCompReportsDownloaded(false)
+      setComparables([])
+      setAppliedComparables([])
+      setCompRecommendations([])
       await loadReportHistory(stock.code, true)
       await loadDataHistory(stock.code)
       const p = await loadProfile(stock.code)
@@ -1709,9 +1712,18 @@ function App() {
     }
   }
 
-  const handleAddRecommendedComparable = (symbol: string) => {
-    if (comparables.includes(symbol) || comparables.length >= 7) return
-    setComparables((prev) => [...prev, symbol])
+  const handleAddRecommendedComparable = async (symbol: string) => {
+    if (!selectedStock || comparables.includes(symbol) || comparables.length >= 7) return
+    try {
+      await AddComparable(selectedStock.code, symbol)
+      const list = await GetComparables(selectedStock.code)
+      setComparables(list || [])
+      setAppliedComparables(list || [])
+    } catch (err: any) {
+      console.error('添加推荐可比公司失败:', err)
+      alert('添加失败: ' + String(err))
+      return
+    }
     setCompRecommendations((prev) => prev.filter((r) => r.symbol !== symbol))
   }
 
@@ -2267,6 +2279,8 @@ function App() {
                   setViewingHistory(null)
                   setHistoryContent('')
                   setComparables([])
+                  setAppliedComparables([])
+                  setCompRecommendations([])
                   loadReportHistory(s.code, true)
                   loadDataHistory(s.code)
                   loadProfile(s.code).then((p) => loadRiskRadar(s.code, p?.industry || ''))
@@ -3259,8 +3273,8 @@ function App() {
                           }}
                         >
                           <div>
-                            <span style={{ color: '#e2e8f0', fontWeight: 600 }}>{info?.name || r.name || r.symbol}</span>
-                            <span style={{ color: '#64748b', marginLeft: 4 }}>{r.symbol}</span>
+                            <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{info?.name || r.name || r.symbol}</span>
+                            <span style={{ color: 'var(--text-secondary, #64748b)', marginLeft: 4 }}>{r.symbol}</span>
                             <span style={{ color: '#fbbf24', marginLeft: 6 }}>相似度 {r.score.toFixed(0)}</span>
                             {r.dataQuality === 'high' ? (
                               <span style={{ color: '#4ade80', marginLeft: 4 }}>✅</span>
