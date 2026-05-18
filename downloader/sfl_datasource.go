@@ -643,17 +643,18 @@ func (c *SFLClient) FetchFinaIndicator(market, code, startDate, endDate string) 
 // ========== 资金流向 ==========
 
 // SFLMoneyflowItem 个股资金流向条目
+// 注意：tushare moneyflow 接口原始数据单位为"万元"，FetchMoneyflow 已统一转换为"元"
 type SFLMoneyflowItem struct {
 	TsCode        string  `json:"ts_code"`
 	TradeDate     string  `json:"trade_date"`
-	BuySmAmount   float64 `json:"buy_sm_amount"`   // 小单买入金额
-	SellSmAmount  float64 `json:"sell_sm_amount"`  // 小单卖出金额
-	BuyMdAmount   float64 `json:"buy_md_amount"`   // 中单买入金额
-	SellMdAmount  float64 `json:"sell_md_amount"`  // 中单卖出金额
-	BuyLgAmount   float64 `json:"buy_lg_amount"`   // 大单买入金额
-	SellLgAmount  float64 `json:"sell_lg_amount"`  // 大单卖出金额
-	BuyElgAmount  float64 `json:"buy_elg_amount"`  // 特大单买入金额
-	SellElgAmount float64 `json:"sell_elg_amount"` // 特大单卖出金额
+	BuySmAmount   float64 `json:"buy_sm_amount"`   // 小单买入金额（元）
+	SellSmAmount  float64 `json:"sell_sm_amount"`  // 小单卖出金额（元）
+	BuyMdAmount   float64 `json:"buy_md_amount"`   // 中单买入金额（元）
+	SellMdAmount  float64 `json:"sell_md_amount"`  // 中单卖出金额（元）
+	BuyLgAmount   float64 `json:"buy_lg_amount"`   // 大单买入金额（元）
+	SellLgAmount  float64 `json:"sell_lg_amount"`  // 大单卖出金额（元）
+	BuyElgAmount  float64 `json:"buy_elg_amount"`  // 特大单买入金额（元）
+	SellElgAmount float64 `json:"sell_elg_amount"` // 特大单卖出金额（元）
 	NetMfAmount   float64 `json:"net_mf_amount"`   // 净流入额（元）
 }
 
@@ -680,18 +681,20 @@ func (c *SFLClient) FetchMoneyflow(market, code, startDate, endDate string) ([]S
 	idx := buildFieldIndex(resp.Data.Fields)
 	result := make([]SFLMoneyflowItem, 0, len(resp.Data.Items))
 	for _, item := range resp.Data.Items {
+		// tushare moneyflow 接口返回的金额单位为"万元"，需转换为"元"
+		const wanToYuan = 10000.0
 		result = append(result, SFLMoneyflowItem{
 			TsCode:        getStr(item, idx, "ts_code"),
 			TradeDate:     getStr(item, idx, "trade_date"),
-			BuySmAmount:   getFloat(item, idx, "buy_sm_amount"),
-			SellSmAmount:  getFloat(item, idx, "sell_sm_amount"),
-			BuyMdAmount:   getFloat(item, idx, "buy_md_amount"),
-			SellMdAmount:  getFloat(item, idx, "sell_md_amount"),
-			BuyLgAmount:   getFloat(item, idx, "buy_lg_amount"),
-			SellLgAmount:  getFloat(item, idx, "sell_lg_amount"),
-			BuyElgAmount:  getFloat(item, idx, "buy_elg_amount"),
-			SellElgAmount: getFloat(item, idx, "sell_elg_amount"),
-			NetMfAmount:   getFloat(item, idx, "net_mf_amount"),
+			BuySmAmount:   getFloat(item, idx, "buy_sm_amount") * wanToYuan,
+			SellSmAmount:  getFloat(item, idx, "sell_sm_amount") * wanToYuan,
+			BuyMdAmount:   getFloat(item, idx, "buy_md_amount") * wanToYuan,
+			SellMdAmount:  getFloat(item, idx, "sell_md_amount") * wanToYuan,
+			BuyLgAmount:   getFloat(item, idx, "buy_lg_amount") * wanToYuan,
+			SellLgAmount:  getFloat(item, idx, "sell_lg_amount") * wanToYuan,
+			BuyElgAmount:  getFloat(item, idx, "buy_elg_amount") * wanToYuan,
+			SellElgAmount: getFloat(item, idx, "sell_elg_amount") * wanToYuan,
+			NetMfAmount:   getFloat(item, idx, "net_mf_amount") * wanToYuan,
 		})
 	}
 	return result, nil

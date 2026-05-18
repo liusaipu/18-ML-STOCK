@@ -7,6 +7,7 @@
 # 结果自动保存到 test-results/ 目录（带时间戳）
 
 set -e
+set -o pipefail
 
 MODE="${1:-quick}"
 PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"

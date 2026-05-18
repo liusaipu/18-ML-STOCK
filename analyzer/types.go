@@ -181,6 +181,7 @@ type AuditorChangeDetail struct {
 	RawTitle             string `json:"raw_title"`
 	IsPolicyCompliance   bool   `json:"is_policy_compliance"` // 是否为政策合规更换（如国企8年强制轮换）
 	IsAbnormal           bool   `json:"is_abnormal"`          // 是否为异常更换（需警惕）
+	IsPassiveChange      bool   `json:"is_passive_change"`    // 是否为被动更换（原事务所被处罚/禁入等，非公司自身问题）
 }
 
 // ExternalRiskData 外部风险数据（审计机构、高管变动、诉讼等）

@@ -18,6 +18,9 @@ type AuditorChangeDetail struct {
 	IsBeforeAnnualReport bool   `json:"is_before_annual_report"`
 	AnnualReportDeadline string `json:"annual_report_deadline"`
 	RawTitle             string `json:"raw_title"`
+	IsPolicyCompliance   bool   `json:"is_policy_compliance"` // 是否为政策合规更换（如国企8年强制轮换）
+	IsAbnormal           bool   `json:"is_abnormal"`          // 是否为异常更换（需警惕）
+	IsPassiveChange      bool   `json:"is_passive_change"`    // 是否为被动更换（原事务所被处罚/禁入等，非公司自身问题）
 }
 
 // AuditOpinion 单年度审计意见

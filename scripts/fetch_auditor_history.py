@@ -94,6 +94,13 @@ POLICY_COMPLIANCE_KEYWORDS = [
     "达到轮换年限", "轮换期限", "服务期满",
 ]
 
+# 被动更换关键词（原事务所被处罚/禁入等，非公司自身问题）
+PASSIVE_CHANGE_KEYWORDS = [
+    "被证监会处罚", "被暂停", "被禁入", "监管决定", "执业受限",
+    "独立性受限", "被监管机构", "行政处罚", "市场禁入",
+    "资格暂停", "签字会计师", "恒大", "普华永道",
+]
+
 # 异常更换关键词（需警惕）
 ABNORMAL_KEYWORDS = [
     "无法达成一致", "审计范围受限", "审计意见分歧", "独立性",
@@ -121,6 +128,11 @@ def infer_change_reason(title: str) -> str:
 def is_policy_compliance_change(title: str) -> bool:
     """判断是否为政策合规更换（如国企8年强制轮换）"""
     return any(kw in title for kw in POLICY_COMPLIANCE_KEYWORDS)
+
+
+def is_passive_change(title: str) -> bool:
+    """判断是否为被动更换（原事务所被处罚/禁入等，非公司自身问题）"""
+    return any(kw in title for kw in PASSIVE_CHANGE_KEYWORDS)
 
 
 def is_abnormal_change(title: str) -> bool:
@@ -188,6 +200,7 @@ def build_change_details(announcements: list) -> list:
             "raw_title": title,
             "is_policy_compliance": is_policy_compliance_change(title),
             "is_abnormal": is_abnormal_change(title),
+            "is_passive_change": is_passive_change(title),
         })
     
     return change_details

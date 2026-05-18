@@ -465,6 +465,9 @@ func (a *App) analyzeStockInternal(symbol string, overwriteLatest bool, customRI
 					IsBeforeAnnualReport: cd.IsBeforeAnnualReport,
 					AnnualReportDeadline: cd.AnnualReportDeadline,
 					RawTitle:             cd.RawTitle,
+					IsPolicyCompliance:   cd.IsPolicyCompliance,
+					IsAbnormal:           cd.IsAbnormal,
+					IsPassiveChange:      cd.IsPassiveChange,
 				})
 			}
 			// 将审计意见回填到 finData（供 step1Audit 使用）

@@ -1464,6 +1464,22 @@ body.light .trace-trigger-btn:hover {
   transition: background 0.15s;
 }
 
+.inline-tooltip-trigger-high {
+  background: #ef4444;
+}
+
+.inline-tooltip-trigger-high:hover {
+  background: #dc2626;
+}
+
+.inline-tooltip-trigger-medium {
+  background: #f59e0b;
+}
+
+.inline-tooltip-trigger-medium:hover {
+  background: #d97706;
+}
+
 .inline-tooltip-trigger:hover {
   background: rgba(59, 130, 246, 0.12);
 }
@@ -1506,6 +1522,24 @@ body.light .trace-trigger-btn:hover {
 body.light .inline-tooltip-trigger {
   background: rgba(59, 130, 246, 0.12);
   color: #2563eb;
+}
+
+body.light .inline-tooltip-trigger-high {
+  background: rgba(239, 68, 68, 0.12);
+  color: #dc2626;
+}
+
+body.light .inline-tooltip-trigger-high:hover {
+  background: rgba(239, 68, 68, 0.25);
+}
+
+body.light .inline-tooltip-trigger-medium {
+  background: rgba(245, 158, 11, 0.12);
+  color: #d97706;
+}
+
+body.light .inline-tooltip-trigger-medium:hover {
+  background: rgba(245, 158, 11, 0.25);
 }
 
 body.light .inline-tooltip-trigger:hover {

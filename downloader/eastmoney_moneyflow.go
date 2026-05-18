@@ -123,7 +123,10 @@ func toEastMoneySecid(market, code string) string {
 }
 
 func parseFloatSafe(s string) float64 {
-	v, _ := strconv.ParseFloat(strings.TrimSpace(s), 64)
+	s = strings.TrimSpace(s)
+	// 去除千分位逗号（东财部分接口返回数值可能带逗号，如 "1,234.56"）
+	s = strings.ReplaceAll(s, ",", "")
+	v, _ := strconv.ParseFloat(s, 64)
 	return v
 }
 

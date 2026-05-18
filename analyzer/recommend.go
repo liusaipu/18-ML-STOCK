@@ -58,6 +58,9 @@ func RecommendComparables(targetSymbol string, targetProfile *StockProfile, targ
 		}
 	}
 
+	// 读取目标股票的概念标签
+	targetConcepts := loadConcepts(filepath.Join(dataDir, "data"), targetSymbol)
+
 	// 扫描候选股票（本地 + 全市场）
 	candidates := scanLocalCandidates(dataDir, targetSymbol, allSymbols)
 
@@ -65,10 +68,15 @@ func RecommendComparables(targetSymbol string, targetProfile *StockProfile, targ
 	var scored []ComparableRecommendation
 	for _, c := range candidates {
 		score, reasons, dataQuality := computeSimilarity(
-			targetIndustry, targetMarketCap, targetROE, targetGM,
+			targetIndustry, targetMarketCap, targetROE, targetGM, targetConcepts,
 			c,
 		)
-		if score > 0 {
+		// 设置最低得分门槛：目标有行业信息时至少15分，否则至少8分
+		minScore := 8.0
+		if targetIndustry != "" {
+			minScore = 15.0
+		}
+		if score >= minScore {
 			scored = append(scored, ComparableRecommendation{
 				Symbol:      c.Symbol,
 				Name:        c.Name,
@@ -102,7 +110,8 @@ type candidateInfo struct {
 	MarketCap float64
 	ROE       float64
 	GM        float64
-	HasData   bool // 是否有本地财报数据
+	HasData   bool     // 是否有本地财报数据
+	Concepts  []string // 概念/风口标签
 }
 
 // StockProfile 推荐算法使用的股票资料子集（避免循环导入）
@@ -150,6 +159,9 @@ func scanLocalCandidates(dataDir, excludeSymbol string, allSymbols []string) []c
 				}
 			}
 
+			// 尝试读取概念标签
+			info.Concepts = loadConcepts(dataRoot, symbol)
+
 			localMap[symbol] = info
 		}
 	}
@@ -163,8 +175,19 @@ func scanLocalCandidates(dataDir, excludeSymbol string, allSymbols []string) []c
 			if _, ok := localMap[symbol]; ok {
 				continue
 			}
-			// 全市场候选但无本地资料：Industry 为空，后续 computeSimilarity 会给予惩罚
-			localMap[symbol] = candidateInfo{Symbol: symbol}
+			// 尝试读取 profile.json（可能由 batchFetchCandidateProfiles 缓存）
+			info := candidateInfo{Symbol: symbol}
+			profilePath := filepath.Join(dataRoot, symbol, "profile.json")
+			if data, err := os.ReadFile(profilePath); err == nil {
+				info.Industry = extractJSONString(data, "industry")
+				info.Name = extractJSONString(data, "name")
+				if mc := extractJSONFloat(data, "market_cap"); mc > 0 {
+					info.MarketCap = mc
+				}
+			}
+			// 补充概念标签
+			info.Concepts = loadConcepts(dataRoot, symbol)
+			localMap[symbol] = info
 		}
 	}
 
@@ -199,6 +222,8 @@ var industrySynonyms = map[string][]string{
 	"电子":         {"消费电子", "元器件", "PCB", "被动元件"},
 	"消费电子":     {"电子", "手机", "可穿戴"},
 	"通信":         {"电信", "5G", "光模块", "光纤"},
+	"电信运营":     {"通信", "通信服务", "电信", "5G", "光模块"},
+	"通信服务":     {"通信", "电信运营", "电信", "5G", "光模块"},
 	"5G":           {"通信", "电信"},
 	"计算机":       {"软件", "IT", "云计算", "人工智能", "AI"},
 	"软件":         {"计算机", "IT", "云计算"},
@@ -224,8 +249,14 @@ var industrySynonyms = map[string][]string{
 	"养殖":         {"农林牧渔", "畜牧", "猪"},
 }
 
+// 等效行业映射（不同数据源/平台对同一行业的不同命名）
+var equivalentIndustries = map[string][]string{
+	"电信运营": {"通信服务"},
+	"通信服务": {"电信运营"},
+}
+
 // computeSimilarity 计算候选股票与目标股票的相似度
-func computeSimilarity(targetIndustry string, targetMarketCap, targetROE, targetGM float64, c candidateInfo) (float64, []string, string) {
+func computeSimilarity(targetIndustry string, targetMarketCap, targetROE, targetGM float64, targetConcepts []string, c candidateInfo) (float64, []string, string) {
 	score := 0.0
 	var reasons []string
 
@@ -234,6 +265,9 @@ func computeSimilarity(targetIndustry string, targetMarketCap, targetROE, target
 	if targetIndustry != "" && c.Industry != "" {
 		if targetIndustry == c.Industry {
 			industryScore = 65
+			reasons = append(reasons, "同属"+targetIndustry)
+		} else if isEquivalentIndustry(targetIndustry, c.Industry) {
+			industryScore = 45
 			reasons = append(reasons, "同属"+targetIndustry)
 		} else {
 			// 简单的行业关键词匹配
@@ -255,9 +289,9 @@ func computeSimilarity(targetIndustry string, targetMarketCap, targetROE, target
 				industryScore = partialScore
 				reasons = append(reasons, "行业相近")
 			} else {
-				// 检查同义词映射
+				// 检查同义词映射（产业链相关，但非同一细分行业）
 				if isSynonymIndustry(targetIndustry, c.Industry) {
-					industryScore = 55
+					industryScore = 25
 					reasons = append(reasons, "产业链相关")
 				}
 			}
@@ -314,7 +348,27 @@ func computeSimilarity(targetIndustry string, targetMarketCap, targetROE, target
 		}
 	}
 
-	// 5. 有财务数据加分（权重从 20% 降到 5%，避免"有数据就靠前"）
+	// 5. 概念/风口匹配 (10%)
+	if len(targetConcepts) > 0 && len(c.Concepts) > 0 {
+		overlap := 0
+		for _, tc := range targetConcepts {
+			for _, cc := range c.Concepts {
+				if tc == cc {
+					overlap++
+				}
+			}
+		}
+		if overlap > 0 {
+			conceptScore := 10.0 * float64(overlap) / float64(len(targetConcepts))
+			if conceptScore > 10 {
+				conceptScore = 10
+			}
+			score += conceptScore
+			reasons = append(reasons, fmt.Sprintf("共享%d个概念", overlap))
+		}
+	}
+
+	// 6. 有财务数据加分（权重从 20% 降到 5%，避免"有数据就靠前"）
 	dataQuality := "low"
 	if c.HasData {
 		score += 5
@@ -325,12 +379,39 @@ func computeSimilarity(targetIndustry string, targetMarketCap, targetROE, target
 		dataQuality = "medium"
 	}
 
-	// 行业惩罚：目标有行业但候选无行业数据，得分打 3 折
+	// 行业惩罚1：目标有行业但候选无行业数据，得分打 3 折
 	if targetIndustry != "" && c.Industry == "" {
 		score = score * 0.3
 	}
 
+	// 行业惩罚2：目标有行业且候选有行业，但行业完全不相关（非同义词且无关键词重叠），得分打 2 折
+	if targetIndustry != "" && c.Industry != "" && industryScore == 0 {
+		score = score * 0.2
+	}
+
 	return score, reasons, dataQuality
+}
+
+// isEquivalentIndustry 检查两个行业是否为同一行业的不同命名
+func isEquivalentIndustry(a, b string) bool {
+	if a == "" || b == "" {
+		return false
+	}
+	if eqs, ok := equivalentIndustries[a]; ok {
+		for _, e := range eqs {
+			if e == b {
+				return true
+			}
+		}
+	}
+	if eqs, ok := equivalentIndustries[b]; ok {
+		for _, e := range eqs {
+			if e == a {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // isSynonymIndustry 检查两个行业是否通过同义词映射相关
@@ -441,4 +522,84 @@ func extractLatestMetrics(dataRoot, symbol string) (roe, gm float64) {
 		gm = (revenue - cost) / revenue
 	}
 	return
+}
+
+// loadConcepts 从本地 concepts.json 读取股票的概念/风口标签
+func loadConcepts(dataRoot, symbol string) []string {
+	path := filepath.Join(dataRoot, symbol, "concepts.json")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil
+	}
+	// 简单解析 JSON 中的 concepts 数组
+	concepts := extractJSONStringArray(data, "concepts")
+	// 对长字符串概念按 '、' 拆分（如 "电信、广播电视和卫星传输服务"）
+	var result []string
+	seen := make(map[string]struct{})
+	for _, c := range concepts {
+		c = strings.TrimSpace(c)
+		if c == "" {
+			continue
+		}
+		// 如果概念包含 '、'，拆分为多个子概念
+		if strings.Contains(c, "、") {
+			for _, part := range strings.Split(c, "、") {
+				part = strings.TrimSpace(part)
+				if part != "" {
+					if _, ok := seen[part]; !ok {
+						seen[part] = struct{}{}
+						result = append(result, part)
+					}
+				}
+			}
+		} else {
+			if _, ok := seen[c]; !ok {
+				seen[c] = struct{}{}
+				result = append(result, c)
+			}
+		}
+	}
+	return result
+}
+
+// extractJSONStringArray 从 JSON 字节中简单提取字符串数组
+func extractJSONStringArray(data []byte, key string) []string {
+	keyPattern := `"` + key + `"`
+	idx := strings.Index(string(data), keyPattern)
+	if idx < 0 {
+		return nil
+	}
+	rest := string(data)[idx+len(keyPattern):]
+	i := 0
+	for i < len(rest) && (rest[i] == ':' || rest[i] == ' ' || rest[i] == '\t' || rest[i] == '\n' || rest[i] == '\r') {
+		i++
+	}
+	if i >= len(rest) || rest[i] != '[' {
+		return nil
+	}
+	i++ // skip [
+	var result []string
+	for i < len(rest) {
+		// skip whitespace
+		for i < len(rest) && (rest[i] == ' ' || rest[i] == '\t' || rest[i] == '\n' || rest[i] == '\r' || rest[i] == ',') {
+			i++
+		}
+		if i < len(rest) && rest[i] == ']' {
+			break
+		}
+		if i < len(rest) && rest[i] == '"' {
+			i++
+			start := i
+			for i < len(rest) && rest[i] != '"' {
+				i++
+			}
+			result = append(result, rest[start:i])
+			if i < len(rest) && rest[i] == '"' {
+				i++
+			}
+		} else {
+			i++
+		}
+	}
+	return result
 }

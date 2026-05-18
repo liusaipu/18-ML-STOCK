@@ -1814,8 +1814,8 @@ function App() {
           if (cells.length < 4) return
 
           const flag = riskAlert.flags[rowIdx]
-          // 仅高风险项显示信息图标 tooltip
-          if (!flag || flag.level !== 'high' || !flag.details?.length) return
+          // 高风险和中风险项均显示信息图标 tooltip
+          if (!flag || (flag.level !== 'high' && flag.level !== 'medium') || !flag.details?.length) return
 
           const valueCell = cells[2] // 数值说明列
           // 避免重复添加
@@ -1823,8 +1823,9 @@ function App() {
 
           const tooltipSpan = document.createElement('span')
           tooltipSpan.className = 'inline-tooltip'
+          const triggerClass = flag.level === 'high' ? 'inline-tooltip-trigger inline-tooltip-trigger-high' : 'inline-tooltip-trigger inline-tooltip-trigger-medium'
           const bodyHtml = flag.details.map((d: string) => d.replace(/</g, '&lt;').replace(/>/g, '&gt;')).join('<br/>')
-          tooltipSpan.innerHTML = '<span class="inline-tooltip-trigger">i</span><span class="inline-tooltip-body"><strong>' + flag.name + '</strong><br/>' + bodyHtml + '</span>'
+          tooltipSpan.innerHTML = '<span class="' + triggerClass + '">i</span><span class="inline-tooltip-body"><strong>' + flag.name + '</strong><br/>' + bodyHtml + '</span>'
           valueCell.appendChild(tooltipSpan)
         })
       })
@@ -2002,6 +2003,7 @@ function App() {
       const titleText = children?.toString() || ''
       // 匹配模块标题：模块X: 标题
       const isModuleTitle = /^模块\d+/.test(titleText)
+      const isModule6 = titleText.includes('模块6')
       const isModule7 = titleText.includes('模块7')
       // 强制修正模块7的 id，确保 TOC 导航匹配
       const headingId = isModule7 ? '模块7-a-score-综合风险画像' : id
@@ -2026,9 +2028,14 @@ function App() {
               />
             )}
           </span>
-          {isModuleTitle && (
-            <ModuleCopyButton moduleId={headingId || ''} moduleTitle={titleText} />
-          )}
+          <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            {isModule6 && (
+              <button className="rim-adjust-btn" onClick={(e: React.MouseEvent) => { e.preventDefault(); e.stopPropagation(); openRIMModal() }}>调整RIM</button>
+            )}
+            {isModuleTitle && (
+              <ModuleCopyButton moduleId={headingId || ''} moduleTitle={titleText} />
+            )}
+          </span>
         </h1>
       )
     },
@@ -3260,6 +3267,7 @@ function App() {
                           key={r.symbol}
                           className="cp-rec-item"
                           onClick={() => handleAddRecommendedComparable(r.symbol)}
+                          title={r.reasons && r.reasons.length > 0 ? r.reasons.join('\n') : ''}
                           style={{
                             display: 'flex',
                             alignItems: 'center',
